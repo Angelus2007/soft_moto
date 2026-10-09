@@ -1,0 +1,20 @@
+# Configuration Render (« Blueprint ») : Render → New → Blueprint → choisir le dépôt GitHub.
+# La base PostgreSQL se crée à part (voir README) ; sa « Internal Database URL » est demandée au moment de créer le site.
+services:
+  - type: web
+    name: softmoto
+    runtime: node
+    region: frankfurt        # même région que la base PostgreSQL
+    plan: starter            # formule payante (site toujours allumé). Mettre « free » pour un simple test : il s'endort après 15 min.
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FUSEAU
+        value: Africa/Porto-Novo
+      - key: DATABASE_URL    # Internal Database URL de la base Render
+        sync: false
+      - key: ADMIN_PASSWORD  # mot de passe du premier administrateur (seulement si la base est neuve)
+        sync: false

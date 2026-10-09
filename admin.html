@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tableau de bord – Soft Moto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,450&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-dark:#0B1B33;
+    --bg-dark-2:#16305A;
+    --bg-light:#F1F4F9;
+    --panel:#FFFFFF;
+    --accent:#1D4ED8;
+    --accent-dark:#1E3A8A;
+    --accent-soft:#DBE6FD;
+    --amber:#C77D0A;
+    --amber-soft:#FCEBC8;
+    --ink:#0F172A;
+    --ink-soft:#526074;
+    --ink-faint:#8793A5;
+    --cream:#F1F4F9;
+    --cream-soft:#AEBBD0;
+    --error:#B42318;
+    --error-soft:#FDE7E5;
+    --border:#DDE3EC;
+    --radius:10px;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:"IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html{height:100%; scroll-padding-top:env(safe-area-inset-top, 0px);}
+  body{
+    min-height:100%;
+    margin:0;
+    font-family:var(--sans);
+    color:var(--ink);
+    background:var(--bg-light);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{ color:inherit; }
+
+  /* ---------- Layout ---------- */
+  .app{
+    display:grid;
+    grid-template-columns:250px 1fr;
+    min-height:100vh;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    background:radial-gradient(130% 110% at 10% 0%, var(--bg-dark-2) 0%, var(--bg-dark) 60%);
+    color:var(--cream);
+    display:flex;
+    flex-direction:column;
+    padding:26px 20px 20px;
+    position:relative;
+    overflow:hidden;
+    z-index:20;
+  }
+
+  .logotype{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    font-family:var(--serif);
+    font-style:italic;
+    font-weight:500;
+    font-size:18px;
+    letter-spacing:0.2px;
+    color:var(--cream);
+    padding:2px 8px 26px;
+  }
+
+  nav.nav{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    margin-top:6px;
+  }
+
+  .nav a{
+    display:flex;
+    align-items:center;
+    gap:11px;
+    padding:10px 12px;
+    border-radius:8px;
+    text-decoration:none;
+    font-size:14.5px;
+    font-weight:500;
+    color:var(--cream-soft);
+    transition:background .15s ease, color .15s ease;
+  }
+  .nav a svg{ flex-shrink:0; opacity:0.85; }
+  .nav a:hover{ background:rgba(241,244,249,0.07); color:var(--cream); }
+  .nav a.active{ background:var(--accent); color:var(--cream); }
+  .nav a.active svg{ opacity:1; }
+  .nav a:focus-visible{ outline:2px solid var(--accent-soft); outline-offset:2px; }
+
+  .sidebar-spacer{ flex:1; }
+
+  .sidebar-profile{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:12px 10px;
+    border-top:1px solid rgba(241,244,249,0.12);
+  }
+  .avatar{
+    width:34px;
+    height:34px;
+    border-radius:50%;
+    background:var(--accent);
+    color:var(--cream);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:var(--mono);
+    font-size:13px;
+    font-weight:600;
+    flex-shrink:0;
+  }
+  .sidebar-profile .who{ line-height:1.3; min-width:0; }
+  .sidebar-profile .who .name{ font-size:13.5px; font-weight:600; color:var(--cream); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sidebar-profile .who .role{ font-size:12px; color:var(--ink-faint); }
+  .logout-link{
+    margin-left:auto;
+    display:flex;
+    padding:6px;
+    border-radius:7px;
+    color:var(--ink-faint);
+    text-decoration:none;
+    flex-shrink:0;
+  }
+  .logout-link:hover{ color:var(--cream); background:rgba(241,244,249,0.08); }
+
+  /* ---------- Main ---------- */
+  main.main{
+    padding:28px 34px 60px;
+    min-width:0;
+  }
+
+  .topbar{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:20px;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+  }
+
+  .menu-toggle{
+    display:none;
+    background:var(--panel);
+    border:1.5px solid var(--border);
+    border-radius:8px;
+    padding:8px;
+    margin-bottom:14px;
+    cursor:pointer;
+  }
+
+  .topbar h1{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:26px;
+    margin:0 0 6px;
+    color:var(--ink);
+  }
+  .topbar .sub{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:14.5px;
+  }
+
+  .top-actions{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+
+  .search{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--panel);
+    border:1.5px solid var(--border);
+    border-radius:9px;
+    padding:9px 12px;
+    color:var(--ink-faint);
+    min-width:220px;
+  }
+  .search input{
+    border:none;
+    outline:none;
+    background:none;
+    font-family:var(--sans);
+    font-size:14px;
+    color:var(--ink);
+    width:100%;
+  }
+  .search input::placeholder{ color:var(--ink-faint); }
+
+  .profile-chip{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    background:var(--panel);
+    border:1.5px solid var(--border);
+    border-radius:9px;
+    padding:6px 12px 6px 6px;
+  }
+  .profile-chip .name{ font-size:13.5px; font-weight:600; }
+  .profile-chip .role{ font-size:11.5px; color:var(--ink-soft); }
+
+  /* ---------- KPI cards ---------- */
+  .kpis{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:16px;
+    margin-bottom:26px;
+  }
+
+  .kpi{
+    background:var(--panel);
+    border:1.5px solid var(--border);
+    border-left:3.5px solid var(--accent-line, var(--accent));
+    border-radius:12px;
+    padding:18px 20px;
+  }
+  .kpi .label{ font-size:13px; color:var(--ink-soft); margin:0 0 10px; }
+  .kpi .value{ font-family:var(--mono); font-size:24px; font-weight:600; color:var(--ink); letter-spacing:-0.3px; }
+  .kpi .delta{ font-size:12.5px; color:var(--ink-faint); margin-top:6px; }
+  .kpi .delta.up{ color:var(--accent-dark); }
+  .kpi .delta.warn{ color:var(--amber); }
+  .kpi{ transition:box-shadow .2s ease, transform .2s ease; }
+  .kpi:hover{ box-shadow:0 6px 18px -10px rgba(15,23,42,0.25); transform:translateY(-1px); }
+
+  .kpi.c1{ --accent-line:var(--accent); }
+  .kpi.c2{ --accent-line:var(--amber); }
+  .kpi.c3{ --accent-line:#475569; }
+  .kpi.c4{ --accent-line:var(--accent-dark); }
+
+  /* ---------- Content grid ---------- */
+  .content-grid{
+    display:grid;
+    grid-template-columns:1.6fr 1fr;
+    gap:18px;
+    align-items:start;
+    margin-bottom:18px;
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1.5px solid var(--border);
+    border-radius:12px;
+    padding:22px 22px 8px;
+  }
+  .panel.tight{ padding:22px; }
+
+  .panel-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:16px;
+  }
+  .panel-head h2{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:17px;
+    margin:0;
+    color:var(--ink);
+  }
+  .panel-head .meta{ font-size:12.5px; color:var(--ink-faint); }
+
+  table{ width:100%; border-collapse:collapse; }
+  thead th{
+    text-align:left;
+    font-size:12px;
+    font-weight:500;
+    color:var(--ink-faint);
+    padding:0 10px 10px;
+    border-bottom:1px solid var(--border);
+  }
+  tbody td{
+    padding:12px 10px;
+    border-bottom:1px solid var(--border);
+    font-size:13.5px;
+    vertical-align:middle;
+  }
+  tbody tr:last-child td{ border-bottom:none; }
+
+  .driver-cell{ display:flex; align-items:center; gap:10px; }
+  .driver-cell .avatar{ width:28px; height:28px; font-size:11px; }
+  .driver-cell .d-name{ font-weight:600; font-size:13.5px; line-height:1.3; }
+  .driver-cell .d-code{ font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); }
+
+  td.amount{ font-family:var(--mono); font-weight:600; }
+  td.amount.zero{ color:var(--ink-faint); font-weight:500; }
+
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    padding:4px 10px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:600;
+  }
+  .badge.paid{ background:var(--paye-soft); color:var(--paye-dark); }
+  .badge.partial{ background:var(--amber-soft); color:var(--amber); }
+  .badge.late{ background:var(--impaye-soft); color:var(--impaye-dark); }
+  .badge.wait{ background:#E6EAF1; color:var(--ink-soft); }
+  .chips{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+  .chips button{ padding:7px 14px; border-radius:999px; border:1.5px solid var(--border); background:var(--panel); color:var(--ink-soft); font:600 13px var(--sans); cursor:pointer; transition:background .15s,border-color .15s,color .15s; }
+  .chips button:hover{ border-color:var(--accent); color:var(--accent-dark); }
+  .chips button.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .moyen-tag{ display:inline-block; margin-top:3px; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:700; background:var(--accent-soft); color:var(--accent-dark); font-family:var(--sans); }
+  .sub-note{ display:block; font-size:11.5px; color:var(--ink-soft); font-weight:500; font-family:var(--sans); margin-top:2px; }
+  .sub-note.warn{ color:var(--impaye-dark); font-weight:600; }
+  .days-pill{ display:inline-block; min-width:38px; text-align:center; padding:4px 10px; border-radius:999px; font:700 13px var(--mono); background:var(--impaye); color:#fff; }
+  .days-pill.mid{ background:var(--amber); }
+  .tag-saisie{ display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; font:700 10.5px var(--sans); background:var(--impaye-soft); color:var(--impaye-dark); }
+  .act-btn{ padding:7px 14px; border-radius:8px; border:1.5px solid var(--impaye); background:var(--panel); color:var(--impaye-dark); font:600 13px var(--sans); cursor:pointer; transition:background .15s,color .15s; }
+  .act-btn:hover{ background:var(--impaye); color:#fff; }
+  .act-btn.ok{ border-color:var(--accent); color:var(--accent-dark); }
+  .act-btn.ok:hover{ background:var(--accent); color:#fff; }
+  .act-btn:disabled{ opacity:.55; cursor:default; }
+  .table-scroll{ overflow-x:auto; }
+  .empty-state{ color:var(--ink-faint); font-size:13.5px; padding:10px 0 2px; }
+
+  /* ---------- Mini bar chart ---------- */
+  .chart{
+    display:flex;
+    align-items:flex-end;
+    gap:10px;
+    height:150px;
+    padding:6px 4px 0;
+  }
+  .chart .bar-col{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    height:100%;
+    justify-content:flex-end;
+  }
+  .chart .bar-track{ width:100%; max-width:26px; height:100%; display:flex; align-items:flex-end; }
+  .chart .bar{
+    width:100%;
+    height:0;
+    border-radius:5px 5px 2px 2px;
+    background:linear-gradient(180deg, var(--cream-soft), var(--border));
+    transition:height 1s cubic-bezier(.16,.8,.28,1), background .2s ease;
+  }
+  .chart .bar-col.today .bar{ background:linear-gradient(180deg, #3B82F6, var(--accent-dark)); box-shadow:0 4px 10px -4px rgba(30,58,138,0.55); }
+  .chart .bar-col:not(.today):hover .bar{ background:linear-gradient(180deg, var(--accent-soft), var(--accent)); }
+  .chart .bar-col .day{ font-size:11.5px; color:var(--ink-faint); transition:color .15s ease; }
+  .chart .bar-col.today .day{ color:var(--ink); font-weight:600; }
+  .chart .bar-col:hover .day{ color:var(--ink); }
+
+  /* ---------- Financing list ---------- */
+  .financing-row{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:14px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .financing-row:last-child{ border-bottom:none; }
+  .financing-row .who{ width:190px; flex-shrink:0; }
+  .financing-row .d-name{ font-weight:600; font-size:13.5px; }
+  .financing-row .d-code{ font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); }
+
+  .progress-track{
+    flex:1;
+    min-width:0;
+  }
+  .progress-bar{
+    height:8px;
+    border-radius:999px;
+    background:var(--border);
+    overflow:hidden;
+    margin-bottom:6px;
+  }
+  .progress-bar > span{
+    display:block;
+    height:100%;
+    width:0;
+    background:linear-gradient(90deg, var(--accent), var(--accent-dark));
+    border-radius:999px;
+    transition:width 1s cubic-bezier(.16,.8,.28,1);
+  }
+  .progress-bar.done > span{ background:linear-gradient(90deg, var(--paye), var(--paye-dark)); }
+  .financing-row{ transition:background .15s ease; border-radius:8px; }
+  .financing-row:hover{ background:var(--bg-light); }
+  .progress-meta{
+    display:flex;
+    justify-content:space-between;
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  .progress-meta .pct{ font-family:var(--mono); font-weight:600; color:var(--ink); }
+
+  .eta{
+    width:120px;
+    flex-shrink:0;
+    text-align:right;
+    font-size:12px;
+    color:var(--ink-faint);
+  }
+  .eta.done{ color:var(--paye-dark); font-weight:600; }
+
+  @media (max-width: 1080px){
+    .kpis{ grid-template-columns:repeat(2, 1fr); }
+    .content-grid{ grid-template-columns:1fr; }
+  }
+
+  @media (max-width: 780px){
+    .app{ grid-template-columns:1fr; }
+    .sidebar{
+      position:fixed;
+      inset:0 30% 0 0;
+      transform:translateX(-100%);
+      transition:transform .2s ease;
+      width:100%;
+      max-width:270px;
+    }
+    .sidebar.open{ transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,0.3); }
+    .menu-toggle{ display:inline-flex; }
+    main.main{ padding:20px 18px 50px; }
+    .kpis{ grid-template-columns:1fr 1fr; gap:12px; }
+    .financing-row{ flex-wrap:wrap; }
+    .financing-row .who{ width:100%; }
+    .eta{ width:auto; text-align:left; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; }
+  }
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- Barre latérale -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sm-ambient-glow" aria-hidden="true"></div>
+    <div class="logotype">
+      <span class="logo-ring" aria-hidden="true"></span>
+      <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/>
+        <circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+        <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="11" y1="16" x2="11" y2="19.4" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="16" y1="11" x2="19.4" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+      </svg>
+      Soft Moto
+    </div>
+
+    <nav class="nav">
+      <a href="admin.html" class="active">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+        Tableau de bord
+      </a>
+      <a href="conducteurs.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Conducteurs
+      </a>
+      <a href="collectes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Collectes journalières
+      </a>
+      <a href="motos.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h9V8H6zM15 8h3l3 4v5h-1"/></svg>
+        Motos &amp; financement
+      </a>
+      <a href="employes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
+        Employés
+      </a>
+      <a href="parametres.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Paramètres
+      </a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-profile">
+      <div class="avatar">AD</div>
+      <div class="who">
+        <div class="name">Admin Soft Moto</div>
+        <div class="role">Gestionnaire</div>
+      </div>
+      <a class="logout-link" id="logoutLink" href="login.html" aria-label="Déconnexion" title="Déconnexion">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Contenu principal -->
+  <main class="main">
+
+    <button class="menu-toggle" id="menuToggle" aria-label="Ouvrir le menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+
+    <div class="topbar">
+      <div>
+        <h1>Tableau de bord</h1>
+        <p class="sub" id="subTitle">Collectes et conducteurs</p>
+      </div>
+      <div class="top-actions">
+        <div class="search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="searchInput" placeholder="Rechercher un conducteur…">
+        </div>
+        <div class="profile-chip">
+          <div class="avatar">AD</div>
+          <div>
+            <div class="name">Admin</div>
+            <div class="role">Soft Moto</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Indicateurs -->
+    <div class="kpis">
+      <div class="kpi c1">
+        <p class="label">Collecté aujourd'hui</p>
+        <div class="value" id="kpiCollecte">—</div>
+        <p class="delta" id="kpiCollecteDelta">&nbsp;</p>
+      </div>
+      <div class="kpi c2">
+        <p class="label">Conducteurs actifs</p>
+        <div class="value" id="kpiActifs">—</div>
+        <p class="delta" id="kpiActifsDelta">&nbsp;</p>
+      </div>
+      <div class="kpi c3">
+        <p class="label">Motos entièrement financées</p>
+        <div class="value" id="kpiMotos">—</div>
+        <p class="delta">au total</p>
+      </div>
+      <div class="kpi c4">
+        <p class="label">Taux de collecte du jour</p>
+        <div class="value" id="kpiTaux">—</div>
+        <p class="delta" id="kpiTauxDelta">&nbsp;</p>
+      </div>
+    </div>
+
+    <div class="content-grid">
+      <!-- Collectes du jour -->
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Liste du jour</h2>
+          <span class="meta" id="collectesMeta"></span>
+        </div>
+        <div class="chips" id="collectesChips" role="group" aria-label="Filtrer la liste du jour">
+          <button type="button" data-mode="payes" class="on">Payés</button>
+          <button type="button" data-mode="impayes">Impayés</button>
+          <button type="button" data-mode="tous">Tous</button>
+        </div>
+        <div class="table-scroll"><table>
+          <thead>
+            <tr><th>Conducteur</th><th>Montant reçu</th><th>Heure</th><th>Statut</th></tr>
+          </thead>
+          <tbody id="collectesBody"></tbody>
+        </table></div>
+        <p class="empty-state" id="collectesEmpty" style="display:none;"></p>
+      </div>
+
+      <!-- Aperçu 7 jours -->
+      <div class="panel tight">
+        <div class="panel-head">
+          <h2>Sur 7 jours</h2>
+          <span class="meta">Total collecté</span>
+        </div>
+        <div class="chart" id="chart" role="img" aria-label="Total collecté sur les 7 derniers jours"></div>
+      </div>
+    </div>
+
+    <!-- Impayés cumulés (admin) -->
+    <div class="panel" id="impayesPanel" style="margin-bottom:20px;">
+      <div class="panel-head">
+        <h2>Impayés cumulés</h2>
+        <span class="meta" id="impayesMeta"></span>
+      </div>
+      <div class="chips" id="impayesChips" role="group" aria-label="Seuil de jours impayés">
+        <button type="button" data-min="2" class="on">2 jours et +</button>
+        <button type="button" data-min="3">3 jours et +</button>
+        <button type="button" data-min="4">4 jours et +</button>
+        <button type="button" data-min="5">5 jours et +</button>
+        <button type="button" data-min="suspendus">Suspendus</button>
+      </div>
+      <div class="table-scroll"><table>
+        <thead>
+          <tr><th>Conducteur</th><th id="impTh1">Jours impayés</th><th id="impTh2">Montant dû</th><th id="impTh3">Impayés depuis</th><th>Action</th></tr>
+        </thead>
+        <tbody id="impayesBody"></tbody>
+      </table></div>
+      <p class="empty-state" id="impayesEmpty" style="display:none;"></p>
+    </div>
+
+    <!-- Financement des motos -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Conducteurs en financement</h2>
+        <span class="meta">Progression vers l'achat de la moto</span>
+      </div>
+
+      <div id="financingList"></div>
+      <p class="empty-state" id="financingEmpty" style="display:none;">Aucune moto en financement. Indiquez le prix de la moto en ajoutant un conducteur.</p>
+    </div>
+
+  </main>
+</div>
+
+<script src="serveur-check.js"></script>
+<script src="theme.js"></script>
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const fmtF = (n) => Math.round(n).toLocaleString('fr-FR') + ' F';
+  const initials = (name) => name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  function avatarClass(name){
+    let h = 0;
+    for(let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return 'av-' + (1 + (h % 6));
+  }
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function api(url, opts){
+    return fetch(url, opts).then(async function(r){
+      const data = await r.json().catch(function(){ return {}; });
+      if(r.status === 401){ window.location.href = 'login.html'; throw new Error('Session expirée.'); }
+      if(!r.ok) throw new Error(data.erreur || 'Erreur serveur.');
+      return data;
+    });
+  }
+
+  $('menuToggle').addEventListener('click', function(){ $('sidebar').classList.toggle('open'); });
+  $('logoutLink').addEventListener('click', function(e){
+    e.preventDefault();
+    fetch('/api/deconnexion', { method: 'POST' }).finally(function(){ window.location.href = 'login.html'; });
+  });
+
+  // ---------- Profil réel (session) dans la barre latérale et l'en-tête ----------
+  api('/api/moi').then(function(moi){
+    const roleLabel = moi.role === 'admin' ? 'Administrateur' : 'Caissière';
+    document.querySelectorAll('.sidebar-profile, .profile-chip').forEach(function(bloc){
+      const av = bloc.querySelector('.avatar');
+      if(av){ av.textContent = initials(moi.nom); av.className = 'avatar ' + avatarClass(moi.nom); }
+      const nm = bloc.querySelector('.name');
+      if(nm) nm.textContent = moi.nom;
+      const rl = bloc.querySelector('.role');
+      if(rl) rl.textContent = roleLabel;
+    });
+    const prenom = moi.nom.trim().split(/\s+/)[0];
+    const sub = $('subTitle');
+    if(sub) sub.innerHTML = window.smGreeting() + ', <span class="greeting-name">' + esc(prenom) + '</span> — voici l’activité du jour.';
+  }).catch(function(){});
+
+
+  let firstLoad = true;
+  function countUp(el, to, opts){
+    opts = opts || {};
+    const suffix = opts.suffix || '';
+    const format = opts.format || function(n){ return Math.round(n).toLocaleString('fr-FR'); };
+    if(!firstLoad){ el.textContent = format(to) + suffix; return; }
+    const from = 0, duration = 900, start = performance.now();
+    (function tick(now){
+      const p = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = format(from + (to - from) * eased) + suffix;
+      if(p < 1) requestAnimationFrame(tick);
+    })(start);
+  }
+
+  const BADGES = {
+    paye: ['paid', 'Payé'], partiel: ['partial', 'Partiel'], retard: ['late', 'En retard'], attente: ['wait', 'En attente']
+  };
+  let collectes = [], jourDuJour = { payes: [], totaux: null }, modeJour = 'payes';
+  const MOYENS_LIB = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régulateur' };
+  const jjmm = function(iso){ const a = iso.split('-'); return a[2] + '/' + a[1]; };
+
+  function cellConducteur(nom, code, extra){
+    return '<td><div class="driver-cell"><div class="avatar ' + avatarClass(nom) + '">' + esc(initials(nom)) + '</div><div>' +
+      '<div class="d-name">' + esc(nom) + '</div><div class="d-code">' + esc(code) + '</div>' + (extra || '') + '</div></div></td>';
+  }
+
+  function renderCollectes(){
+    const q = $('searchInput').value.trim().toLowerCase();
+    const ok = function(x){ return x.nom.toLowerCase().includes(q) || x.code.toLowerCase().includes(q); };
+    const payes = jourDuJour.payes;
+    const impayes = collectes.filter(function(c){ return c.statut !== 'paye'; });
+
+    $('collectesChips').querySelectorAll('button').forEach(function(b){
+      const m = b.dataset.mode, n = m === 'payes' ? payes.length : m === 'impayes' ? impayes.length : payes.length + impayes.length;
+      b.textContent = (m === 'payes' ? 'Payés' : m === 'impayes' ? 'Impayés' : 'Tous') + ' (' + n + ')';
+      b.classList.toggle('on', m === modeJour);
+    });
+
+    const rowsPayes = payes.filter(ok).map(function(p){
+      const moy = p.moyens.map(function(m){ return MOYENS_LIB[m]; }).filter(Boolean);
+      const reg = p.regularisations.length ? '<span class="sub-note">a aussi réglé : ' + esc(p.regularisations.map(function(g){ return jjmm(g.date); }).join(', ')) + '</span>' : '';
+      return '<tr>' + cellConducteur(p.nom, p.code) +
+        '<td class="amount">' + fmtF(p.montant) + (moy.length ? '<br><span class="moyen-tag">' + esc(moy.join(' + ')) + '</span>' : '') + (p.numeros && p.numeros.length ? '<span class="sub-note">' + esc(p.numeros.join(', ')) + '</span>' : '') + '</td>' +
+        '<td>' + esc(p.heure || '—') + '</td>' +
+        '<td><span class="badge ' + (p.complet ? 'paid">Payé' : 'partial">Partiel') + '</span>' + reg + '</td></tr>';
+    });
+    const rowsImpayes = impayes.filter(ok).map(function(c){
+      const b = BADGES[c.statut];
+      const cumul = c.jours_impayes > 0 ? '<span class="sub-note warn">' + c.jours_impayes + ' jour' + (c.jours_impayes > 1 ? 's' : '') + ' impayé' + (c.jours_impayes > 1 ? 's' : '') + ' avant aujourd\'hui · ' + esc(fmtF(c.montant_du)) + ' dû</span>' : '';
+      return '<tr>' + cellConducteur(c.nom, c.code) +
+        '<td class="amount' + (c.montant ? '' : ' zero') + '">' + (c.montant ? fmtF(c.montant) : '—') + '</td>' +
+        '<td>' + esc(c.heure || '—') + '</td>' +
+        '<td><span class="badge ' + b[0] + '">' + b[1] + '</span>' + cumul + '</td></tr>';
+    });
+    const rows = modeJour === 'payes' ? rowsPayes : modeJour === 'impayes' ? rowsImpayes : rowsPayes.concat(rowsImpayes);
+    const shown = rows.slice(0, 40);
+    $('collectesBody').innerHTML = shown.join('');
+
+    const t = jourDuJour.totaux;
+    $('collectesMeta').textContent = t
+      ? 'Reçu : ' + fmtF(t.encaisse) + ' (Espèces ' + fmtF(t.par_moyen.especes) + ' · MOMO ' + fmtF(t.par_moyen.momo) + ' · MOMO régulateur ' + fmtF(t.par_moyen.momo_regulateur) + (t.par_moyen.non_precise ? ' · non précisé ' + fmtF(t.par_moyen.non_precise) : '') + ')'
+      : '';
+    const vide = modeJour === 'payes' ? "Personne n'a encore payé aujourd'hui." : modeJour === 'impayes' ? "Tous les conducteurs actifs sont à jour aujourd'hui." : "Aucun conducteur actif pour l'instant.";
+    const msg = !rows.length ? (q ? 'Aucun conducteur ne correspond à cette recherche.' : vide)
+      : rows.length > shown.length ? (rows.length - shown.length) + ' autres lignes — utilisez la recherche.' : '';
+    $('collectesEmpty').textContent = msg;
+    $('collectesEmpty').style.display = msg ? 'block' : 'none';
+  }
+  $('collectesChips').addEventListener('click', function(e){ const b = e.target.closest('button'); if(!b) return; modeJour = b.dataset.mode; renderCollectes(); });
+
+  /* ---------- Impayés cumulés (admin) : seuil de jours, suspension, réactivation ---------- */
+  let seuil = '2', impayesDonnees = null;
+  const jourLisible = function(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; };
+
+  function renderImpayes(){
+    const susp = seuil === 'suspendus';
+    $('impTh1').textContent = susp ? 'Téléphone' : 'Jours impayés';
+    $('impTh2').textContent = susp ? 'Inscrit le' : 'Montant dû';
+    $('impTh3').textContent = susp ? '' : 'Impayés depuis';
+    if(!impayesDonnees){ return; }
+    const cmp = impayesDonnees.compteurs;
+    $('impayesChips').querySelectorAll('button').forEach(function(b){
+      const m = b.dataset.min;
+      if(m !== 'suspendus') b.textContent = m + ' jours et + (' + (cmp ? cmp[m] : 0) + ')';
+      else b.textContent = 'Suspendus (' + (impayesDonnees.suspendus ? impayesDonnees.suspendus.length : 0) + ')';
+      b.classList.toggle('on', m === seuil);
+    });
+    let html = '', n = 0;
+    if(susp){
+      const liste = impayesDonnees.suspendus || [];
+      n = liste.length;
+      html = liste.map(function(c){
+        return '<tr>' + cellConducteur(c.nom, c.code) +
+          '<td>' + (c.telephone ? '<a href="tel:' + esc(c.telephone.replace(/\s+/g, '')) + '">' + esc(c.telephone) + '</a>' : '—') + '</td>' +
+          '<td>' + esc(jourLisible((c.date_creation || '').slice(0, 10))) + '</td><td></td>' +
+          '<td><button type="button" class="act-btn ok" data-act="reactiver" data-id="' + c.id + '" data-nom="' + esc(c.nom) + '">Réactiver</button></td></tr>';
+      }).join('');
+      $('impayesMeta').textContent = n + ' conducteur' + (n > 1 ? 's' : '') + ' suspendu' + (n > 1 ? 's' : '') + ' (absents des collectes du jour)';
+    } else {
+      const liste = impayesDonnees.listes[seuil] || [];
+      n = liste.length;
+      html = liste.map(function(c){
+        const tel = c.telephone ? '<span class="sub-note"><a href="tel:' + esc(c.telephone.replace(/\s+/g, '')) + '">' + esc(c.telephone) + '</a></span>' : '';
+        return '<tr>' + cellConducteur(c.nom, c.code, tel) +
+          '<td><span class="days-pill' + (c.jours_impayes < 3 ? ' mid' : '') + '">' + c.jours_impayes + '</span></td>' +
+          '<td class="amount">' + esc(fmtF(c.montant_du)) + (c.saisie_possible ? '<span class="tag-saisie" title="Article 8-II du contrat">≥ ' + esc(fmtF(impayesDonnees.seuil_saisie)) + ' : saisie possible</span>' : '') + '</td>' +
+          '<td>' + esc(jourLisible(c.depuis)) + (c.consecutifs ? '<span class="sub-note">' + c.consecutifs + ' d\'affilée</span>' : '') + '</td>' +
+          '<td><button type="button" class="act-btn" data-act="suspendre" data-id="' + c.id + '" data-nom="' + esc(c.nom) + '">Suspendre</button></td></tr>';
+      }).join('');
+      $('impayesMeta').textContent = n + ' conducteur' + (n > 1 ? 's' : '') + ' avec ' + seuil + ' jours impayés ou plus (avant aujourd\'hui)';
+    }
+    $('impayesBody').innerHTML = html;
+    const vide = susp ? 'Aucun conducteur suspendu.' : 'Aucun conducteur actif avec ' + seuil + ' jours impayés ou plus.';
+    $('impayesEmpty').textContent = vide;
+    $('impayesEmpty').style.display = n ? 'none' : 'block';
+  }
+
+  function chargerImpayes(){
+    const seuils = ['2', '3', '4', '5'];
+    Promise.all([api('/api/impayes?min=1'), api('/api/clients')]).then(function(r){
+      const tous = r[0].conducteurs;
+      const listes = {};
+      seuils.forEach(function(s){ listes[s] = tous.filter(function(c){ return c.jours_impayes >= Number(s); }); });
+      impayesDonnees = {
+        compteurs: r[0].compteurs, listes: listes, seuil_saisie: r[0].seuil_saisie,
+        suspendus: r[1].filter(function(c){ return c.statut === 'inactif'; })
+      };
+      renderImpayes();
+    }).catch(function(err){
+      $('impayesEmpty').textContent = smMessage(err); $('impayesEmpty').style.display = 'block';
+    });
+  }
+
+  $('impayesChips').addEventListener('click', function(e){ const b = e.target.closest('button'); if(!b) return; seuil = b.dataset.min; renderImpayes(); });
+  $('impayesBody').addEventListener('click', function(e){
+    const b = e.target.closest('button[data-act]'); if(!b) return;
+    const susp = b.dataset.act === 'suspendre';
+    const question = susp
+      ? 'Suspendre ' + b.dataset.nom + ' ?\n\nIl ne figurera plus dans les collectes du jour. Vous pourrez le réactiver à tout moment depuis « Suspendus ».'
+      : 'Réactiver ' + b.dataset.nom + ' ? Il réapparaîtra dans les collectes du jour.';
+    if(!window.confirm(question)) return;
+    b.disabled = true;
+    api('/api/clients/' + b.dataset.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: susp ? 'inactif' : 'actif' }) })
+      .then(function(){
+        if(window.smToast) smToast(b.dataset.nom + (susp ? ' est suspendu.' : ' est réactivé.'));
+        chargerImpayes(); load();
+      })
+      .catch(function(err){ b.disabled = false; alert(smMessage(err)); });
+  });
+
+  function render(d){
+    const jours = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+    const mois = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+    const t = new Date(d.date + 'T12:00:00');
+    $('subTitle').textContent = 'Collectes et conducteurs — ' + jours[t.getDay()] + ' ' + t.getDate() + ' ' + mois[t.getMonth()] + ' ' + t.getFullYear();
+
+    countUp($('kpiCollecte'), d.collecte_aujourdhui, { format: fmtF });
+    const dc = $('kpiCollecteDelta');
+    dc.className = 'delta';
+    if(d.collecte_hier > 0){
+      const pct = Math.round((d.collecte_aujourdhui - d.collecte_hier) / d.collecte_hier * 100);
+      dc.textContent = (pct > 0 ? '+' : '') + pct + ' % par rapport à hier';
+      if(pct > 0) dc.classList.add('up'); else if(pct < 0) dc.classList.add('warn');
+    } else { dc.textContent = 'Aucune collecte hier'; }
+
+    countUp($('kpiActifs'), d.conducteurs_actifs);
+    $('kpiActifsDelta').textContent = 'sur ' + d.conducteurs_total + ' inscrits';
+    countUp($('kpiMotos'), d.motos_financees);
+
+    const taux = d.attendus ? Math.round(d.payes / d.attendus * 100) : 0;
+    countUp($('kpiTaux'), taux, { suffix:' %' });
+    $('kpiTauxDelta').textContent = d.payes + ' / ' + d.attendus + ' versements attendus';
+    $('kpiTauxDelta').className = 'delta' + (d.attendus && taux < 100 ? ' warn' : '');
+
+    collectes = d.collectes;
+    jourDuJour = d.jour || { payes: [], totaux: null };
+    renderCollectes();
+
+    const max = Math.max.apply(null, d.sept_jours.map(x => x.total).concat([1]));
+    $('chart').innerHTML = d.sept_jours.map(function(x, i){
+      const day = jours[new Date(x.date + 'T12:00:00').getDay()].slice(0, 3);
+      const h = x.total ? Math.max(4, Math.round(x.total / max * 100)) : 2;
+      return '<div class="bar-col' + (i === d.sept_jours.length - 1 ? ' today' : '') + '">' +
+        '<div class="bar-track"><div class="bar" data-h="' + h + '" title="' + esc(fmtF(x.total)) + '"></div></div>' +
+        '<span class="day">' + esc(day.charAt(0).toUpperCase() + day.slice(1)) + '</span></div>';
+    }).join('');
+
+    $('financingEmpty').style.display = d.financements.length ? 'none' : 'block';
+    $('financingList').innerHTML = d.financements.map(function(f){
+      const done = f.pct >= 100;
+      return '<div class="financing-row">' +
+        '<div class="who"><div class="d-name">' + esc(f.nom) + '</div><div class="d-code">' + esc(f.code) + '</div></div>' +
+        '<div class="progress-track"><div class="progress-bar' + (done ? ' done' : '') + '"><span data-w="' + f.pct + '"></span></div>' +
+        '<div class="progress-meta"><span>' + esc(f.verse.toLocaleString('fr-FR')) + ' / ' + esc(fmtF(f.prix)) + '</span><span class="pct">' + f.pct + ' %</span></div></div>' +
+        '<div class="eta' + (done ? ' done' : '') + '">' + (done ? 'Moto remise ✓' : '≈ ' + f.jours_restants + ' jours restants') + '</div></div>';
+    }).join('');
+
+    // Deux frames d'attente pour que le navigateur peigne l'état de départ (0) avant d'animer vers la cible.
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      document.querySelectorAll('.chart .bar[data-h]').forEach(function(el){ el.style.height = el.dataset.h + '%'; });
+      document.querySelectorAll('.progress-bar > span[data-w]').forEach(function(el){ el.style.width = el.dataset.w + '%'; });
+    }); });
+
+    firstLoad = false;
+  }
+
+  function load(){
+    api('/api/tableau-de-bord').then(render).catch(function(err){
+      const msg = err.message === 'Failed to fetch'
+        ? 'Impossible de contacter le serveur. Vérifiez qu’il est bien démarré (npm start).' : smMessage(err);
+      $('collectesEmpty').textContent = msg;
+      $('collectesEmpty').style.display = 'block';
+    });
+  }
+  load();
+  chargerImpayes();
+  setInterval(function(){ load(); chargerImpayes(); }, 60000);
+  $('searchInput').addEventListener('input', renderCollectes);
+})();
+</script>
+
+</body>
+</html>

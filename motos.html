@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Motos &amp; financement – Soft Moto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,450&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-dark:#0B1B33; --bg-dark-2:#16305A; --bg-light:#F1F4F9; --panel:#FFFFFF;
+    --accent:#1D4ED8; --accent-dark:#1E3A8A; --accent-soft:#DBE6FD;
+    --amber:#C77D0A; --amber-soft:#FCEBC8;
+    --ink:#0F172A; --ink-soft:#526074; --ink-faint:#8793A5;
+    --cream:#F1F4F9; --cream-soft:#AEBBD0;
+    --error:#B42318; --error-soft:#FDE7E5;
+    --border:#DDE3EC; --radius:10px;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:"IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  html{height:100%; scroll-padding-top:env(safe-area-inset-top, 0px);}
+  body{ min-height:100%; margin:0; font-family:var(--sans); color:var(--ink); background:var(--bg-light); -webkit-font-smoothing:antialiased; }
+  a{ color:inherit; }
+
+  .app{ display:grid; grid-template-columns:250px 1fr; min-height:100vh; }
+  .sidebar{
+    background:radial-gradient(130% 110% at 10% 0%, var(--bg-dark-2) 0%, var(--bg-dark) 60%);
+    color:var(--cream); display:flex; flex-direction:column; padding:26px 20px 20px;
+    position:relative; overflow:hidden; z-index:20;
+  }
+  .logotype{ display:flex; align-items:center; gap:9px; font-family:var(--serif); font-style:italic; font-weight:500; font-size:18px; letter-spacing:0.2px; color:var(--cream); padding:2px 8px 26px; }
+  nav.nav{ display:flex; flex-direction:column; gap:3px; margin-top:6px; }
+  .nav a{ display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:8px; text-decoration:none; font-size:14.5px; font-weight:500; color:var(--cream-soft); transition:background .15s ease, color .15s ease; }
+  .nav a svg{ flex-shrink:0; opacity:0.85; }
+  .nav a:hover{ background:rgba(241,244,249,0.07); color:var(--cream); }
+  .nav a.active{ background:var(--accent); color:var(--cream); }
+  .nav a.active svg{ opacity:1; }
+  .nav a:focus-visible{ outline:2px solid var(--accent-soft); outline-offset:2px; }
+  .sidebar-spacer{ flex:1; }
+  .sidebar-profile{ display:flex; align-items:center; gap:10px; padding:12px 10px; border-top:1px solid rgba(241,244,249,0.12); }
+  .avatar{ width:34px; height:34px; border-radius:50%; background:var(--accent); color:var(--cream); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:13px; font-weight:600; flex-shrink:0; }
+  .sidebar-profile .who{ line-height:1.3; min-width:0; }
+  .sidebar-profile .who .name{ font-size:13.5px; font-weight:600; color:var(--cream); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sidebar-profile .who .role{ font-size:12px; color:var(--ink-faint); }
+  .logout-link{ margin-left:auto; display:flex; padding:6px; border-radius:7px; color:var(--ink-faint); text-decoration:none; flex-shrink:0; }
+  .logout-link:hover{ color:var(--cream); background:rgba(241,244,249,0.08); }
+
+  main.main{ padding:28px 34px 60px; min-width:0; }
+  .topbar{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:22px; flex-wrap:wrap; }
+  .menu-toggle{ display:none; background:var(--panel); border:1.5px solid var(--border); border-radius:8px; padding:8px; margin-bottom:14px; cursor:pointer; }
+  .topbar h1{ font-family:var(--serif); font-weight:600; font-size:26px; margin:0 0 6px; color:var(--ink); }
+  .topbar .sub{ margin:0; color:var(--ink-soft); font-size:14.5px; }
+  .profile-chip{ display:flex; align-items:center; gap:9px; background:var(--panel); border:1.5px solid var(--border); border-radius:9px; padding:6px 12px 6px 6px; }
+  .profile-chip .name{ font-size:13.5px; font-weight:600; }
+  .profile-chip .role{ font-size:11.5px; color:var(--ink-soft); }
+
+  .summary-strip{ display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; margin-bottom:20px; }
+  .summary-card{ background:var(--panel); border:1.5px solid var(--border); border-left:3.5px solid var(--accent-line, var(--accent)); border-radius:12px; padding:16px 18px; }
+  .summary-card.s1{ --accent-line:var(--paye); }
+  .summary-card.s2{ --accent-line:var(--accent); }
+  .summary-card.s3{ --accent-line:var(--amber); }
+  .summary-card.s4{ --accent-line:var(--ink-faint); }
+  .summary-card .label{ font-size:12.5px; color:var(--ink-soft); margin:0 0 8px; }
+  .summary-card .value{ font-family:var(--mono); font-size:21px; font-weight:600; color:var(--ink); }
+
+  .toolbar{ display:flex; align-items:center; gap:14px; margin-bottom:16px; flex-wrap:wrap; }
+  .search{ display:flex; align-items:center; gap:8px; background:var(--panel); border:1.5px solid var(--border); border-radius:9px; padding:9px 12px; color:var(--ink-faint); min-width:240px; }
+  .search input{ border:none; outline:none; background:none; font-family:var(--sans); font-size:14px; color:var(--ink); width:100%; }
+  .status-toggle{ display:flex; border:1.5px solid var(--border); border-radius:8px; overflow:hidden; }
+  .status-toggle button{ padding:9px 14px; font-size:13px; font-weight:600; background:var(--panel); border:none; color:var(--ink-soft); cursor:pointer; border-right:1.5px solid var(--border); }
+  .status-toggle button:last-child{ border-right:none; }
+  .status-toggle button.active{ background:var(--accent); color:var(--cream); }
+  .toolbar-spacer{ flex:1; }
+  .btn{ padding:9px 16px; border-radius:9px; border:1.5px solid var(--accent); background:var(--accent); color:var(--cream); font-weight:600; font-size:13.5px; cursor:pointer; }
+  .btn:hover{ background:var(--accent-dark); }
+  .btn.ghost{ background:var(--panel); color:var(--accent-dark); }
+  .btn.ghost:hover{ background:var(--accent-soft); }
+
+  .panel{ background:var(--panel); border:1.5px solid var(--border); border-radius:12px; padding:10px 22px 8px; }
+  .moto-row{ display:flex; align-items:center; gap:16px; padding:16px 0; border-bottom:1px solid var(--border); cursor:pointer; border-radius:8px; transition:background .15s ease; }
+  .moto-row:last-child{ border-bottom:none; }
+  .moto-row:hover{ background:var(--bg-light); }
+  .moto-row .who{ width:200px; flex-shrink:0; display:flex; align-items:center; gap:10px; }
+  .moto-row .d-name{ font-weight:600; font-size:13.5px; }
+  .moto-row .d-code{ font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); }
+  .reliability{ display:inline-block; font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:999px; margin-top:4px; white-space:nowrap; }
+  .reliability.good{ background:var(--paye-soft); color:var(--paye-dark); }
+  .reliability.mid{ background:var(--amber-soft); color:var(--amber); }
+  .reliability.bad{ background:var(--impaye-soft); color:var(--impaye-dark); }
+  .reliability.unknown{ background:#E6EAF1; color:var(--ink-soft); }
+  .moto-row .plan{ flex:1; min-width:0; }
+  .moto-row .no-plan{ color:var(--ink-faint); font-size:13px; font-style:italic; }
+  .progress-track{ flex:1; min-width:0; }
+  .progress-bar{ height:8px; border-radius:999px; background:var(--border); overflow:hidden; margin-bottom:6px; }
+  .progress-bar > span{ display:block; height:100%; width:0; background:linear-gradient(90deg, var(--accent), var(--accent-dark)); border-radius:999px; transition:width .8s cubic-bezier(.16,.8,.28,1); }
+  .progress-bar.done > span{ background:linear-gradient(90deg, var(--paye), var(--paye-dark)); }
+  .progress-meta{ display:flex; justify-content:space-between; font-size:12px; color:var(--ink-soft); }
+  .progress-meta .pct{ font-family:var(--mono); font-weight:600; color:var(--ink); }
+  .eta{ width:130px; flex-shrink:0; text-align:right; font-size:12px; color:var(--ink-faint); }
+  .eta.done{ color:var(--paye-dark); font-weight:600; }
+  .moto-row .badge-inactif{ background:#E6EAF1; color:var(--ink-soft); font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; margin-left:8px; }
+  .empty-state{ color:var(--ink-faint); font-size:13.5px; padding:24px 0; text-align:center; }
+
+  /* ---------- Modale d'édition ---------- */
+  .modal-backdrop{ display:none; position:fixed; inset:0; background:rgba(11,27,51,0.5); backdrop-filter:blur(2px); align-items:center; justify-content:center; padding:20px; z-index:100; }
+  .modal-backdrop.show{ display:flex; animation:sm-modal-fade .18s ease both; }
+  .modal-card{ background:var(--panel); border-radius:14px; padding:24px; width:100%; max-width:380px; box-shadow:0 20px 50px -12px rgba(11,27,51,0.35); animation:sm-modal-pop .22s cubic-bezier(.22,.8,.32,1) both; }
+  .modal-card h3{ font-family:var(--serif); font-size:19px; margin:0 0 2px; }
+  .modal-card .modal-sub{ margin:0 0 18px; color:var(--ink-soft); font-size:13.5px; font-family:var(--mono); }
+  .field{ margin-bottom:16px; }
+  .field label{ display:block; font-size:12.5px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; }
+  .field input, .field select{ width:100%; padding:11px 13px; font-size:14.5px; font-family:var(--sans); color:var(--ink); background:var(--bg-light); border:1.5px solid var(--border); border-radius:9px; outline:none; }
+  .field input:focus, .field select:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .field .hint{ font-size:12px; color:var(--ink-faint); margin-top:5px; }
+  .modal-error{ margin:4px 0 12px; font-size:13px; color:var(--impaye-dark); display:none; }
+  .modal-error.show{ display:block; }
+  .modal-actions{ display:flex; gap:10px; margin-top:6px; }
+  .modal-actions button{ flex:1; padding:12px; border-radius:10px; font-size:14.5px; font-weight:600; cursor:pointer; border:1.5px solid transparent; }
+  .modal-actions .cancel{ background:var(--bg-light); border-color:var(--border); color:var(--ink-soft); }
+  .modal-actions .save{ background:var(--accent); color:var(--cream); }
+  .modal-actions .save:hover{ background:var(--accent-dark); }
+  .modal-actions button:disabled{ opacity:0.6; cursor:default; }
+
+  @media (max-width: 1080px){ .summary-strip{ grid-template-columns:1fr 1fr; } }
+  @media (max-width: 780px){
+    .app{ grid-template-columns:1fr; }
+    .sidebar{ position:fixed; inset:0 30% 0 0; transform:translateX(-100%); transition:transform .2s ease; width:100%; max-width:270px; }
+    .sidebar.open{ transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,0.3); }
+    .menu-toggle{ display:inline-flex; }
+    main.main{ padding:20px 18px 50px; }
+    .summary-strip{ grid-template-columns:1fr 1fr; gap:12px; }
+    .moto-row{ flex-wrap:wrap; }
+    .moto-row .who{ width:100%; }
+    .eta{ width:auto; text-align:left; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sm-ambient-glow" aria-hidden="true"></div>
+    <div class="logotype">
+      <span class="logo-ring" aria-hidden="true"></span>
+      <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/>
+        <circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+        <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="11" y1="16" x2="11" y2="19.4" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="16" y1="11" x2="19.4" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+      </svg>
+      Soft Moto
+    </div>
+
+    <nav class="nav">
+      <a href="admin.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+        Tableau de bord
+      </a>
+      <a href="conducteurs.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Conducteurs
+      </a>
+      <a href="collectes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Collectes journalières
+      </a>
+      <a href="motos.html" class="active">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h9V8H6zM15 8h3l3 4v5h-1"/></svg>
+        Motos &amp; financement
+      </a>
+      <a href="employes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
+        Employés
+      </a>
+      <a href="parametres.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Paramètres
+      </a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-profile">
+      <div class="avatar">AD</div>
+      <div class="who">
+        <div class="name">Admin Soft Moto</div>
+        <div class="role">Gestionnaire</div>
+      </div>
+      <a class="logout-link" id="logoutLink" href="login.html" aria-label="Déconnexion" title="Déconnexion">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <button class="menu-toggle" id="menuToggle" aria-label="Ouvrir le menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+
+    <div class="topbar">
+      <div>
+        <h1>Motos &amp; financement</h1>
+        <p class="sub">Progression de chaque moto, prix et montant journalier</p>
+      </div>
+      <div class="profile-chip">
+        <div class="avatar">AD</div>
+        <div>
+          <div class="name">Admin</div>
+          <div class="role">Soft Moto</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-strip">
+      <div class="summary-card s1">
+        <p class="label">Motos entièrement financées</p>
+        <div class="value" id="sumDone">—</div>
+      </div>
+      <div class="summary-card s2">
+        <p class="label">Valeur totale engagée</p>
+        <div class="value" id="sumValeur">—</div>
+      </div>
+      <div class="summary-card s3">
+        <p class="label">Restant à collecter</p>
+        <div class="value" id="sumRestant">—</div>
+      </div>
+      <div class="summary-card s4">
+        <p class="label">Sans plan de financement</p>
+        <div class="value" id="sumSansPlan">—</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Rechercher un conducteur…">
+      </div>
+      <div class="status-toggle" id="statusToggle">
+        <button type="button" data-v="tous" class="active">Tous</button>
+        <button type="button" data-v="cours">En cours</button>
+        <button type="button" data-v="fini">Terminées</button>
+        <button type="button" data-v="aucun">Sans plan</button>
+      </div>
+      <div class="toolbar-spacer"></div>
+    </div>
+
+    <div class="panel">
+      <div id="listeBody"></div>
+      <p class="empty-state" id="emptyState" style="display:none;"></p>
+    </div>
+
+  </main>
+</div>
+
+<div class="modal-backdrop" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+  <div class="modal-card">
+    <h3 id="editTitle">—</h3>
+    <p class="modal-sub" id="editCode">—</p>
+
+    <div class="field">
+      <label for="prixInput">Prix de la moto (F CFA)</label>
+      <input type="number" inputmode="numeric" id="prixInput" min="0" step="1000" placeholder="Aucun plan de financement">
+      <p class="hint">Laissez vide pour retirer le plan de financement de ce conducteur.</p>
+    </div>
+    <div class="field">
+      <label for="cibleInput">Montant journalier personnalisé (F CFA)</label>
+      <input type="number" inputmode="numeric" id="cibleInput" min="0" step="100" placeholder="Utiliser le montant par défaut">
+      <p class="hint">Laissez vide pour utiliser le montant journalier par défaut (réglages).</p>
+    </div>
+    <div class="field">
+      <label for="statutSelect">Statut</label>
+      <select id="statutSelect">
+        <option value="actif">Actif</option>
+        <option value="inactif">Inactif</option>
+      </select>
+    </div>
+
+    <p class="modal-error" id="editError"></p>
+    <div class="modal-actions">
+      <button type="button" class="cancel" id="editCancelBtn">Annuler</button>
+      <button type="button" class="save btn" id="editSaveBtn">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script src="serveur-check.js"></script>
+<script src="theme.js"></script>
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const fmtF = (n) => Math.round(n).toLocaleString('fr-FR') + ' F';
+  const initials = (name) => name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  function avatarClass(name){
+    let h = 0;
+    for(let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return 'av-' + (1 + (h % 6));
+  }
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function api(url, opts){
+    return fetch(url, opts).then(async function(r){
+      const data = await r.json().catch(function(){ return {}; });
+      if(r.status === 401){ window.location.href = 'login.html'; throw new Error('Session expirée.'); }
+      if(!r.ok) throw new Error(data.erreur || 'Erreur serveur.');
+      return data;
+    });
+  }
+
+  $('menuToggle').addEventListener('click', function(){ $('sidebar').classList.toggle('open'); });
+  $('logoutLink').addEventListener('click', function(e){
+    e.preventDefault();
+    fetch('/api/deconnexion', { method: 'POST' }).finally(function(){ window.location.href = 'login.html'; });
+  });
+
+  api('/api/moi').then(function(moi){
+    const roleLabel = moi.role === 'admin' ? 'Administrateur' : 'Caissière';
+    document.querySelectorAll('.sidebar-profile, .profile-chip').forEach(function(bloc){
+      const av = bloc.querySelector('.avatar');
+      if(av){ av.textContent = initials(moi.nom); av.className = 'avatar ' + avatarClass(moi.nom); }
+      const nm = bloc.querySelector('.name');
+      if(nm) nm.textContent = moi.nom;
+      const rl = bloc.querySelector('.role');
+      if(rl) rl.textContent = roleLabel;
+    });
+  }).catch(function(){});
+
+  const searchInput = $('searchInput');
+  const statusToggle = $('statusToggle');
+  const listeBody = $('listeBody');
+  const emptyState = $('emptyState');
+  let motos = [];
+  let statutFiltre = 'tous';
+  let firstLoad = true;
+  const celebres = new Set(); // codes déjà fêtés dans cette session (évite de refêter à chaque re-rendu)
+
+  function categorie(m){
+    if(!m.prix_moto) return 'aucun';
+    return m.pct >= 100 ? 'fini' : 'cours';
+  }
+
+  function reliabilityBadge(m){
+    if(m.fiabilite === null || m.fiabilite === undefined){
+      return '<span class="reliability unknown" title="Historique trop court (' + m.fiabilite_jours + ' j)">Historique court</span>';
+    }
+    const cls = m.fiabilite >= 80 ? 'good' : m.fiabilite >= 50 ? 'mid' : 'bad';
+    return '<span class="reliability ' + cls + '" title="' + m.fiabilite + ' % des jours payés sur les ' + m.fiabilite_jours + ' derniers jours">' + m.fiabilite + ' % fiable</span>';
+  }
+
+  function render(){
+    const q = searchInput.value.trim().toLowerCase();
+    const list = motos.filter(function(m){
+      const matchQ = !q || m.nom.toLowerCase().includes(q) || m.code.toLowerCase().includes(q);
+      const matchStatut = statutFiltre === 'tous' || categorie(m) === statutFiltre;
+      return matchQ && matchStatut;
+    });
+
+    listeBody.innerHTML = list.map(function(m, i){
+      const inactifTag = m.statut === 'inactif' ? '<span class="badge-inactif">Inactif</span>' : '';
+      const planHtml = !m.prix_moto
+        ? '<span class="no-plan">Aucun plan de financement — cliquez pour en définir un</span>'
+        : '<div class="progress-track">' +
+            '<div class="progress-bar' + (m.pct >= 100 ? ' done' : '') + '"><span data-w="' + m.pct + '"></span></div>' +
+            '<div class="progress-meta"><span>' + fmtF(m.verse) + ' / ' + fmtF(m.prix_moto) + '</span><span class="pct">' + m.pct + ' %</span></div>' +
+          '</div>' +
+          '<div class="eta' + (m.pct >= 100 ? ' done' : '') + '">' + (m.pct >= 100 ? '<span class="sm-milestone-badge">🏁 Moto remboursée</span>' : '≈ ' + m.jours_restants + ' jours restants') + '</div>';
+      return '<div class="moto-row" data-i="' + i + '">' +
+        '<div class="who"><div class="avatar ' + avatarClass(m.nom) + '">' + esc(initials(m.nom)) + '</div>' +
+        '<div><div class="d-name">' + esc(m.nom) + inactifTag + '</div><div class="d-code">' + esc(m.code) + '</div>' + reliabilityBadge(m) + '</div></div>' +
+        '<div class="plan">' + planHtml + '</div>' +
+      '</div>';
+    }).join('');
+    listeBody.dataset.list = 'ok';
+    window.__listeCourante = list;
+
+    const msg = !motos.length ? 'Aucun conducteur enregistré.' : !list.length ? 'Aucun conducteur ne correspond à ces filtres.' : '';
+    emptyState.textContent = msg;
+    emptyState.style.display = msg ? 'block' : 'none';
+
+    if(firstLoad){
+      requestAnimationFrame(function(){ requestAnimationFrame(function(){
+        listeBody.querySelectorAll('.progress-bar > span[data-w]').forEach(function(el){ el.style.width = el.dataset.w + '%'; });
+      }); });
+      list.forEach(function(m){ if(m.pct >= 100) celebres.add(m.code); }); // pas de fête au tout premier chargement
+    } else {
+      listeBody.querySelectorAll('.progress-bar > span[data-w]').forEach(function(el){ el.style.width = el.dataset.w + '%'; });
+      list.forEach(function(m, i){
+        if(m.pct >= 100 && !celebres.has(m.code)){
+          celebres.add(m.code);
+          const row = listeBody.querySelector('.moto-row[data-i="' + i + '"] .sm-milestone-badge');
+          if(row){ row.closest('.moto-row').classList.add('sm-milestone'); window.smCelebrate(row); }
+        }
+      });
+    }
+  }
+
+  function recomputeSummary(){
+    const avecPlan = motos.filter(function(m){ return m.prix_moto; });
+    const done = avecPlan.filter(function(m){ return m.pct >= 100; });
+    const enCours = avecPlan.filter(function(m){ return m.pct < 100; });
+    $('sumDone').textContent = done.length;
+    $('sumValeur').textContent = fmtF(avecPlan.reduce(function(s, m){ return s + m.prix_moto; }, 0));
+    $('sumRestant').textContent = fmtF(enCours.reduce(function(s, m){ return s + Math.max(0, m.prix_moto - m.verse); }, 0));
+    $('sumSansPlan').textContent = motos.filter(function(m){ return !m.prix_moto && m.statut === 'actif'; }).length;
+  }
+
+  function charger(){
+    api('/api/financements')
+      .then(function(rows){
+        motos = rows;
+        recomputeSummary();
+        render();
+        firstLoad = false;
+      })
+      .catch(function(err){
+        emptyState.textContent = esc(smMessage(err));
+        emptyState.style.display = 'block';
+      });
+  }
+
+  searchInput.addEventListener('input', render);
+  statusToggle.querySelectorAll('button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      statusToggle.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      statutFiltre = btn.dataset.v;
+      render();
+    });
+  });
+
+  // ---------- Modale d'édition ----------
+  const editModal = $('editModal');
+  const editTitle = $('editTitle');
+  const editCode = $('editCode');
+  const prixInput = $('prixInput');
+  const cibleInput = $('cibleInput');
+  const statutSelect = $('statutSelect');
+  const editError = $('editError');
+  const editSaveBtn = $('editSaveBtn');
+  const editCancelBtn = $('editCancelBtn');
+  let motoEnCours = null;
+
+  function fermerModal(){ editModal.classList.remove('show'); motoEnCours = null; }
+  editCancelBtn.addEventListener('click', fermerModal);
+  editModal.addEventListener('click', function(e){ if(e.target === editModal) fermerModal(); });
+
+  listeBody.addEventListener('click', function(e){
+    const row = e.target.closest('.moto-row');
+    if(!row) return;
+    const m = window.__listeCourante[Number(row.dataset.i)];
+    if(!m) return;
+    motoEnCours = m;
+
+    editTitle.textContent = m.nom;
+    editCode.textContent = m.code;
+    prixInput.value = m.prix_moto || '';
+    cibleInput.value = m.montant_journalier || '';
+    statutSelect.value = m.statut;
+    editError.classList.remove('show');
+    editModal.classList.add('show');
+  });
+
+  function enregistrer(){
+    if(!motoEnCours) return;
+    const corps = {
+      prix_moto: prixInput.value === '' ? null : Math.round(Number(prixInput.value)),
+      montant_journalier: cibleInput.value === '' ? null : Math.round(Number(cibleInput.value)),
+      statut: statutSelect.value
+    };
+    editSaveBtn.disabled = true;
+    api('/api/clients/' + motoEnCours.id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps)
+    })
+      .then(function(){ charger(); fermerModal(); })
+      .catch(function(err){
+        editError.textContent = esc(smMessage(err));
+        editError.classList.add('show');
+      })
+      .finally(function(){ editSaveBtn.disabled = false; });
+  }
+  editSaveBtn.addEventListener('click', enregistrer);
+
+  charger();
+})();
+</script>
+
+</body>
+</html>

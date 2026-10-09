@@ -1,0 +1,16 @@
+# Base PostgreSQL locale :  docker compose up -d
+# Puis :  DATABASE_URL=postgresql://softmoto:softmoto@localhost:5432/softmoto npm start
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: softmoto
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-softmoto}
+      POSTGRES_DB: softmoto
+    ports:
+      - "5432:5432"
+    volumes:
+      - softmoto_data:/var/lib/postgresql/data
+volumes:
+  softmoto_data:

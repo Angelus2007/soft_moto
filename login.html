@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connexion – Soft Moto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,450&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-dark:#0B1B33;
+    --bg-dark-2:#16305A;
+    --bg-light:#F1F4F9;
+    --panel:#FFFFFF;
+    --accent:#1D4ED8;
+    --accent-dark:#1E3A8A;
+    --accent-soft:#DBE6FD;
+    --ink:#0F172A;
+    --ink-soft:#526074;
+    --ink-faint:#8793A5;
+    --cream:#F1F4F9;
+    --cream-soft:#AEBBD0;
+    --error:#B42318;
+    --error-soft:#FDE7E5;
+    --border:#DDE3EC;
+    --radius:10px;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html{height:100%; scroll-padding-top:env(safe-area-inset-top, 0px);}
+  body{
+    height:100%;
+    margin:0;
+    font-family:var(--sans);
+    color:var(--ink);
+    background:var(--bg-light);
+    -webkit-font-smoothing:antialiased;
+    padding-top:env(safe-area-inset-top, 0px);
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+  }
+
+  .screen{
+    display:grid;
+    grid-template-columns:1.05fr 1fr;
+    min-height:100vh;
+  }
+
+  /* ---------- Left panel ---------- */
+  .side{
+    position:relative;
+    background:radial-gradient(120% 120% at 15% 10%, var(--bg-dark-2) 0%, var(--bg-dark) 55%);
+    color:var(--cream);
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    padding:56px 56px 48px;
+    overflow:hidden;
+  }
+
+  .side svg.decor{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    opacity:0.55;
+  }
+
+  .mark{ display:flex; align-items:center; z-index:1; }
+
+  .logotype{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-family:var(--serif);
+    font-style:italic;
+    font-weight:500;
+    font-size:19px;
+    letter-spacing:0.2px;
+    color:var(--cream);
+  }
+
+  .side-copy{ max-width:380px; z-index:1; }
+  .side-copy p.eyebrow-free{ margin:0 0 18px; color:var(--cream-soft); font-size:15px; line-height:1.6; }
+  .side-copy h1{
+    font-family:var(--serif); font-weight:450; font-style:italic;
+    font-size:clamp(28px, 3vw, 38px); line-height:1.25; margin:0; color:var(--cream);
+    transition:opacity .15s ease;
+  }
+  .side-foot{ z-index:1; font-size:13px; color:var(--ink-faint); }
+
+  /* ---------- Right panel ---------- */
+  .form-side{ display:flex; align-items:center; justify-content:center; padding:40px 24px; background:var(--bg-light); }
+  .card{ width:100%; max-width:380px; }
+  .card h2{ font-family:var(--serif); font-weight:500; font-size:28px; margin:0 0 8px; color:var(--ink); }
+  .card .sub{ margin:0 0 32px; color:var(--ink-soft); font-size:15px; line-height:1.5; }
+
+  .field{ margin-bottom:20px; }
+  .field label{ display:block; font-size:13.5px; font-weight:500; color:var(--ink); margin-bottom:7px; }
+  .input-wrap{ position:relative; }
+  .field input{
+    width:100%; padding:12px 14px; font-size:15px; font-family:var(--sans); color:var(--ink);
+    background:var(--panel); border:1.5px solid var(--border); border-radius:var(--radius); outline:none;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  .field input::placeholder{ color:var(--ink-faint); }
+  .field input:focus-visible, .field input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .field input[data-invalid="true"]{ border-color:var(--error); }
+  .field input[data-invalid="true"]:focus{ box-shadow:0 0 0 3px var(--error-soft); }
+
+  .toggle-pass{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none;
+    padding:6px; cursor:pointer; color:var(--ink-soft); display:flex; border-radius:6px;
+  }
+  .toggle-pass:hover{ color:var(--ink); background:var(--accent-soft); }
+  .toggle-pass:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .error-msg{ display:none; margin-top:6px; font-size:13px; color:var(--error); }
+  .error-msg.show{ display:block; }
+
+  .row-between{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 16px; margin:4px 0 26px; font-size:14px; }
+  .row-between .hint{ color:var(--ink-faint); font-size:13px; }
+  .remember{ display:flex; align-items:center; gap:8px; color:var(--ink-soft); cursor:pointer; user-select:none; }
+  .remember input{ width:16px; height:16px; accent-color:var(--accent); cursor:pointer; }
+  .row-between a{ color:var(--accent-dark); text-decoration:none; font-weight:500; }
+  .row-between a:hover{ text-decoration:underline; }
+  .row-between a:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+  button.submit{
+    width:100%; padding:13px 16px; font-size:15.5px; font-weight:600; font-family:var(--sans);
+    color:var(--cream); background:var(--accent); border:none; border-radius:var(--radius); cursor:pointer;
+    transition:background .15s ease, transform .1s ease;
+  }
+  button.submit:hover{ background:var(--accent-dark); }
+  button.submit:active{ transform:translateY(1px); }
+  button.submit:focus-visible{ outline:2px solid var(--ink); outline-offset:3px; }
+  button.submit[disabled]{ opacity:.7; cursor:default; }
+
+  .foot-link{ margin:24px 0 0; text-align:center; font-size:14px; color:var(--ink-soft); }
+  .foot-link a{ color:var(--ink); font-weight:600; text-decoration:none; cursor:pointer; }
+  .foot-link a:hover{ text-decoration:underline; }
+
+  .success{
+    display:none; align-items:flex-start; gap:12px; padding:14px 16px; border-radius:var(--radius);
+    background:var(--accent-soft); color:var(--accent-dark); font-size:14px; line-height:1.5; margin-bottom:20px;
+  }
+  .success.show{ display:flex; }
+
+  [role="alert"]:empty{ display:none; }
+
+  /* ---------- Vue "Créer un compte" ---------- */
+  #signupView{ display:none; }
+  .success-icon{
+    width:46px; height:46px; border-radius:50%; background:var(--accent-soft); color:var(--accent-dark);
+    display:flex; align-items:center; justify-content:center; margin-bottom:18px;
+  }
+  #signupSuccessView{ display:none; }
+  #signupSuccessView h2{ margin-bottom:10px; }
+  #signupSuccessView p.sub{ margin-bottom:26px; }
+  .btn-link{
+    display:inline-flex; width:100%; justify-content:center; padding:12px 16px; border-radius:var(--radius);
+    border:1.5px solid var(--border); background:var(--panel); color:var(--ink); text-decoration:none;
+    font-weight:600; font-size:14.5px; cursor:pointer;
+  }
+  .btn-link:hover{ background:var(--bg-light); }
+
+  /* ---------- Motif : le trajet du jour ---------- */
+  .route-line{ animation:sm-route-draw 2.4s cubic-bezier(.22,.8,.32,1) .3s both; }
+  .route-glow{ filter:blur(2px); opacity:0; animation:sm-route-glow-in 1.6s ease-out 1.4s both; }
+  @keyframes sm-route-glow-in{ from{ opacity:0; } to{ opacity:1; } }
+  .route-stop{ opacity:0; animation:sm-stop-in .5s ease-out both, sm-glow-pulse 3.4s ease-in-out infinite; animation-delay:2.2s, 3s; }
+  @keyframes sm-stop-in{ from{ opacity:0; transform:scale(0); } to{ opacity:1; transform:scale(1); } }
+  .route-dot{
+    offset-path: path('M 60 760 C 170 700 130 570 260 525 C 380 485 335 385 420 325 C 480 280 400 165 465 90');
+    offset-distance:0%; opacity:0;
+    filter:drop-shadow(0 0 6px rgba(241,244,249,0.85));
+    animation:sm-route-dot-in .01s 2.7s forwards, sm-route-dot-move 5.5s ease-in-out 2.7s infinite alternate;
+  }
+  @keyframes sm-route-dot-in{ to{ opacity:1; } }
+  @keyframes sm-route-dot-move{ from{ offset-distance:0%; } to{ offset-distance:100%; } }
+  .card{ animation:sm-rise .6s cubic-bezier(.22,.8,.32,1) both; }
+
+  @media (prefers-reduced-motion: reduce){
+    .route-line{ stroke-dashoffset:0; }
+    .route-glow, .route-stop{ opacity:1; }
+    .route-dot{ opacity:0; }
+  }
+
+  @media (max-width: 860px){
+    .screen{ grid-template-columns:1fr; }
+    .side{ padding:32px 28px; min-height:200px; }
+    .side-copy h1{ font-size:22px; }
+    .side-copy p.eyebrow-free{ margin-bottom:10px; }
+    .form-side{ padding:32px 22px 56px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<div class="screen">
+
+  <!-- Panneau gauche : identité -->
+  <aside class="side">
+    <div class="sm-ambient-glow" aria-hidden="true"></div>
+    <svg class="decor" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="480" cy="140" r="230" fill="none" stroke="#1D4ED8" stroke-opacity="0.22" stroke-width="1"/>
+      <!-- Le trajet du jour : une route qui se dessine à l'ouverture, puis un phare qui la parcourt en boucle. -->
+      <path class="route-glow" pathLength="100" d="M 60 760 C 170 700 130 570 260 525 C 380 485 335 385 420 325 C 480 280 400 165 465 90"
+            fill="none" stroke="#C77D0A" stroke-opacity="0.22" stroke-width="9" stroke-linecap="round"/>
+      <path id="routeLine" class="route-line" pathLength="100" stroke-dashoffset="100" stroke-dasharray="100"
+            d="M 60 760 C 170 700 130 570 260 525 C 380 485 335 385 420 325 C 480 280 400 165 465 90"
+            fill="none" stroke="#F1F4F9" stroke-opacity="0.55" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="1.2 4.4"/>
+      <circle class="route-stop" cx="260" cy="525" r="4.5" fill="#F1F4F9" fill-opacity="0.4" style="animation-delay:.4s"/>
+      <circle class="route-stop" cx="420" cy="325" r="4.5" fill="#F1F4F9" fill-opacity="0.4" style="animation-delay:1.1s"/>
+      <circle class="route-stop" cx="465" cy="90" r="4.5" fill="#C77D0A" fill-opacity="0.55" style="animation-delay:1.8s"/>
+      <circle class="route-dot" r="5" fill="#F1F4F9"/>
+    </svg>
+
+    <div class="mark">
+      <span class="logotype">
+      <span class="logo-ring" aria-hidden="true"></span>
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+          <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/>
+          <circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+          <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F1F4F9" stroke-width="1.1"/>
+          <line x1="11" y1="16" x2="11" y2="19.4" stroke="#F1F4F9" stroke-width="1.1"/>
+          <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+          <line x1="16" y1="11" x2="19.4" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+        </svg>
+        Soft Moto
+      </span>
+    </div>
+
+    <div class="side-copy">
+      <p class="eyebrow-free" id="sideEyebrow">Content de vous revoir.</p>
+      <h1 id="sideHeadline">La route continue là où vous vous étiez arrêté.</h1>
+    </div>
+
+    <p class="side-foot">© 2026 Soft Moto — tous droits réservés</p>
+  </aside>
+
+  <!-- Panneau droit : formulaire -->
+  <main class="form-side">
+    <div class="card">
+
+      <!-- ===== Vue Connexion ===== -->
+      <div id="loginView">
+        <h2>Connexion</h2>
+        <p class="sub">Entrez vos identifiants pour accéder à votre compte.</p>
+
+        <div class="success" id="successBox" role="status">
+          <span>✓</span>
+          <span>Connexion réussie. Redirection en cours…</span>
+        </div>
+
+        <form id="loginForm" novalidate>
+          <div class="field">
+            <label for="email">Adresse e-mail</label>
+            <div class="input-wrap">
+              <input type="email" id="email" name="email" placeholder="vous@exemple.com" autocomplete="email">
+            </div>
+            <p class="error-msg" id="emailError" role="alert"></p>
+          </div>
+
+          <div class="field">
+            <label for="password">Mot de passe</label>
+            <div class="input-wrap">
+              <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password">
+              <button type="button" class="toggle-pass" id="togglePass" aria-label="Afficher le mot de passe" aria-pressed="false">
+                <svg id="eyeIcon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/>
+                  <circle cx="12" cy="12" r="3.2"/>
+                </svg>
+              </button>
+            </div>
+            <p class="error-msg" id="passwordError" role="alert"></p>
+          </div>
+
+          <div class="row-between">
+            <label class="remember">
+              <input type="checkbox" id="remember" name="remember">
+              Se souvenir de moi
+            </label>
+            <span class="hint">Mot de passe oublié ? Voyez avec un administrateur.</span>
+          </div>
+
+          <button type="submit" class="submit" id="submitBtn">Se connecter</button>
+
+          <p class="foot-link">Pas encore de compte ? <a href="#" id="createAccountLink">Créer un compte</a></p>
+        </form>
+      </div>
+
+      <!-- ===== Vue Créer un compte (caissière) ===== -->
+      <div id="signupView">
+
+        <div id="signupFormView">
+          <h2>Créer un compte caissière</h2>
+          <p class="sub">Une fois votre compte créé, un administrateur devra valider votre accès avant votre première connexion.</p>
+
+          <form id="signupForm" novalidate>
+            <div class="field">
+              <label for="suFullName">Nom complet</label>
+              <input type="text" id="suFullName" placeholder="ex. Judith Kpodar" autocomplete="name">
+              <p class="error-msg" id="suFullNameError" role="alert"></p>
+            </div>
+
+            <div class="field">
+              <label for="suEmail">Adresse e-mail</label>
+              <input type="email" id="suEmail" placeholder="vous@exemple.com" autocomplete="email">
+              <p class="error-msg" id="suEmailError" role="alert"></p>
+            </div>
+
+            <div class="field">
+              <label for="suPassword">Mot de passe</label>
+              <input type="password" id="suPassword" placeholder="••••••••" autocomplete="new-password">
+              <p class="error-msg" id="suPasswordError" role="alert"></p>
+            </div>
+
+            <div class="field">
+              <label for="suConfirm">Confirmer le mot de passe</label>
+              <input type="password" id="suConfirm" placeholder="••••••••" autocomplete="new-password">
+              <p class="error-msg" id="suConfirmError" role="alert"></p>
+            </div>
+
+            <button type="submit" class="submit">Créer mon compte</button>
+          </form>
+
+          <p class="foot-link">Déjà un compte ? <a href="#" id="toLoginLink">Se connecter</a></p>
+        </div>
+
+        <div id="signupSuccessView">
+          <div class="success-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h2>Compte créé</h2>
+          <p class="sub">Votre demande a été envoyée à un administrateur Soft Moto. Vous recevrez l'accès dès qu'elle sera validée dans l'espace Employés.</p>
+          <a class="btn-link" href="#" id="backToLoginLink">Retour à la connexion</a>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+</div>
+
+<script src="serveur-check.js"></script>
+<script src="theme.js"></script>
+<script>
+(function(){
+  // ================= Connexion =================
+  const form = document.getElementById('loginForm');
+  const email = document.getElementById('email');
+  const password = document.getElementById('password');
+  const emailError = document.getElementById('emailError');
+  const passwordError = document.getElementById('passwordError');
+  const toggleBtn = document.getElementById('togglePass');
+  const eyeIcon = document.getElementById('eyeIcon');
+  const submitBtn = document.getElementById('submitBtn');
+  const successBox = document.getElementById('successBox');
+
+  function setError(input, msgEl, message){
+    if(message){
+      input.setAttribute('data-invalid', 'true');
+      msgEl.textContent = message;
+      msgEl.classList.add('show');
+    } else {
+      input.removeAttribute('data-invalid');
+      msgEl.textContent = '';
+      msgEl.classList.remove('show');
+    }
+  }
+
+  function validEmail(value){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
+
+  toggleBtn.addEventListener('click', function(){
+    const isPassword = password.type === 'password';
+    password.type = isPassword ? 'text' : 'password';
+    toggleBtn.setAttribute('aria-pressed', String(isPassword));
+    toggleBtn.setAttribute('aria-label', isPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+    eyeIcon.innerHTML = isPassword
+      ? '<path d="M3 3l18 18"/><path d="M10.6 10.6a3.2 3.2 0 0 0 4.5 4.5"/><path d="M6.6 6.7C3.9 8.3 1.5 12 1.5 12s3.5 7 10.5 7c2 0 3.7-.5 5.1-1.3M17.5 17.4C20.2 15.8 22.5 12 22.5 12S19 5 12 5c-.7 0-1.3.05-1.9.15"/>'
+      : '<path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3.2"/>';
+  });
+
+  email.addEventListener('input', () => setError(email, emailError, ''));
+  password.addEventListener('input', () => setError(password, passwordError, ''));
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    successBox.classList.remove('show');
+    let hasError = false;
+
+    if(!email.value.trim()){
+      setError(email, emailError, 'Entrez votre adresse e-mail.');
+      hasError = true;
+    } else if(!validEmail(email.value.trim())){
+      setError(email, emailError, 'Cette adresse e-mail ne semble pas valide.');
+      hasError = true;
+    } else { setError(email, emailError, ''); }
+
+    if(!password.value){
+      setError(password, passwordError, 'Entrez votre mot de passe.');
+      hasError = true;
+    } else { setError(password, passwordError, ''); }
+
+    if(hasError){
+      const firstInvalid = form.querySelector('[data-invalid="true"]');
+      if(firstInvalid) firstInvalid.focus();
+      return;
+    }
+
+    // Appel réel à l'API : la connexion est vérifiée et enregistrée côté serveur.
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Connexion…';
+
+    fetch('/api/connexion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.value.trim(), motDePasse: password.value, remember: document.getElementById('remember').checked })
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.erreur || 'Erreur de connexion.');
+        return data;
+      })
+      .then((data) => {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Se connecter';
+        successBox.classList.add('show');
+
+        const compte = data.compte;
+        let destination = 'login.html';
+        if (compte.role === 'admin') destination = 'admin.html';
+        else if (compte.role === 'caissiere') destination = 'caissiere.html?email=' + encodeURIComponent(compte.email) + '&name=' + encodeURIComponent(compte.nom);
+
+        setTimeout(function(){ if(window.smGo) window.smGo(destination); else window.location.href = destination; }, 900);
+      })
+      .catch((err) => {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Se connecter';
+        setError(password, passwordError, smMessage(err));
+      });
+  });
+
+  // ================= Bascule Connexion / Créer un compte =================
+  const loginView = document.getElementById('loginView');
+  const signupView = document.getElementById('signupView');
+  const signupFormView = document.getElementById('signupFormView');
+  const signupSuccessView = document.getElementById('signupSuccessView');
+  const sideEyebrow = document.getElementById('sideEyebrow');
+  const sideHeadline = document.getElementById('sideHeadline');
+
+  const COPY = {
+    login: { eyebrow: 'Content de vous revoir.', headline: 'La route continue là où vous vous étiez arrêté.' },
+    signup: { eyebrow: "Bienvenue dans l'équipe.", headline: "Créez votre accès, un administrateur l'activera." }
+  };
+
+  function showLogin(){
+    loginView.style.display = 'block';
+    signupView.style.display = 'none';
+    sideEyebrow.textContent = COPY.login.eyebrow;
+    sideHeadline.textContent = COPY.login.headline;
+  }
+  function showSignup(){
+    loginView.style.display = 'none';
+    signupView.style.display = 'block';
+    signupFormView.style.display = 'block';
+    signupSuccessView.style.display = 'none';
+    sideEyebrow.textContent = COPY.signup.eyebrow;
+    sideHeadline.textContent = COPY.signup.headline;
+  }
+
+  document.getElementById('createAccountLink').addEventListener('click', function(e){ e.preventDefault(); showSignup(); });
+  document.getElementById('toLoginLink').addEventListener('click', function(e){ e.preventDefault(); showLogin(); });
+  document.getElementById('backToLoginLink').addEventListener('click', function(e){ e.preventDefault(); showLogin(); });
+
+  // Ouvre directement sur "Créer un compte" si le lien le demande (?view=signup)
+  const initialParams = new URLSearchParams(window.location.search);
+  if(initialParams.get('view') === 'signup') showSignup();
+
+  // ================= Créer un compte caissière =================
+  const signupForm = document.getElementById('signupForm');
+  const suFullName = document.getElementById('suFullName');
+  const suEmail = document.getElementById('suEmail');
+  const suPassword = document.getElementById('suPassword');
+  const suConfirm = document.getElementById('suConfirm');
+
+  [suFullName, suEmail, suPassword, suConfirm].forEach(function(input){
+    input.addEventListener('input', function(){
+      const errEl = document.getElementById(input.id + 'Error');
+      if(errEl) setError(input, errEl, '');
+    });
+  });
+
+  signupForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    let hasError = false;
+
+    if(!suFullName.value.trim()){
+      setError(suFullName, document.getElementById('suFullNameError'), 'Entrez votre nom complet.');
+      hasError = true;
+    }
+    if(!suEmail.value.trim()){
+      setError(suEmail, document.getElementById('suEmailError'), 'Entrez votre adresse e-mail.');
+      hasError = true;
+    } else if(!validEmail(suEmail.value.trim())){
+      setError(suEmail, document.getElementById('suEmailError'), 'Cette adresse e-mail ne semble pas valide.');
+      hasError = true;
+    }
+    if(!suPassword.value){
+      setError(suPassword, document.getElementById('suPasswordError'), 'Choisissez un mot de passe.');
+      hasError = true;
+    } else if(suPassword.value.length < 8){
+      setError(suPassword, document.getElementById('suPasswordError'), 'Au moins 8 caractères.');
+      hasError = true;
+    }
+    if(!suConfirm.value){
+      setError(suConfirm, document.getElementById('suConfirmError'), 'Confirmez le mot de passe.');
+      hasError = true;
+    } else if(suConfirm.value !== suPassword.value){
+      setError(suConfirm, document.getElementById('suConfirmError'), 'Les mots de passe ne correspondent pas.');
+      hasError = true;
+    }
+
+    if(hasError){
+      const firstInvalid = signupForm.querySelector('[data-invalid="true"]');
+      if(firstInvalid) firstInvalid.focus();
+      return;
+    }
+
+    // Enregistrement réel de la demande d'accès dans la base de données (table comptes, statut "en_attente").
+    const submitSignupBtn = signupForm.querySelector('button[type="submit"]');
+    submitSignupBtn.disabled = true;
+    submitSignupBtn.textContent = 'Création…';
+
+    fetch('/api/inscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nom: suFullName.value.trim(), email: suEmail.value.trim(), motDePasse: suPassword.value })
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.erreur || 'Erreur lors de la création du compte.');
+        return data;
+      })
+      .then(() => {
+        submitSignupBtn.disabled = false;
+        submitSignupBtn.textContent = 'Créer mon compte';
+        signupFormView.style.display = 'none';
+        signupSuccessView.style.display = 'block';
+      })
+      .catch((err) => {
+        submitSignupBtn.disabled = false;
+        submitSignupBtn.textContent = 'Créer mon compte';
+        setError(suEmail, document.getElementById('suEmailError'), smMessage(err));
+      });
+  });
+})();
+</script>
+
+</body>
+</html>

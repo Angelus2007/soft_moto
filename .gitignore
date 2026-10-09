@@ -1,0 +1,7 @@
+node_modules/
+.env
+# Vraies données : ne jamais les publier
+*.db
+*.db-wal
+*.db-shm
+*.sql

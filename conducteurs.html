@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conducteurs – Soft Moto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,450&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-dark:#0B1B33;
+    --bg-dark-2:#16305A;
+    --bg-light:#F1F4F9;
+    --panel:#FFFFFF;
+    --accent:#1D4ED8;
+    --accent-dark:#1E3A8A;
+    --accent-soft:#DBE6FD;
+    --amber:#C77D0A;
+    --amber-soft:#FCEBC8;
+    --ink:#0F172A;
+    --ink-soft:#526074;
+    --ink-faint:#8793A5;
+    --cream:#F1F4F9;
+    --cream-soft:#AEBBD0;
+    --error:#B42318;
+    --error-soft:#FDE7E5;
+    --border:#DDE3EC;
+    --radius:10px;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:"IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html{height:100%; scroll-padding-top:env(safe-area-inset-top, 0px);}
+  body{
+    min-height:100%;
+    margin:0;
+    font-family:var(--sans);
+    color:var(--ink);
+    background:var(--bg-light);
+    -webkit-font-smoothing:antialiased;
+  }
+  a{ color:inherit; }
+
+  /* ---------- Layout ---------- */
+  .app{ display:grid; grid-template-columns:250px 1fr; min-height:100vh; }
+
+  /* ---------- Sidebar (identique aux autres pages admin) ---------- */
+  .sidebar{
+    background:radial-gradient(130% 110% at 10% 0%, var(--bg-dark-2) 0%, var(--bg-dark) 60%);
+    color:var(--cream);
+    display:flex;
+    flex-direction:column;
+    padding:26px 20px 20px;
+    position:relative;
+    overflow:hidden;
+    z-index:20;
+  }
+  .logotype{
+    display:flex; align-items:center; gap:9px;
+    font-family:var(--serif); font-style:italic; font-weight:500; font-size:18px;
+    color:var(--cream); padding:2px 8px 26px;
+  }
+  nav.nav{ display:flex; flex-direction:column; gap:3px; margin-top:6px; }
+  .nav a{
+    display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:8px;
+    text-decoration:none; font-size:14.5px; font-weight:500; color:var(--cream-soft);
+    transition:background .15s ease, color .15s ease;
+  }
+  .nav a svg{ flex-shrink:0; opacity:0.85; }
+  .nav a:hover{ background:rgba(241,244,249,0.07); color:var(--cream); }
+  .nav a.active{ background:var(--accent); color:var(--cream); }
+  .nav a.active svg{ opacity:1; }
+  .nav a:focus-visible{ outline:2px solid var(--accent-soft); outline-offset:2px; }
+  .sidebar-spacer{ flex:1; }
+  .sidebar-profile{
+    display:flex; align-items:center; gap:10px; padding:12px 10px;
+    border-top:1px solid rgba(241,244,249,0.12);
+  }
+  .avatar{
+    width:34px; height:34px; border-radius:50%; background:var(--accent); color:var(--cream);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:13px; font-weight:600; flex-shrink:0;
+  }
+  .sidebar-profile .who{ line-height:1.3; min-width:0; }
+  .sidebar-profile .who .name{ font-size:13.5px; font-weight:600; color:var(--cream); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sidebar-profile .who .role{ font-size:12px; color:var(--ink-faint); }
+  .logout-link{ margin-left:auto; display:flex; padding:6px; border-radius:7px; color:var(--ink-faint); text-decoration:none; flex-shrink:0; }
+  .logout-link:hover{ color:var(--cream); background:rgba(241,244,249,0.08); }
+
+  /* ---------- Main ---------- */
+  main.main{ padding:28px 34px 60px; min-width:0; }
+  .menu-toggle{ display:none; background:var(--panel); border:1.5px solid var(--border); border-radius:8px; padding:8px; margin-bottom:14px; cursor:pointer; }
+
+  .topbar{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:26px; flex-wrap:wrap; }
+  .topbar h1{ font-family:var(--serif); font-weight:600; font-size:26px; margin:0 0 6px; color:var(--ink); }
+  .topbar .sub{ margin:0; color:var(--ink-soft); font-size:14.5px; }
+  .top-actions{ display:flex; align-items:center; gap:12px; }
+  .search{
+    display:flex; align-items:center; gap:8px; background:var(--panel); border:1.5px solid var(--border);
+    border-radius:9px; padding:9px 12px; color:var(--ink-faint); min-width:220px;
+  }
+  .search input{ border:none; outline:none; background:none; font-family:var(--sans); font-size:14px; color:var(--ink); width:100%; }
+  .search input::placeholder{ color:var(--ink-faint); }
+  .profile-chip{ display:flex; align-items:center; gap:9px; background:var(--panel); border:1.5px solid var(--border); border-radius:9px; padding:6px 12px 6px 6px; }
+  .profile-chip .name{ font-size:13.5px; font-weight:600; }
+  .profile-chip .role{ font-size:11.5px; color:var(--ink-soft); }
+
+  /* ---------- Stats row ---------- */
+  .stats{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:22px; }
+  .stat{ background:var(--panel); border:1.5px solid var(--border); border-left:3.5px solid var(--stat-line, var(--accent)); border-radius:12px; padding:16px 20px; }
+  .stat .label{ font-size:13px; color:var(--ink-soft); margin:0 0 8px; }
+  .stat .value{ font-family:var(--mono); font-size:22px; font-weight:600; color:var(--ink); }
+  .stat.s2{ --stat-line:var(--accent); }
+  .stat.s3{ --stat-line:var(--ink-faint); }
+
+  /* ---------- Panel ---------- */
+  .panel{ background:var(--panel); border:1.5px solid var(--border); border-radius:12px; padding:22px; }
+  .panel-head{ display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:16px; flex-wrap:wrap; }
+  .panel-head h2{ font-family:var(--serif); font-weight:600; font-size:17px; margin:0; color:var(--ink); }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:7px; font-family:var(--sans); font-size:13.5px; font-weight:600;
+    padding:9px 15px; border-radius:8px; border:1.5px solid var(--accent); cursor:pointer; background:var(--accent); color:var(--cream);
+    transition:background .15s ease;
+  }
+  .btn:hover{ background:var(--accent-dark); }
+  .btn.ghost{ background:var(--panel); color:var(--ink); border-color:var(--border); }
+  .btn.ghost:hover{ background:var(--bg-light); }
+  .btn:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+
+  .empty-state{ color:var(--ink-faint); font-size:13.5px; padding:6px 0 2px; }
+
+  /* ---------- Formulaire d'ajout ---------- */
+  .add-form{
+    display:none;
+    grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
+    gap:14px;
+    align-items:flex-end;
+    background:var(--bg-light);
+    border:1.5px solid var(--border);
+    border-radius:10px;
+    padding:18px 16px 16px;
+    margin-bottom:18px;
+  }
+  .add-form.open{ display:grid; }
+  .add-form .section-title{
+    grid-column:1 / -1; margin:8px 0 -4px; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:0.05em; color:var(--ink-faint); border-top:1px solid var(--border); padding-top:12px;
+  }
+  .add-form .section-title:first-child{ margin-top:0; border-top:none; padding-top:0; }
+  .add-form .actions{ grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:10px; margin-top:4px; }
+  .add-form .field{ display:flex; flex-direction:column; gap:6px; }
+  .add-form label{ font-size:12.5px; font-weight:500; color:var(--ink-soft); }
+  .add-form input{
+    padding:10px 12px; font-size:14px; font-family:var(--sans); color:var(--ink);
+    background:var(--panel); border:1.5px solid var(--border); border-radius:8px; outline:none;
+  }
+  .add-form input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .add-form input[data-invalid="true"]{ border-color:var(--error); }
+  .add-form .field-error{ font-size:12px; color:var(--error); min-height:14px; }
+
+  .toast{
+    display:none; position:fixed; inset:0; z-index:200; align-items:center; justify-content:center;
+    background:rgba(11,27,51,0.45); backdrop-filter:blur(2px); padding:20px;
+  }
+  .toast.show{ display:flex; animation:sm-modal-fade .18s ease both; }
+  .toast-card{
+    background:var(--panel); border:1.5px solid var(--accent); border-radius:14px;
+    padding:22px 24px; max-width:400px; width:100%; box-shadow:0 20px 50px -12px rgba(11,27,51,0.35);
+    display:flex; flex-direction:column; gap:16px;
+    animation:sm-modal-pop .22s cubic-bezier(.22,.8,.32,1) both;
+  }
+  .toast .toast-body{ display:flex; align-items:center; gap:12px; color:var(--accent-dark); font-size:14.5px; line-height:1.4; }
+  .toast .toast-icon{ flex-shrink:0; }
+  #copyToastBtn{ position:relative; }
+  .toast .code{ font-family:var(--mono); font-weight:600; letter-spacing:1px; }
+  .toast-actions{ display:flex; justify-content:flex-end; gap:10px; }
+  .toast button{
+    background:var(--accent); color:var(--cream); border:none; border-radius:9px;
+    padding:10px 16px; font-weight:600; font-size:13.5px; cursor:pointer;
+  }
+  .toast button:hover{ background:var(--accent-dark); }
+  .toast button.ghost{ background:none; color:var(--ink-soft); }
+  .toast button.ghost:hover{ background:var(--bg-light); color:var(--ink); }
+
+  table{ width:100%; border-collapse:collapse; }
+  thead th{ text-align:left; font-size:12px; font-weight:500; color:var(--ink-faint); padding:0 10px 10px; border-bottom:1px solid var(--border); }
+  tbody td{ padding:12px 10px; border-bottom:1px solid var(--border); font-size:13.5px; vertical-align:middle; }
+  tbody tr:last-child td{ border-bottom:none; }
+  .driver-cell{ display:flex; align-items:center; gap:10px; }
+  .driver-cell .avatar{ width:28px; height:28px; font-size:11px; }
+  .driver-cell .d-name{ font-weight:600; font-size:13.5px; line-height:1.3; }
+  .driver-cell .d-phone{ font-size:11.5px; color:var(--ink-faint); }
+  td.code-val{ font-family:var(--mono); font-weight:600; letter-spacing:0.5px; }
+
+  .badge{ display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; }
+  .badge.active{ background:var(--accent-soft); color:var(--accent-dark); }
+  .badge.inactive{ background:#E6EAF1; color:var(--ink-faint); }
+  .badge.new{ background:var(--amber-soft); color:var(--amber); }
+
+  @media (max-width: 780px){
+    .app{ grid-template-columns:1fr; }
+    .sidebar{
+      position:fixed; inset:0 30% 0 0; transform:translateX(-100%); transition:transform .2s ease;
+      width:100%; max-width:270px;
+    }
+    .sidebar.open{ transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,0.3); }
+    .menu-toggle{ display:inline-flex; }
+    main.main{ padding:20px 18px 50px; }
+    .stats{ grid-template-columns:1fr; }
+    .add-form{ grid-template-columns:1fr; }
+    table, thead, tbody, tr{ display:block; }
+    thead{ display:none; }
+    tbody tr{ border-bottom:1px solid var(--border); padding:10px 0; }
+    tbody td{ display:flex; justify-content:space-between; align-items:center; border-bottom:none; padding:6px 0; }
+    tbody td::before{ content:attr(data-label); font-size:11.5px; color:var(--ink-faint); font-weight:500; }
+  }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+  td.code-val .code-link{ color:var(--accent-dark); border-bottom:1.5px dashed currentColor; padding-bottom:1px; transition:color .15s, border-color .15s; }
+  td.code-val .code-link:hover{ color:var(--accent); border-bottom-style:solid; }
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sm-ambient-glow" aria-hidden="true"></div>
+    <div class="logotype">
+      <span class="logo-ring" aria-hidden="true"></span>
+      <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/>
+        <circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+        <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="11" y1="16" x2="11" y2="19.4" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="16" y1="11" x2="19.4" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+      </svg>
+      Soft Moto
+    </div>
+
+    <nav class="nav">
+      <a href="admin.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+        Tableau de bord
+      </a>
+      <a href="conducteurs.html" class="active">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Conducteurs
+      </a>
+      <a href="collectes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Collectes journalières
+      </a>
+      <a href="motos.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h9V8H6zM15 8h3l3 4v5h-1"/></svg>
+        Motos &amp; financement
+      </a>
+      <a href="employes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
+        Employés
+      </a>
+      <a href="parametres.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Paramètres
+      </a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-profile">
+      <div class="avatar">AD</div>
+      <div class="who"><div class="name">Admin Soft Moto</div><div class="role">Gestionnaire</div></div>
+      <a class="logout-link" id="logoutLink" href="login.html" aria-label="Déconnexion" title="Déconnexion">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <button class="menu-toggle" id="menuToggle" aria-label="Ouvrir le menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+
+    <div class="topbar">
+      <div>
+        <h1>Conducteurs</h1>
+        <p class="sub">Chaque conducteur reçoit un code unique généré automatiquement à l'inscription.</p>
+      </div>
+      <div class="top-actions">
+        <div class="search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="searchInput" placeholder="Code ou nom, puis Entrée pour ouvrir la fiche…">
+        </div>
+        <div class="profile-chip">
+          <div class="avatar">AD</div>
+          <div><div class="name">Admin</div><div class="role">Soft Moto</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><p class="label">Conducteurs enregistrés</p><div class="value" id="statTotal">—</div></div>
+      <div class="stat s2"><p class="label">Actifs</p><div class="value" id="statActive">—</div></div>
+      <div class="stat s3"><p class="label">Inactifs</p><div class="value" id="statInactive">—</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Liste des conducteurs</h2>
+        <button class="btn" id="toggleFormBtn" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Ajouter un conducteur
+        </button>
+      </div>
+
+      <form class="add-form" id="addForm">
+        <p class="section-title">Conducteur</p>
+        <div class="field">
+          <label for="newName">Nom et prénoms</label>
+          <input type="text" id="newName" placeholder="ex. Espoir Kaki" autocomplete="off">
+          <span class="field-error" id="newNameError"></span>
+        </div>
+        <div class="field">
+          <label for="newPhone">Téléphone</label>
+          <input type="tel" id="newPhone" placeholder="+229 XX XX XX XX" autocomplete="off">
+          <span class="field-error" id="newPhoneError"></span>
+        </div>
+        <div class="field">
+          <label for="newAddress">Adresse</label>
+          <input type="text" id="newAddress" placeholder="ex. Cotonou, Akpakpa" autocomplete="off">
+          <span class="field-error" id="newAddressError"></span>
+        </div>
+
+        <p class="section-title">Témoin</p>
+        <div class="field">
+          <label for="newWitnessName">Nom et prénoms</label>
+          <input type="text" id="newWitnessName" placeholder="ex. Ayaba Sossou" autocomplete="off">
+          <span class="field-error" id="newWitnessNameError"></span>
+        </div>
+        <div class="field">
+          <label for="newWitnessPhone">Téléphone</label>
+          <input type="tel" id="newWitnessPhone" placeholder="+229 XX XX XX XX" autocomplete="off">
+          <span class="field-error" id="newWitnessPhoneError"></span>
+        </div>
+        <div class="field">
+          <label for="newWitnessAddress">Adresse</label>
+          <input type="text" id="newWitnessAddress" placeholder="ex. Cotonou, Fidjrosse" autocomplete="off">
+          <span class="field-error" id="newWitnessAddressError"></span>
+        </div>
+
+        <p class="section-title">Contrat</p>
+        <div class="field" style="grid-column:1/-1">
+          <p class="type-label">TYPE DE CONTRAT :</p>
+          <div class="type-row" id="newTypeRow" role="group" aria-label="Type de contrat">
+            <button type="button" data-type="journee_payee">Contrat JOURNÉE PAYÉE</button>
+            <button type="button" data-type="droit_usage">Contrat DROIT D’USAGE</button>
+          </div>
+          <span class="field-error" id="newTypeError"></span>
+        </div>
+        <div class="field">
+          <label for="newMarque">Marque de la moto</label>
+          <input type="text" id="newMarque" value="TVS" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="newPlate">Immatriculation (plaque) <span style="font-weight:400; color:var(--ink-faint);">— optionnel</span></label>
+          <input type="text" id="newPlate" placeholder="ex. EP 1234 RB" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="newStartDate">Date de début</label>
+          <input type="date" id="newStartDate">
+          <span class="field-error" id="newStartDateError"></span>
+        </div>
+        <div class="field">
+          <label for="newEndDate">Date de fin</label>
+          <input type="date" id="newEndDate">
+          <span class="field-error" id="newEndDateError"></span>
+        </div>
+        <div class="field">
+          <label for="newPrice">Montant de base journalier (F CFA)</label>
+          <input type="number" id="newPrice" min="0" step="100" placeholder="ex. 3500" autocomplete="off">
+          <span class="field-error" id="newPriceError"></span>
+        </div>
+        <div class="field">
+          <label for="newMotoPrice">Prix de la moto (F CFA) <span style="font-weight:400; color:var(--ink-faint);">— optionnel</span></label>
+          <input type="number" id="newMotoPrice" min="0" step="1000" placeholder="ex. 650000" autocomplete="off">
+          <span class="field-error" id="newMotoPriceError"></span>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn">Générer le code et ajouter</button>
+          <button type="button" class="btn ghost" id="cancelFormBtn">Annuler</button>
+          <span class="field-error" id="addFormError" style="flex-basis:100%;"></span>
+        </div>
+      </form>
+
+      <div class="toast" id="toast" role="dialog" aria-modal="true" aria-labelledby="toastName">
+        <div class="toast-card">
+          <span class="toast-body"><svg class="toast-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" stroke-dasharray="24" stroke-dashoffset="24" style="animation:sm-check-in .4s .15s ease forwards"/></svg><span>Code généré pour <strong id="toastName"></strong> — <span class="code" id="toastCode"></span></span></span>
+          <div class="toast-actions">
+            <button type="button" class="ghost" id="closeToastBtn">Fermer</button>
+            <button type="button" class="ghost" id="contratToastBtn">Télécharger le contrat</button>
+            <button type="button" id="copyToastBtn">Copier le code</button>
+          </div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th>Code</th><th>Conducteur</th><th>Inscrit le</th><th>Statut</th></tr>
+        </thead>
+        <tbody id="driversBody"></tbody>
+      </table>
+      <p class="empty-state" id="driversEmpty" style="display:none;"></p>
+    </div>
+  </main>
+</div>
+
+<script src="serveur-check.js"></script>
+<script src="theme.js"></script>
+<script src="contrat.js"></script>
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const MOIS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function initials(name){ return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join(''); }
+  function avatarClass(name){
+    let h = 0;
+    for(let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return 'av-' + (1 + (h % 6));
+  }
+  function formatDateFR(iso){
+    const d = new Date(iso);
+    return d.getDate().toString().padStart(2,'0') + ' ' + MOIS[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  function isRecent(iso){ return Date.now() - new Date(iso).getTime() < 7 * 24 * 3600 * 1000; }
+
+  function api(url, opts){
+    return fetch(url, opts).then(async function(r){
+      const data = await r.json().catch(function(){ return {}; });
+      if(r.status === 401){ window.location.href = 'login.html'; throw new Error('Session expirée.'); }
+      if(!r.ok) throw new Error(data.erreur || 'Erreur serveur.');
+      return data;
+    });
+  }
+
+  // ---------- Menu mobile et déconnexion ----------
+  $('menuToggle').addEventListener('click', function(){ $('sidebar').classList.toggle('open'); });
+  $('logoutLink').addEventListener('click', function(e){
+    e.preventDefault();
+    fetch('/api/deconnexion', { method: 'POST' }).finally(function(){ window.location.href = 'login.html'; });
+  });
+
+  // ---------- Profil réel (session) dans la barre latérale et l'en-tête ----------
+  api('/api/moi').then(function(moi){
+    const roleLabel = moi.role === 'admin' ? 'Administrateur' : 'Caissière';
+    document.querySelectorAll('.sidebar-profile, .profile-chip').forEach(function(bloc){
+      const av = bloc.querySelector('.avatar');
+      if(av){ av.textContent = initials(moi.nom); av.className = 'avatar ' + avatarClass(moi.nom); }
+      const nm = bloc.querySelector('.name');
+      if(nm) nm.textContent = moi.nom;
+      const rl = bloc.querySelector('.role');
+      if(rl) rl.textContent = roleLabel;
+    });
+  }).catch(function(){});
+
+
+  // ---------- Liste ----------
+  const driversBody = $('driversBody');
+  const driversEmpty = $('driversEmpty');
+  const searchInput = $('searchInput');
+  let clients = [];
+  let loadError = '';
+
+  function badge(c){
+    if(c.statut === 'inactif') return '<span class="badge inactive">Inactif</span>';
+    if(isRecent(c.date_creation)) return '<span class="badge new">Nouveau</span>';
+    return '<span class="badge active">Actif</span>';
+  }
+
+  function render(){
+    const q = searchInput.value.trim().toLowerCase();
+    const list = clients.filter(c => c.nom.toLowerCase().includes(q) || c.code.toLowerCase().includes(q));
+
+    driversBody.innerHTML = list.map(function(c){
+      return '<tr>' +
+        '<td class="code-val" data-label="Code"><a class="code-link" href="fiche-conducteur.html?code=' + encodeURIComponent(c.code) + '" title="Ouvrir la fiche : vidange et redevance">' + esc(c.code) + '</a></td>' +
+        '<td data-label="Conducteur"><div class="driver-cell"><div class="avatar ' + avatarClass(c.nom) + '">' + esc(initials(c.nom)) + '</div>' +
+        '<div><div class="d-name">' + esc(c.nom) + '</div><div class="d-phone">' + esc(c.telephone || '—') + '</div></div></div></td>' +
+        '<td data-label="Inscrit le">' + formatDateFR(c.date_creation) + '</td>' +
+        '<td data-label="Statut">' + badge(c) + '</td></tr>';
+    }).join('');
+
+    let msg = '';
+    if(loadError) msg = loadError;
+    else if(!clients.length) msg = "Aucun conducteur pour l'instant. Ajoutez le premier avec le bouton ci-dessus.";
+    else if(!list.length) msg = 'Aucun conducteur ne correspond à cette recherche.';
+    driversEmpty.textContent = msg;
+    driversEmpty.style.display = msg ? 'block' : 'none';
+
+    const inactive = clients.filter(c => c.statut === 'inactif').length;
+    $('statTotal').textContent = clients.length;
+    $('statActive').textContent = clients.length - inactive;
+    $('statInactive').textContent = inactive;
+  }
+
+  function load(){
+    return api('/api/clients')
+      .then(function(list){ clients = list; loadError = ''; render(); })
+      .catch(function(err){
+        loadError = err.message === 'Failed to fetch'
+          ? 'Impossible de contacter le serveur. Vérifiez qu’il est bien démarré (npm start).'
+          : smMessage(err);
+        render();
+      });
+  }
+  load();
+  searchInput.addEventListener('input', render);
+  // Entrée : ouvre la fiche (vidange + redevance) du conducteur recherché par son code
+  searchInput.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    const q = searchInput.value.trim().toLowerCase().replace(/\s+/g, '');
+    if(!q) return;
+    const exact = clients.find(function(c){ return c.code.toLowerCase() === q; });
+    const liste = clients.filter(function(c){ return c.nom.toLowerCase().includes(q) || c.code.toLowerCase().includes(q); });
+    const cible = exact || (liste.length === 1 ? liste[0] : null);
+    if(cible) window.smGo ? window.smGo('fiche-conducteur.html?code=' + encodeURIComponent(cible.code)) : (window.location.href = 'fiche-conducteur.html?code=' + encodeURIComponent(cible.code));
+  });
+
+  // ---------- Formulaire d'ajout (le code est généré par le serveur) ----------
+  const toggleFormBtn = $('toggleFormBtn');
+  const cancelFormBtn = $('cancelFormBtn');
+  const addForm = $('addForm');
+  const toast = $('toast');
+
+  // Chaque champ requis : [input, span-erreur, message]
+  const CHAMPS_REQUIS = [
+    ['newName', 'newNameError', 'Entrez le nom et prénoms du conducteur.'],
+    ['newPhone', 'newPhoneError', 'Entrez le téléphone du conducteur.'],
+    ['newAddress', 'newAddressError', "Entrez l'adresse du conducteur."],
+    ['newWitnessName', 'newWitnessNameError', 'Entrez le nom et prénoms du témoin.'],
+    ['newWitnessPhone', 'newWitnessPhoneError', 'Entrez le téléphone du témoin.'],
+    ['newWitnessAddress', 'newWitnessAddressError', "Entrez l'adresse du témoin."],
+    ['newStartDate', 'newStartDateError', 'Choisissez une date de début.'],
+    ['newEndDate', 'newEndDateError', 'Choisissez une date de fin.'],
+    ['newPrice', 'newPriceError', 'Entrez le montant de base journalier.']
+  ].map(function(t){ return { input: $(t[0]), err: $(t[1]), msg: t[2] }; });
+
+  // Type de contrat : un des deux boutons doit être choisi
+  let typeContrat = '';
+  const typeRow = $('newTypeRow');
+  function choisirType(t){
+    typeContrat = t;
+    typeRow.removeAttribute('data-invalid'); $('newTypeError').textContent = '';
+    typeRow.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.type === t); b.setAttribute('aria-pressed', b.dataset.type === t); });
+  }
+  typeRow.addEventListener('click', function(e){ const b = e.target.closest('button'); if(b) choisirType(b.dataset.type); });
+  let dernierClient = null;
+  $('contratToastBtn').addEventListener('click', function(){ if(dernierClient) smContrat.telecharger(dernierClient); });
+
+  function openForm(){ addForm.classList.add('open'); toast.classList.remove('show'); $('addFormError').textContent = ''; CHAMPS_REQUIS[0].input.focus(); }
+  function closeForm(){
+    addForm.classList.remove('open');
+    $('addFormError').textContent = '';
+    CHAMPS_REQUIS.forEach(function(c){ c.input.value = ''; c.input.removeAttribute('data-invalid'); c.err.textContent = ''; });
+    $('newMotoPrice').value = ''; $('newMotoPrice').removeAttribute('data-invalid'); $('newMotoPriceError').textContent = '';
+    $('newMarque').value = 'TVS'; $('newPlate').value = ''; choisirType('');
+  }
+  toggleFormBtn.addEventListener('click', function(){ addForm.classList.contains('open') ? closeForm() : openForm(); });
+  cancelFormBtn.addEventListener('click', closeForm);
+  CHAMPS_REQUIS.forEach(function(c){
+    c.input.addEventListener('input', function(){ c.input.removeAttribute('data-invalid'); c.err.textContent = ''; });
+  });
+
+  addForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    let premierInvalide = null;
+    CHAMPS_REQUIS.forEach(function(c){
+      c.input.removeAttribute('data-invalid'); c.err.textContent = '';
+      if(!c.input.value.trim()){
+        c.input.setAttribute('data-invalid', 'true');
+        c.err.textContent = c.msg;
+        if(!premierInvalide) premierInvalide = c.input;
+      }
+    });
+    if(!typeContrat){
+      typeRow.setAttribute('data-invalid', 'true'); $('newTypeError').textContent = 'Choisissez le type de contrat.';
+      if(!premierInvalide){ typeRow.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    }
+    if(premierInvalide){ premierInvalide.focus(); return; }
+
+    const newStartDate = $('newStartDate'), newEndDate = $('newEndDate'), newEndDateError = $('newEndDateError');
+    if(newEndDate.value < newStartDate.value){
+      newEndDate.setAttribute('data-invalid', 'true');
+      newEndDateError.textContent = 'La date de fin doit être après la date de début.';
+      newEndDate.focus();
+      return;
+    }
+
+    const submitBtn = addForm.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    api('/api/clients', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nom: $('newName').value.trim(),
+        telephone: $('newPhone').value.trim(),
+        adresse: $('newAddress').value.trim(),
+        temoin_nom: $('newWitnessName').value.trim(),
+        temoin_telephone: $('newWitnessPhone').value.trim(),
+        temoin_adresse: $('newWitnessAddress').value.trim(),
+        date_debut: newStartDate.value,
+        date_fin: newEndDate.value,
+        montant_journalier: Number($('newPrice').value),
+        prix_moto: $('newMotoPrice').value.trim() ? Number($('newMotoPrice').value) : undefined,
+        type_contrat: typeContrat,
+        marque: $('newMarque').value.trim() || 'TVS',
+        immatriculation: $('newPlate').value.trim() || undefined
+      })
+    })
+      .then(function(c){
+        clients.unshift(c);
+        dernierClient = c;
+        $('toastName').textContent = c.nom;
+        $('toastCode').textContent = c.code;
+        toast.classList.remove('show'); void toast.offsetWidth; toast.classList.add('show');
+        closeForm();
+        render();
+      })
+      .catch(function(err){
+        $('addFormError').textContent = smMessage(err);
+      })
+      .finally(function(){ submitBtn.disabled = false; });
+  });
+
+  $('copyToastBtn').addEventListener('click', function(){
+    const btn = this;
+    const done = function(){ btn.textContent = 'Copié !'; setTimeout(function(){ btn.textContent = 'Copier le code'; }, 1500); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText($('toastCode').textContent).then(done).catch(done);
+    } else { done(); }
+  });
+  $('closeToastBtn').addEventListener('click', function(){ toast.classList.remove('show'); });
+  toast.addEventListener('click', function(e){ if(e.target === toast) toast.classList.remove('show'); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && toast.classList.contains('show')) toast.classList.remove('show'); });
+})();
+</script>
+
+</body>
+</html>
