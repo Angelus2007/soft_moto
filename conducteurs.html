@@ -135,7 +135,7 @@
 
   /* ---------- Formulaire d'ajout ---------- */
   .add-form{
-    display:none;
+    display:grid;
     grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
     gap:14px;
     align-items:flex-end;
@@ -550,7 +550,7 @@
     CHAMPS_REQUIS.forEach(function(c){ c.input.value = ''; c.input.removeAttribute('data-invalid'); c.err.textContent = ''; });
     $('newMotoPrice').value = ''; $('newMotoPrice').removeAttribute('data-invalid'); $('newMotoPriceError').textContent = ''; $('newPlate').value = '';
   }
-  toggleFormBtn.addEventListener('click', function(){ addForm.classList.contains('open') ? closeForm() : openForm(); });
+  toggleFormBtn.addEventListener('click', function(){ $('newCode').focus(); });
   cancelFormBtn.addEventListener('click', closeForm);
   CHAMPS_REQUIS.forEach(function(c){
     c.input.addEventListener('input', function(){ c.input.removeAttribute('data-invalid'); c.err.textContent = ''; });
