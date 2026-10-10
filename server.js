@@ -69,15 +69,9 @@ function cibleJourniere(client) {
   return (client && client.montant_journalier) || getVersementDefaut();
 }
 
-
 /* Démarrage : tables, migrations, premier administrateur, réglages par défaut. */
 async function demarrer() {
   await creerSchema(db);
-
-  // Anciens conducteurs créés sans code
-  for (const r of await db.all('SELECT id FROM clients WHERE code IS NULL')) {
-    await db.run('UPDATE clients SET code = ?, date_creation = COALESCE(date_creation, ?) WHERE id = ?', [await genererCode(), now(), r.id]);
-  }
 
   /* --- Migration (SQLite) : l'ancienne table `users` stockait les mots de passe en clair --- */
   if (db.dialect === 'sqlite' && await db.tableExiste('users')) {
@@ -374,14 +368,55 @@ app.get('/api/clients', exigerRole('admin', 'caissiere'), h(async (req, res) => 
 }));
 
 app.get('/api/clients/:code', exigerRole('admin', 'caissiere'), h(async (req, res) => {
-  const c = await db.get(`SELECT ${COLS_CLIENT} FROM clients WHERE code = ?`, [req.params.code.trim().toUpperCase()]);
-  if (!c) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  const recherche = texte(req.params.code, 30).toUpperCase();
+  const plaqueNormalisee = recherche.replace(/[\s-]/g, '');
+  const c = await db.get(`SELECT ${COLS_CLIENT} FROM clients
+    WHERE UPPER(code) = ? OR UPPER(REPLACE(REPLACE(COALESCE(immatriculation, ''), ' ', ''), '-', '')) = ?
+    LIMIT 1`, [recherche, plaqueNormalisee]);
+  if (!c) return res.status(404).json({ erreur: 'Aucun conducteur ne correspond à ce code ou à cette plaque.' });
   res.json(avecCible(c));
 }));
 
+/* ------------------------------------------------------------------ */
+/* Suivi des 24 cases de vidange : 100 F CFA par case cochée           */
+/* Stockage dans parametres pour ne pas mélanger la vidange à la       */
+/* redevance journalière et éviter une migration de schéma.             */
+/* ------------------------------------------------------------------ */
+app.get('/api/vidanges', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const code = texte(req.query.code_client, 20).toUpperCase();
+  if (!code) return res.status(400).json({ erreur: 'code_client requis.' });
+  const client = await db.get('SELECT code FROM clients WHERE code = ?', [code]);
+  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  const cases = [];
+  for (let numero = 1; numero <= 24; numero++) {
+    const r = await db.get('SELECT valeur FROM parametres WHERE cle = ?', [`vidange:${code}:${numero}`]);
+    let info = null;
+    try { info = r ? JSON.parse(r.valeur) : null; } catch (_) { info = null; }
+    cases.push({ numero, paye: !!(info && info.paye), montant: info && info.paye ? 100 : 0,
+      date: info && info.paye ? (info.date || null) : null });
+  }
+  res.json({ code_client: code, montant_par_case: 100, cases });
+}));
+
+app.post('/api/vidanges', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const code = texte(req.body.code_client, 20).toUpperCase();
+  const numero = Number(req.body.numero);
+  const paye = req.body.paye === true;
+  if (!code) return res.status(400).json({ erreur: 'code_client requis.' });
+  if (!Number.isInteger(numero) || numero < 1 || numero > 24) return res.status(400).json({ erreur: 'Numéro de case invalide (1 à 24).' });
+  const client = await db.get('SELECT code FROM clients WHERE code = ?', [code]);
+  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  const cle = `vidange:${code}:${numero}`;
+  if (paye) {
+    await setParametre(cle, JSON.stringify({ paye: true, montant: 100, date: jourLocal(new Date()), maj_le: now(), compte_id: req.user.id }));
+  } else {
+    await db.run('DELETE FROM parametres WHERE cle = ?', [cle]);
+  }
+  res.json({ numero, paye, montant: paye ? 100 : 0, date: paye ? jourLocal(new Date()) : null });
+}));
+
 app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
-  // Récupération et nettoyage du code saisi manuellement par l'admin
-  const code = texte(req.body.code, 20).trim().toUpperCase();
+  const code = texte(req.body.code, 20).toUpperCase();
   const nom = texte(req.body.nom, 100);
   const adresse = texte(req.body.adresse, 200);
   const telephone = texte(req.body.telephone, 30);
@@ -394,12 +429,8 @@ app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
   const immatriculation = texte(req.body.immatriculation, 30) || null;
   const marque = texte(req.body.marque, 40) || 'TVS';
 
-  // Validations du code conducteur
-  if (!code || code.length < 2) return res.status(400).json({ erreur: 'Entrez un code conducteur valide (ex: SM-101).' });
-  if (await db.get('SELECT 1 FROM clients WHERE code = ?', [code])) {
-    return res.status(409).json({ erreur: 'Ce code conducteur est déjà utilisé.' });
-  }
-
+  if (!/^[A-Z0-9-]{2,20}$/.test(code)) return res.status(400).json({ erreur: 'Saisissez un code conducteur valide (2 à 20 caractères : lettres, chiffres ou tirets).' });
+  if (await db.get('SELECT 1 FROM clients WHERE UPPER(code) = ?', [code])) return res.status(409).json({ erreur: 'Ce code conducteur est déjà utilisé.' });
   if (!TYPES_CONTRAT.includes(typeContrat)) return res.status(400).json({ erreur: 'Type de contrat invalide.' });
   if (nom.length < 2) return res.status(400).json({ erreur: 'Entrez le nom et prénoms du conducteur.' });
   if (!telephone) return res.status(400).json({ erreur: 'Entrez le téléphone du conducteur.' });
@@ -411,30 +442,35 @@ app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
   if (!dateValide(dateFin)) return res.status(400).json({ erreur: 'Entrez une date de fin valide.' });
   if (dateFin < dateDebut) return res.status(400).json({ erreur: 'La date de fin doit être après la date de début.' });
 
+  // Montant de base JOURNALIER : ce que la caissière doit collecter chaque jour — obligatoire.
   const montantJournalier = nombreOptionnel(req.body.montant_journalier, 1, 1000000);
   if (montantJournalier === false) return res.status(400).json({ erreur: 'Montant de base journalier invalide.' });
   if (montantJournalier === null) return res.status(400).json({ erreur: 'Entrez le montant de base journalier.' });
-  
+  // Prix de la moto : montant TOTAL que le conducteur doit rembourser au fil du temps — optionnel.
   const prix = nombreOptionnel(req.body.prix_moto, 1, 100000000);
   if (prix === false) return res.status(400).json({ erreur: 'Prix de la moto invalide.' });
 
-  // Insertion en base avec le code saisi par l'administrateur
   const id = await db.insertId(`INSERT INTO clients
       (code, nom, telephone, adresse, temoin_nom, temoin_telephone, temoin_adresse, date_debut, date_fin,
        statut, date_creation, prix_moto, montant_journalier, type_contrat, immatriculation, marque)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [code, nom, telephone, adresse, temoinNom, temoinTelephone, temoinAdresse, dateDebut, dateFin,
       'actif', now(), prix, montantJournalier, typeContrat, immatriculation, marque]);
-      
   res.status(201).json(avecCible(await db.get(`SELECT ${COLS_CLIENT} FROM clients WHERE id = ?`, [id])));
 }));
-
 
 app.patch('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
   const existant = await db.get('SELECT * FROM clients WHERE id = ?', [idParam(req.params.id)]);
   if (!existant) return res.status(404).json({ erreur: 'Conducteur introuvable.' });
 
   const champs = {};
+  if (req.body.code !== undefined) {
+    const code = texte(req.body.code, 20).toUpperCase();
+    if (!/^[A-Z0-9-]{2,20}$/.test(code)) return res.status(400).json({ erreur: 'Code conducteur invalide.' });
+    const doublon = await db.get('SELECT id FROM clients WHERE UPPER(code) = ? AND id <> ?', [code, existant.id]);
+    if (doublon) return res.status(409).json({ erreur: 'Ce code conducteur est déjà utilisé.' });
+    champs.code = code;
+  }
   if (req.body.nom !== undefined) {
     const nom = texte(req.body.nom, 100);
     if (nom.length < 2) return res.status(400).json({ erreur: 'Entrez le nom du conducteur.' });
@@ -511,70 +547,74 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
 
   const cible = cibleJourniere(client);
   const jourSaisie = jourLocal(new Date());
-  const ajustements = []; // jours antérieurs ou futurs comblés grâce au surplus
+  const estAvance = req.body.avance === true;
+  if (date > jourSaisie && !estAvance) return res.status(400).json({ erreur: 'Pour payer une date future, utilisez le paiement hebdomadaire, mensuel ou anticipé.' });
+  if (estAvance) {
+    if (date <= jourSaisie) return res.status(400).json({ erreur: 'Un paiement anticipé doit concerner une date à partir de demain.' });
+    const finContrat = (client.date_fin || '').slice(0, 10);
+    if (finContrat && date > finContrat) return res.status(400).json({ erreur: 'La date dépasse la fin du contrat du conducteur.' });
+    if (montant !== cible) return res.status(400).json({ erreur: 'Le paiement anticipé doit correspondre exactement au montant journalier (' + cible + ' F CFA).' });
+  }
+  const ajustements = []; // jours antérieurs comblés grâce au surplus
   let reporte = 0;        // total du surplus utilisé pour combler ces jours
   let paiement;
 
-  // Tout se fait dans une transaction, avec un verrou sur le conducteur
+  // Tout se fait dans une transaction, avec un verrou sur le conducteur : deux saisies simultanées ne se mélangent pas.
   await db.tx(async (tx) => {
     await tx.lock('clients', 'code', code);
 
-    const ancien = await tx.get('SELECT moyen, montant, numero_momo FROM paiements WHERE code_client = ? AND date = ?', [code, date]);
+    const ancien = await tx.get('SELECT moyen, montant, numero_momo, paye FROM paiements WHERE code_client = ? AND date = ?', [code, date]);
+    if (estAvance && ancien && ancien.paye) throw new ErreurHttp(409, 'Cette date est déjà payée. Actualisez le calendrier avant de continuer.');
     let moyen = texte(req.body.moyen, 20);
-    if (!moyen) moyen = (ancien && ancien.moyen) || 'especes';
+    if (!moyen) moyen = (ancien && ancien.moyen) || 'especes'; // champ absent : on garde l'existant
     if (!MOYENS[moyen]) throw new ErreurHttp(400, 'Moyen de paiement invalide (especes, momo ou momo_regulateur).');
-    
+    // Numéro MOMO ayant reçu le transfert : seulement pour MOMO / MOMO régulateur ; champ absent => on garde l'existant.
     let numero = null;
     if (moyen !== 'especes') {
       numero = texte(req.body.numero_momo, 30) || null;
       if (!numero && ancien && ancien.moyen === moyen) numero = ancien.numero_momo || null;
     }
 
-    const upsert = (c, d, paye, m, moy, regle, num) => tx.run(`
-      INSERT INTO paiements (code_client, date, paye, montant, compte_id, maj_le, moyen, regle_le, numero_momo)
-      VALUES (?,?,?,?,?,?,?,?,?)
-      ON CONFLICT (code_client, date) DO UPDATE
-      SET paye = excluded.paye, montant = excluded.montant, compte_id = excluded.compte_id, 
-          maj_le = excluded.maj_le, moyen = excluded.moyen, regle_le = excluded.regle_le, numero_momo = excluded.numero_momo`,
+    const upsert = (c, d, paye, m, moy, regle, num) => tx.run(`INSERT INTO paiements (code_client, date, paye, montant, compte_id, maj_le, moyen, regle_le, numero_momo)
+              VALUES (?,?,?,?,?,?,?,?,?)
+              ON CONFLICT (code_client, date) DO UPDATE
+              SET paye = excluded.paye, montant = excluded.montant, compte_id = excluded.compte_id, maj_le = excluded.maj_le, moyen = excluded.moyen, regle_le = excluded.regle_le, numero_momo = excluded.numero_momo`,
       [c, d, paye, m, req.user.id, now(), moy, regle, num]);
-
     const journal = (jourConcerne, mt, moy, num) => tx.run(
       'INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo) VALUES (?,?,?,?,?,?,?,?)',
       [code, jourSaisie, jourConcerne, mt, moy, req.user.id, now(), num]);
 
-    let garde = montant; 
+    let garde = montant; // ce qui reste inscrit sur le jour saisi
     const surplus = montant - cible;
 
     if (surplus > 0 && cible > 0) {
+      // Jours suivis AVANT la date saisie, du plus ancien au plus récent.
       const debut = ((client.date_debut || client.date_creation) || '').slice(0, 10);
       const fin = (client.date_fin || '').slice(0, 10);
-      
-      // 1. D'ABORD : Combler les jours impayés dans le PASSÉ (date < jour saisi)
-      const existantsPasses = {};
+      const existants = {};
       (await tx.all('SELECT date, montant, moyen, numero_momo FROM paiements WHERE code_client = ? AND date < ?', [code, date]))
-        .forEach((r) => { existantsPasses[r.date] = { montant: r.montant, moyen: r.moyen, numero: r.numero_momo }; });
+        .forEach((r) => { existants[r.date] = { montant: r.montant, moyen: r.moyen, numero: r.numero_momo }; });
 
+      // Borne basse : début du contrat, sinon le plus ancien paiement connu.
       let borne = debut;
-      if (!borne) borne = Object.keys(existantsPasses).sort()[0] || date;
+      if (!borne) borne = Object.keys(existants).sort()[0] || date;
 
       let reste = surplus;
       const jour = new Date(borne + 'T00:00:00Z');
       const limite = new Date(date + 'T00:00:00Z');
-      
       while (jour < limite && reste > 0) {
         const k = jour.toISOString().slice(0, 10);
         if (!fin || k <= fin) {
-          const ex = existantsPasses[k] || { montant: 0, moyen: null };
+          const ex = existants[k] || { montant: 0, moyen: null };
           const dejaVerse = ex.montant;
           const manque = cible - dejaVerse;
           if (manque > 0) {
             const apport = Math.min(manque, reste);
             const nouveau = dejaVerse + apport;
-            const garder = dejaVerse > 0 && ex.moyen;
+            const garder = dejaVerse > 0 && ex.moyen; // un jour déjà entamé garde son moyen (et son numéro)
             const moyenJour = garder ? ex.moyen : moyen;
             const numeroJour = garder ? (ex.numero || null) : numero;
-            const regleLeJour = nouveau >= cible ? date : null;
-            
+            const regleLeJour = nouveau >= cible ? date : null; // jour complété : on retient la date réelle du règlement
             await upsert(code, k, nouveau >= cible ? 1 : 0, nouveau, moyenJour, regleLeJour, numeroJour);
             await journal(k, apport, moyen, numero);
             ajustements.push({ date: k, montant: nouveau, paye: nouveau >= cible, cible, moyen: moyenJour, regle_le: regleLeJour, numero_momo: numeroJour });
@@ -583,47 +623,13 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
         }
         jour.setUTCDate(jour.getUTCDate() + 1);
       }
-
-      // 2. ENSUITE : Si le conducteur est à jour et qu'il reste du surplus, gérer le PAIEMENT ANTICIPÉ (date > jour saisi)
-      if (reste > 0) {
-        const existantsFuturs = {};
-        (await tx.all('SELECT date, montant, moyen, numero_momo FROM paiements WHERE code_client = ? AND date > ?', [code, date]))
-          .forEach((r) => { existantsFuturs[r.date] = { montant: r.montant, moyen: r.moyen, numero: r.numero_momo }; });
-
-        const jourFutur = new Date(date + 'T00:00:00Z');
-        jourFutur.setUTCDate(jourFutur.getUTCDate() + 1); // Débute le lendemain du jour saisi
-
-        while (reste > 0) {
-          const k = jourFutur.toISOString().slice(0, 10);
-          if (fin && k > fin) break; // Ne pas dépasser la fin du contrat
-
-          const ex = existantsFuturs[k] || { montant: 0, moyen: null };
-          const dejaVerse = ex.montant;
-          const manque = cible - dejaVerse;
-
-          if (manque > 0) {
-            const apport = Math.min(manque, reste);
-            const nouveau = dejaVerse + apport;
-            const garder = dejaVerse > 0 && ex.moyen;
-            const moyenJour = garder ? ex.moyen : moyen;
-            const numeroJour = garder ? (ex.numero || null) : numero;
-            const regleLeJour = nouveau >= cible ? date : null;
-
-            await upsert(code, k, nouveau >= cible ? 1 : 0, nouveau, moyenJour, regleLeJour, numeroJour);
-            await journal(k, apport, moyen, numero);
-            ajustements.push({ date: k, montant: nouveau, paye: nouveau >= cible, cible, moyen: moyenJour, regle_le: regleLeJour, numero_momo: numeroJour });
-            reste -= apport;
-          }
-          jourFutur.setUTCDate(jourFutur.getUTCDate() + 1);
-        }
-      }
-
       reporte = surplus - reste;
       garde = montant - reporte;
     }
 
     await upsert(code, date, garde >= cible && garde > 0 ? 1 : 0, garde, garde > 0 ? moyen : null, null, garde > 0 ? numero : null);
-    
+    // Journal : ce qui change réellement dans la caisse. Si le moyen ou le numéro d'un versement existant change,
+    // on retire le montant de l'ancien moyen et on l'ajoute au nouveau.
     const deplace = ancien && ancien.montant > 0 && ancien.moyen &&
       (garde === 0 || ancien.moyen !== moyen || (ancien.numero_momo || null) !== (numero || null));
     if (deplace) {
@@ -741,7 +747,7 @@ async function versementsDuJour(dateStr) {
 
 // Collecte du jour pour un conducteur actif donné (utilisé par le tableau de bord et la tournée caissière).
 async function calculerCollectesDuJour(dateStr, defaut) {
-  const actifs = await db.all("SELECT code, nom, telephone, date_creation, date_debut, date_fin, montant_journalier FROM clients WHERE statut = 'actif'");
+  const actifs = await db.all("SELECT code, nom, telephone, immatriculation, date_creation, date_debut, date_fin, montant_journalier FROM clients WHERE statut = 'actif'");
   const duJour = new Map((await db.all('SELECT * FROM paiements WHERE date = ?', [dateStr])).map((p) => [p.code_client, p]));
   const bilans = await bilansImpayes(dateStr, actifs);
   const payes30 = await joursPayes30j();
@@ -753,7 +759,7 @@ async function calculerCollectesDuJour(dateStr, defaut) {
     const fiab = fiabilite30j(payes30, c.code, c.date_creation);
     const b = bilans.get(c.code);
     return {
-      code: c.code, nom: c.nom, statut, montant: p ? p.montant : 0, moyen: p ? p.moyen : null, numero_momo: p ? p.numero_momo : null, cible, heure: p ? heureLocale(p.maj_le) : null,
+      code: c.code, nom: c.nom, immatriculation: c.immatriculation, statut, montant: p ? p.montant : 0, moyen: p ? p.moyen : null, numero_momo: p ? p.numero_momo : null, cible, heure: p ? heureLocale(p.maj_le) : null,
       fiabilite: fiab.pourcentage, fiabilite_jours: fiab.jours_historique,
       jours_impayes: b.jours_impayes, montant_du: b.montant_du
     };
@@ -826,16 +832,23 @@ app.get('/api/tournee', exigerRole('admin', 'caissiere'), h(async (req, res) => 
 app.get('/api/impayes', exigerRole('admin'), h(async (req, res) => {
   const min = Math.min(Math.max(parseInt(req.query.min, 10) || 2, 1), 60);
   const aujourdhui = jourLocal(new Date());
-  const actifs = await db.all("SELECT id, code, nom, telephone, date_creation, date_debut, date_fin, montant_journalier FROM clients WHERE statut = 'actif'");
+  const actifs = await db.all("SELECT id, code, nom, telephone, adresse, temoin_telephone, immatriculation, date_creation, date_debut, date_fin, montant_journalier FROM clients WHERE statut = 'actif'");
   const bilans = await bilansImpayes(aujourdhui, actifs);
-  const tous = actifs.map((c) => ({ id: c.id, code: c.code, nom: c.nom, telephone: c.telephone, ...bilans.get(c.code),
+  const tous = actifs.map((c) => ({ id: c.id, code: c.code, nom: c.nom, telephone: c.telephone, adresse: c.adresse,
+    temoin_telephone: c.temoin_telephone, immatriculation: c.immatriculation, ...bilans.get(c.code),
     saisie_possible: bilans.get(c.code).montant_du >= SEUIL_SAISIE })).filter((c) => c.jours_impayes >= 1);
+  const filtres = tous.filter((c) => c.jours_impayes >= min).sort((x, y) => y.jours_impayes - x.jours_impayes || y.montant_du - x.montant_du);
+  if (req.query.format === 'csv') {
+    const entetes = ['Code conducteur', 'Conducteur', 'Téléphone conducteur', 'Adresse conducteur', 'Téléphone témoin', 'Plaque', 'Jours impayés', 'Montant dû (F CFA)', 'Depuis le', 'Jours consécutifs'];
+    const lignes = filtres.map((c) => [c.code, c.nom, c.telephone || '', c.adresse || '', c.temoin_telephone || '', c.immatriculation || '', c.jours_impayes, c.montant_du, c.depuis || '', c.consecutifs || 0].map(csvEchappe).join(';'));
+    const csv = '\uFEFF' + [entetes.join(';'), ...lignes].join('\r\n');
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="impayes_${aujourdhui}.csv"`);
+    return res.send(csv);
+  }
   const compteurs = {};
   [1, 2, 3, 4, 5].forEach((n) => { compteurs[n] = tous.filter((c) => c.jours_impayes >= n).length; });
-  res.json({
-    date: aujourdhui, min, seuil_saisie: SEUIL_SAISIE, compteurs,
-    conducteurs: tous.filter((c) => c.jours_impayes >= min).sort((x, y) => y.jours_impayes - x.jours_impayes || y.montant_du - x.montant_du)
-  });
+  res.json({ date: aujourdhui, min, seuil_saisie: SEUIL_SAISIE, compteurs, conducteurs: filtres });
 }));
 
 /* ------------------------------------------------------------------ */
@@ -879,7 +892,7 @@ app.get('/api/collectes', exigerRole('admin'), h(async (req, res) => {
   if (code) { where.push('p.code_client = ?'); args.push(code); }
 
   const rows = await db.all(`
-    SELECT p.date, p.code_client, c.nom AS client_nom, p.montant, p.paye, p.maj_le, p.moyen, p.numero_momo,
+    SELECT p.date, p.code_client, c.nom AS client_nom, c.immatriculation, p.montant, p.paye, p.maj_le, p.moyen, p.numero_momo,
            COALESCE(co.nom, 'Compte supprimé') AS caissiere_nom
     FROM paiements p
     LEFT JOIN clients c ON c.code = p.code_client
@@ -889,9 +902,9 @@ app.get('/api/collectes', exigerRole('admin'), h(async (req, res) => {
     LIMIT 5000`, args);
 
   if (req.query.format === 'csv') {
-    const entetes = ['Date', 'Code', 'Conducteur', 'Montant (F CFA)', 'Moyen', 'Numéro MOMO', 'Statut', 'Caissière', 'Enregistré le'];
+    const entetes = ['Date', 'Code', 'Conducteur', 'Plaque', 'Montant (F CFA)', 'Moyen', 'Numéro MOMO', 'Statut', 'Caissière', 'Enregistré le'];
     const lignes = rows.map((r) => [
-      r.date, r.code_client, r.client_nom || '', r.montant, MOYENS[r.moyen] || '', r.numero_momo || '', r.paye ? 'Payé' : 'Impayé', r.caissiere_nom, r.maj_le
+      r.date, r.code_client, r.client_nom || '', r.immatriculation || '', r.montant, MOYENS[r.moyen] || '', r.numero_momo || '', r.paye ? 'Payé' : 'Impayé', r.caissiere_nom, r.maj_le
     ].map(csvEchappe).join(';'));
     const csv = '\uFEFF' + [entetes.join(';'), ...lignes].join('\r\n');
     res.set('Content-Type', 'text/csv; charset=utf-8');
