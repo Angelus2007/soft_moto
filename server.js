@@ -387,6 +387,8 @@ app.get('/api/clients/:code', exigerRole('admin', 'caissiere'), h(async (req, re
 }));
 
 app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
+  // Récupération et nettoyage du code saisi manuellement par l'admin
+  const code = texte(req.body.code, 20).trim().toUpperCase();
   const nom = texte(req.body.nom, 100);
   const adresse = texte(req.body.adresse, 200);
   const telephone = texte(req.body.telephone, 30);
@@ -399,6 +401,12 @@ app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
   const immatriculation = texte(req.body.immatriculation, 30) || null;
   const marque = texte(req.body.marque, 40) || 'TVS';
 
+  // Validations du code conducteur
+  if (!code || code.length < 2) return res.status(400).json({ erreur: 'Entrez un code conducteur valide (ex: SM-101).' });
+  if (await db.get('SELECT 1 FROM clients WHERE code = ?', [code])) {
+    return res.status(409).json({ erreur: 'Ce code conducteur est déjà utilisé.' });
+  }
+
   if (!TYPES_CONTRAT.includes(typeContrat)) return res.status(400).json({ erreur: 'Type de contrat invalide.' });
   if (nom.length < 2) return res.status(400).json({ erreur: 'Entrez le nom et prénoms du conducteur.' });
   if (!telephone) return res.status(400).json({ erreur: 'Entrez le téléphone du conducteur.' });
@@ -410,23 +418,24 @@ app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
   if (!dateValide(dateFin)) return res.status(400).json({ erreur: 'Entrez une date de fin valide.' });
   if (dateFin < dateDebut) return res.status(400).json({ erreur: 'La date de fin doit être après la date de début.' });
 
-  // Montant de base JOURNALIER : ce que la caissière doit collecter chaque jour — obligatoire.
   const montantJournalier = nombreOptionnel(req.body.montant_journalier, 1, 1000000);
   if (montantJournalier === false) return res.status(400).json({ erreur: 'Montant de base journalier invalide.' });
   if (montantJournalier === null) return res.status(400).json({ erreur: 'Entrez le montant de base journalier.' });
-  // Prix de la moto : montant TOTAL que le conducteur doit rembourser au fil du temps — optionnel.
+  
   const prix = nombreOptionnel(req.body.prix_moto, 1, 100000000);
   if (prix === false) return res.status(400).json({ erreur: 'Prix de la moto invalide.' });
 
-  const code = await genererCode();
+  // Insertion en base avec le code saisi par l'administrateur
   const id = await db.insertId(`INSERT INTO clients
       (code, nom, telephone, adresse, temoin_nom, temoin_telephone, temoin_adresse, date_debut, date_fin,
        statut, date_creation, prix_moto, montant_journalier, type_contrat, immatriculation, marque)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [code, nom, telephone, adresse, temoinNom, temoinTelephone, temoinAdresse, dateDebut, dateFin,
       'actif', now(), prix, montantJournalier, typeContrat, immatriculation, marque]);
+      
   res.status(201).json(avecCible(await db.get(`SELECT ${COLS_CLIENT} FROM clients WHERE id = ?`, [id])));
 }));
+
 
 app.patch('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
   const existant = await db.get('SELECT * FROM clients WHERE id = ?', [idParam(req.params.id)]);
