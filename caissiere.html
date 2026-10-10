@@ -276,12 +276,12 @@
 
   <div class="panel">
     <h2>Rechercher un conducteur précis</h2>
-    <p class="hint">Entrez le code du conducteur (ex. SM-274819) ou sa plaque d'immatriculation pour ouvrir sa fiche : les 24 cases de vidange et les paiements jour par jour.</p>
+    <p class="hint">Entrez le code conducteur (ex. SM-274819) pour ouvrir sa fiche : les 24 cases de vidange et les paiements jour par jour.</p>
     <div class="search-row">
-      <input type="text" id="clientCodeInput" placeholder="Code ou plaque" autocomplete="off">
+      <input type="text" id="clientCodeInput" placeholder="Code conducteur ou plaque" autocomplete="off">
       <button type="button" class="btn" id="searchBtn">Rechercher</button>
     </div>
-    <p class="search-error" id="searchError">Aucun conducteur trouvé avec ce code ou cette plaque.</p>
+    <p class="search-error" id="searchError">Aucun client trouvé avec ce code.</p>
   </div>
 
   <div class="panel" id="clientPanel">
@@ -307,6 +307,12 @@
       <p class="cal-title" id="calTitle">—</p>
       <button type="button" id="nextMonthBtn" aria-label="Mois suivant">&#8250;</button>
     </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin:0 0 12px;">
+      <button type="button" class="btn" id="advanceWeekBtn" style="padding:9px 13px;border:1.5px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">Redevance hebdomadaire · 7 jours</button>
+      <button type="button" class="btn" id="advanceMonthBtn" style="padding:9px 13px;border:1.5px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">Redevance mensuelle · 30 jours</button>
+      <button type="button" class="btn" id="advancePaymentBtn" style="padding:9px 13px;border:1.5px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">Autre durée</button>
+    </div>
+    <p class="panel-error" id="advancePaymentError"></p>
     <p class="panel-error" id="calError"></p>
     <div class="cal-grid" id="calGrid">
       <div class="cal-dow">Lun</div><div class="cal-dow">Mar</div><div class="cal-dow">Mer</div>
@@ -472,7 +478,7 @@
   }
 
   function renderCalendar(){
-    if(!currentClient) return;
+    if(!currentClient) return Promise.resolve();
     const y = viewYear, m = viewMonth;
     const now = new Date();
     const isCurrentMonth = y === now.getFullYear() && m === now.getMonth();
@@ -485,7 +491,7 @@
     calGrid.querySelectorAll('.cal-day, .cal-empty').forEach(function(el){ el.remove(); });
     calGrid.classList.add('loading');
 
-    api('/api/paiements?code_client=' + encodeURIComponent(currentClient.code) + '&mois=' + isoMois(y, m))
+    return api('/api/paiements?code_client=' + encodeURIComponent(currentClient.code) + '&mois=' + isoMois(y, m))
       .then(function(rows){
         paiementsParJour = {};
         rows.forEach(function(p){ paiementsParJour[p.date] = p; });
@@ -676,6 +682,79 @@
   const quickFullBtn = document.getElementById('quickFullBtn');
   const quickZeroBtn = document.getElementById('quickZeroBtn');
   let contexteEnCours = null; // { code, date, cible, onSaved(p) }
+
+  // Paiement anticipé : enregistre un paiement journalier sur chaque date future.
+  const advancePaymentBtn = document.getElementById('advancePaymentBtn');
+  const advancePaymentError = document.getElementById('advancePaymentError');
+
+  function ajouterJoursISO(iso, nombre){
+    const d = new Date(iso + 'T12:00:00');
+    d.setDate(d.getDate() + nombre);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  const advanceWeekBtn = document.getElementById('advanceWeekBtn');
+  const advanceMonthBtn = document.getElementById('advanceMonthBtn');
+  async function payerAvance(joursFixes, bouton){
+    if(!currentClient) return;
+    advancePaymentError.classList.remove('show');
+    const jours = Number.isInteger(joursFixes) ? joursFixes : Number(window.prompt('Combien de jours souhaitez-vous payer en avance ? (1 à 90 jours)', '14'));
+    if(!Number.isInteger(jours) || jours < 1 || jours > 90){
+      if(jours !== 0 && jours !== null && Number.isFinite(jours)){
+        advancePaymentError.textContent = 'Indiquez un nombre entier entre 1 et 90 jours.';
+        advancePaymentError.classList.add('show');
+      }
+      return;
+    }
+    const tarif = Number(currentClient.montant_journalier_effectif || DAILY_RATE);
+    const total = tarif * jours;
+    const debut = ajouterJoursISO(aujourdhuiISO(), 1);
+    const fin = ajouterJoursISO(debut, jours - 1);
+    const finContrat = currentClient.date_fin ? String(currentClient.date_fin).slice(0,10) : '';
+    if(finContrat && fin > finContrat){
+      advancePaymentError.textContent = 'Cette durée dépasse la fin du contrat (' + finContrat + '). Aucun paiement n’a été enregistré.';
+      advancePaymentError.classList.add('show'); return;
+    }
+    const libelle = jours===7 ? 'hebdomadaire (7 jours)' : jours===30 ? 'mensuelle (30 jours)' : jours+' jours';
+    const confirme = window.confirm('Conducteur : '+currentClient.nom+'\nType : redevance '+libelle+'\nPériode : du '+debut+' au '+fin+'\nMontant total : '+total.toLocaleString('fr-FR')+' F CFA\n\nConfirmer ?');
+    if(!confirme)return;
+    const boutons=[advancePaymentBtn,advanceWeekBtn,advanceMonthBtn];
+    boutons.forEach(b=>b.disabled=true);
+    if(bouton) bouton.textContent='Enregistrement…';
+    let enregistres=0, dejaRegles=0;
+    try{
+      // Charger tout l'historique afin de ne pas écraser un paiement déjà enregistré dans un autre mois.
+      const historique=await api('/api/paiements?code_client='+encodeURIComponent(currentClient.code));
+      const parDate={}; (historique||[]).forEach(p=>{parDate[p.date]=p});
+      for(let i=0;i<jours;i++){
+        const date=ajouterJoursISO(debut,i);
+        if(parDate[date]&&parDate[date].paye){dejaRegles++;continue;}
+      }
+      for(let i=0;i<jours;i++){
+        const date=ajouterJoursISO(debut,i);
+        if(parDate[date]&&parDate[date].paye)continue;
+        await api('/api/paiements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code_client:currentClient.code,date,montant:tarif,moyen:smMoyenGet(),numero_momo:smNumeroGet()||undefined,avance:true})});
+        enregistres++;
+      }
+      await renderCalendar();
+      advancePaymentError.textContent=enregistres
+        ? 'Paiement '+libelle+' enregistré : '+enregistres+' jour(s), soit '+(enregistres*tarif).toLocaleString('fr-FR')+' F CFA.'+(dejaRegles?' '+dejaRegles+' jour(s) déjà payé(s) ont été ignorés.':'')
+        : 'Aucun nouveau paiement : toutes les dates choisies étaient déjà réglées.';
+      advancePaymentError.classList.add('show'); rechargerTourneeBientot();
+      if(enregistres&&window.smCelebrate)window.smCelebrate(bouton||advancePaymentBtn);
+    }catch(err){
+      advancePaymentError.textContent='Enregistrement interrompu après '+enregistres+' jour(s). '+smMessage(err)+' Vérifiez les paiements avant de réessayer.';
+      advancePaymentError.classList.add('show'); renderCalendar();
+    }finally{
+      boutons.forEach(b=>b.disabled=false);
+      advancePaymentBtn.textContent='Autre durée';
+      advanceWeekBtn.textContent='Redevance hebdomadaire · 7 jours';
+      advanceMonthBtn.textContent='Redevance mensuelle · 30 jours';
+    }
+  }
+  advancePaymentBtn.addEventListener('click',()=>payerAvance(null,advancePaymentBtn));
+  advanceWeekBtn.addEventListener('click',()=>payerAvance(7,advanceWeekBtn));
+  advanceMonthBtn.addEventListener('click',()=>payerAvance(30,advanceMonthBtn));
 
   function ouvrirModalContexte(ctx){
     contexteEnCours = ctx;
