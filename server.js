@@ -509,65 +509,70 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
 
   const cible = cibleJourniere(client);
   const jourSaisie = jourLocal(new Date());
-  const ajustements = []; // jours antérieurs comblés grâce au surplus
+  const ajustements = []; // jours antérieurs ou futurs comblés grâce au surplus
   let reporte = 0;        // total du surplus utilisé pour combler ces jours
   let paiement;
 
-  // Tout se fait dans une transaction, avec un verrou sur le conducteur : deux saisies simultanées ne se mélangent pas.
+  // Tout se fait dans une transaction, avec un verrou sur le conducteur
   await db.tx(async (tx) => {
     await tx.lock('clients', 'code', code);
 
     const ancien = await tx.get('SELECT moyen, montant, numero_momo FROM paiements WHERE code_client = ? AND date = ?', [code, date]);
     let moyen = texte(req.body.moyen, 20);
-    if (!moyen) moyen = (ancien && ancien.moyen) || 'especes'; // champ absent : on garde l'existant
+    if (!moyen) moyen = (ancien && ancien.moyen) || 'especes';
     if (!MOYENS[moyen]) throw new ErreurHttp(400, 'Moyen de paiement invalide (especes, momo ou momo_regulateur).');
-    // Numéro MOMO ayant reçu le transfert : seulement pour MOMO / MOMO régulateur ; champ absent => on garde l'existant.
+    
     let numero = null;
     if (moyen !== 'especes') {
       numero = texte(req.body.numero_momo, 30) || null;
       if (!numero && ancien && ancien.moyen === moyen) numero = ancien.numero_momo || null;
     }
 
-    const upsert = (c, d, paye, m, moy, regle, num) => tx.run(`INSERT INTO paiements (code_client, date, paye, montant, compte_id, maj_le, moyen, regle_le, numero_momo)
-              VALUES (?,?,?,?,?,?,?,?,?)
-              ON CONFLICT (code_client, date) DO UPDATE
-              SET paye = excluded.paye, montant = excluded.montant, compte_id = excluded.compte_id, maj_le = excluded.maj_le, moyen = excluded.moyen, regle_le = excluded.regle_le, numero_momo = excluded.numero_momo`,
+    const upsert = (c, d, paye, m, moy, regle, num) => tx.run(`
+      INSERT INTO paiements (code_client, date, paye, montant, compte_id, maj_le, moyen, regle_le, numero_momo)
+      VALUES (?,?,?,?,?,?,?,?,?)
+      ON CONFLICT (code_client, date) DO UPDATE
+      SET paye = excluded.paye, montant = excluded.montant, compte_id = excluded.compte_id, 
+          maj_le = excluded.maj_le, moyen = excluded.moyen, regle_le = excluded.regle_le, numero_momo = excluded.numero_momo`,
       [c, d, paye, m, req.user.id, now(), moy, regle, num]);
+
     const journal = (jourConcerne, mt, moy, num) => tx.run(
       'INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo) VALUES (?,?,?,?,?,?,?,?)',
       [code, jourSaisie, jourConcerne, mt, moy, req.user.id, now(), num]);
 
-    let garde = montant; // ce qui reste inscrit sur le jour saisi
+    let garde = montant; 
     const surplus = montant - cible;
 
     if (surplus > 0 && cible > 0) {
-      // Jours suivis AVANT la date saisie, du plus ancien au plus récent.
       const debut = ((client.date_debut || client.date_creation) || '').slice(0, 10);
       const fin = (client.date_fin || '').slice(0, 10);
-      const existants = {};
+      
+      // 1. D'ABORD : Combler les jours impayés dans le PASSÉ (date < jour saisi)
+      const existantsPasses = {};
       (await tx.all('SELECT date, montant, moyen, numero_momo FROM paiements WHERE code_client = ? AND date < ?', [code, date]))
-        .forEach((r) => { existants[r.date] = { montant: r.montant, moyen: r.moyen, numero: r.numero_momo }; });
+        .forEach((r) => { existantsPasses[r.date] = { montant: r.montant, moyen: r.moyen, numero: r.numero_momo }; });
 
-      // Borne basse : début du contrat, sinon le plus ancien paiement connu.
       let borne = debut;
-      if (!borne) borne = Object.keys(existants).sort()[0] || date;
+      if (!borne) borne = Object.keys(existantsPasses).sort()[0] || date;
 
       let reste = surplus;
       const jour = new Date(borne + 'T00:00:00Z');
       const limite = new Date(date + 'T00:00:00Z');
+      
       while (jour < limite && reste > 0) {
         const k = jour.toISOString().slice(0, 10);
         if (!fin || k <= fin) {
-          const ex = existants[k] || { montant: 0, moyen: null };
+          const ex = existantsPasses[k] || { montant: 0, moyen: null };
           const dejaVerse = ex.montant;
           const manque = cible - dejaVerse;
           if (manque > 0) {
             const apport = Math.min(manque, reste);
             const nouveau = dejaVerse + apport;
-            const garder = dejaVerse > 0 && ex.moyen; // un jour déjà entamé garde son moyen (et son numéro)
+            const garder = dejaVerse > 0 && ex.moyen;
             const moyenJour = garder ? ex.moyen : moyen;
             const numeroJour = garder ? (ex.numero || null) : numero;
-            const regleLeJour = nouveau >= cible ? date : null; // jour complété : on retient la date réelle du règlement
+            const regleLeJour = nouveau >= cible ? date : null;
+            
             await upsert(code, k, nouveau >= cible ? 1 : 0, nouveau, moyenJour, regleLeJour, numeroJour);
             await journal(k, apport, moyen, numero);
             ajustements.push({ date: k, montant: nouveau, paye: nouveau >= cible, cible, moyen: moyenJour, regle_le: regleLeJour, numero_momo: numeroJour });
@@ -576,13 +581,47 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
         }
         jour.setUTCDate(jour.getUTCDate() + 1);
       }
+
+      // 2. ENSUITE : Si le conducteur est à jour et qu'il reste du surplus, gérer le PAIEMENT ANTICIPÉ (date > jour saisi)
+      if (reste > 0) {
+        const existantsFuturs = {};
+        (await tx.all('SELECT date, montant, moyen, numero_momo FROM paiements WHERE code_client = ? AND date > ?', [code, date]))
+          .forEach((r) => { existantsFuturs[r.date] = { montant: r.montant, moyen: r.moyen, numero: r.numero_momo }; });
+
+        const jourFutur = new Date(date + 'T00:00:00Z');
+        jourFutur.setUTCDate(jourFutur.getUTCDate() + 1); // Débute le lendemain du jour saisi
+
+        while (reste > 0) {
+          const k = jourFutur.toISOString().slice(0, 10);
+          if (fin && k > fin) break; // Ne pas dépasser la fin du contrat
+
+          const ex = existantsFuturs[k] || { montant: 0, moyen: null };
+          const dejaVerse = ex.montant;
+          const manque = cible - dejaVerse;
+
+          if (manque > 0) {
+            const apport = Math.min(manque, reste);
+            const nouveau = dejaVerse + apport;
+            const garder = dejaVerse > 0 && ex.moyen;
+            const moyenJour = garder ? ex.moyen : moyen;
+            const numeroJour = garder ? (ex.numero || null) : numero;
+            const regleLeJour = nouveau >= cible ? date : null;
+
+            await upsert(code, k, nouveau >= cible ? 1 : 0, nouveau, moyenJour, regleLeJour, numeroJour);
+            await journal(k, apport, moyen, numero);
+            ajustements.push({ date: k, montant: nouveau, paye: nouveau >= cible, cible, moyen: moyenJour, regle_le: regleLeJour, numero_momo: numeroJour });
+            reste -= apport;
+          }
+          jourFutur.setUTCDate(jourFutur.getUTCDate() + 1);
+        }
+      }
+
       reporte = surplus - reste;
       garde = montant - reporte;
     }
 
     await upsert(code, date, garde >= cible && garde > 0 ? 1 : 0, garde, garde > 0 ? moyen : null, null, garde > 0 ? numero : null);
-    // Journal : ce qui change réellement dans la caisse. Si le moyen ou le numéro d'un versement existant change,
-    // on retire le montant de l'ancien moyen et on l'ajoute au nouveau.
+    
     const deplace = ancien && ancien.montant > 0 && ancien.moyen &&
       (garde === 0 || ancien.moyen !== moyen || (ancien.numero_momo || null) !== (numero || null));
     if (deplace) {
