@@ -593,6 +593,7 @@
       <div class="panel-head">
         <h2>Impayés cumulés</h2>
         <span class="meta" id="impayesMeta"></span>
+        <a class="act-btn ok" id="impayesExport" href="#" style="text-decoration:none; display:inline-block;" title="Fichier Excel : code, nom, téléphone, adresse, plaque, jours impayés, montant dû et coordonnées du témoin">Exporter (Excel)</a>
       </div>
       <div class="chips" id="impayesChips" role="group" aria-label="Seuil de jours impayés">
         <button type="button" data-min="2" class="on">2 jours et +</button>
@@ -750,6 +751,8 @@
 
   function renderImpayes(){
     const susp = seuil === 'suspendus';
+    $('impayesExport').style.display = susp ? 'none' : '';
+    if(!susp) $('impayesExport').href = '/api/impayes?format=csv&min=' + seuil;
     $('impTh1').textContent = susp ? 'Téléphone' : 'Jours impayés';
     $('impTh2').textContent = susp ? 'Inscrit le' : 'Montant dû';
     $('impTh3').textContent = susp ? '' : 'Impayés depuis';
@@ -777,7 +780,7 @@
       n = liste.length;
       html = liste.map(function(c){
         const tel = c.telephone ? '<span class="sub-note"><a href="tel:' + esc(c.telephone.replace(/\s+/g, '')) + '">' + esc(c.telephone) + '</a></span>' : '';
-        return '<tr>' + cellConducteur(c.nom, c.code, tel) +
+        return '<tr>' + cellConducteur(c.nom, c.code + (c.immatriculation ? ' · ' + c.immatriculation : ''), tel) +
           '<td><span class="days-pill' + (c.jours_impayes < 3 ? ' mid' : '') + '">' + c.jours_impayes + '</span></td>' +
           '<td class="amount">' + esc(fmtF(c.montant_du)) + (c.saisie_possible ? '<span class="tag-saisie" title="Article 8-II du contrat">≥ ' + esc(fmtF(impayesDonnees.seuil_saisie)) + ' : saisie possible</span>' : '') + '</td>' +
           '<td>' + esc(jourLisible(c.depuis)) + (c.consecutifs ? '<span class="sub-note">' + c.consecutifs + ' d\'affilée</span>' : '') + '</td>' +
