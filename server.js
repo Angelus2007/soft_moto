@@ -69,13 +69,6 @@ function cibleJourniere(client) {
   return (client && client.montant_journalier) || getVersementDefaut();
 }
 
-async function genererCode() {
-  let code;
-  do {
-    code = 'SM-' + String(crypto.randomInt(0, 1000000)).padStart(6, '0');
-  } while (await db.get('SELECT 1 FROM clients WHERE code = ?', [code]));
-  return code;
-}
 
 /* Démarrage : tables, migrations, premier administrateur, réglages par défaut. */
 async function demarrer() {
