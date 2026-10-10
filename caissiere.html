@@ -276,12 +276,12 @@
 
   <div class="panel">
     <h2>Rechercher un conducteur précis</h2>
-    <p class="hint">Entrez le code conducteur (ex. SM-274819) pour ouvrir sa fiche : les 24 cases de vidange et les paiements jour par jour.</p>
+    <p class="hint">Entrez le code du conducteur (ex. SM-274819) ou sa plaque d'immatriculation pour ouvrir sa fiche : les 24 cases de vidange et les paiements jour par jour.</p>
     <div class="search-row">
-      <input type="text" id="clientCodeInput" placeholder="SM-XXXXXX" autocomplete="off">
+      <input type="text" id="clientCodeInput" placeholder="Code ou plaque" autocomplete="off">
       <button type="button" class="btn" id="searchBtn">Rechercher</button>
     </div>
-    <p class="search-error" id="searchError">Aucun client trouvé avec ce code.</p>
+    <p class="search-error" id="searchError">Aucun conducteur trouvé avec ce code ou cette plaque.</p>
   </div>
 
   <div class="panel" id="clientPanel">
@@ -823,78 +823,6 @@
   if(params.get('code')) loadClient(params.get('code'));
 })();
 </script>
-  <!-- Extension Soft Moto : Logique de paiement anticipé -->
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  // 1. Attendre qu'un client soit chargé à l'écran
-  const observer = new MutationObserver(() => {
-    // On cherche l'endroit où s'affiche l'objectif journalier dans le volet
-    const targetDiv = document.querySelector('h3')?.parentElement;
-    if (!targetDiv || document.getElementById('btn-paiement-anticipe-container')) return;
-
-    // Récupérer les données du client actuellement sélectionné à l'écran
-    // Ces sélecteurs se basent sur les textes visibles de votre interface
-    const totalImpayesText = document.body.innerText.match(/Total impayés\s*([\d\s]+)\s*F/i);
-    const totalImpayes = totalImpayesText ? parseInt(totalImpayesText[1].replace(/\s/g, '')) : 0;
-    
-    const objectifText = document.body.innerText.match(/Objectif du jour\s*:\s*([\d\s]+)/i);
-    const montantJournalier = objectifText ? parseInt(objectifText[1].replace(/\s/g, '')) : 3500;
-
-    // Création du conteneur visuel pour le paiement anticipé
-    const container = document.createElement('div');
-    container.id = 'btn-paiement-anticipe-container';
-    container.style.cssText = 'margin: 15px 0; padding: 12px; background: #f0f7ff; border: 1px solid #b3d7ff; border-radius: 6px;';
-
-    if (totalImpayes > 0) {
-      // Si le conducteur a des dettes, on bloque l'option anticipée
-      container.innerHTML = `<p style="margin:0; font-size:13px; color:#555;">⚠️ <em>Réglez d'abord les <strong>${totalImpayes} F</strong> d'impayés pour débloquer le paiement en avance.</em></p>`;
-    } else {
-      // Si le conducteur est à jour, on affiche les options
-      container.innerHTML = `
-        <label style="display:block; font-weight:600; font-size:13px; margin-bottom:8px; color:#004085;">
-          🚀 Payer des jours en avance :
-        </label>
-        <div style="display:flex; gap:8px;">
-          <button type="button" class="btn-avance" data-jours="7" style="flex:1; padding:6px; font-size:12px; cursor:pointer; background:#fff; border:1px solid #007bff; border-radius:4px; color:#007bff; font-weight:500;">+7 jours (1 sem.)</button>
-          <button type="button" class="btn-avance" data-jours="14" style="flex:1; padding:6px; font-size:12px; cursor:pointer; background:#fff; border:1px solid #007bff; border-radius:4px; color:#007bff; font-weight:500;">+14 jours (2 sem.)</button>
-        </div>
-      `;
-
-      // Ajouter l'action lors du clic sur un des boutons (+7 ou +14 jours)
-      container.querySelectorAll('.btn-avance').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const jours = parseInt(e.target.getAttribute('data-jours'));
-          const montantTotalAvance = montantJournalier * jours;
-          
-          // Trouver le champ de saisie du montant dans votre formulaire Soft Moto
-          const inputMontant = document.querySelector('input[type="number"], input[placeholder*="Montant"]');
-          if (inputMontant) {
-            inputMontant.value = montantTotalAvance;
-            // Déclencher l'événement pour avertir les scripts internes de Soft Moto du changement de valeur
-            inputMontant.dispatchEvent(new Event('input', { bubbles: true }));
-            
-            // Notification visuelle rapide pour la caissière
-            btn.style.background = '#007bff';
-            btn.style.color = '#fff';
-            setTimeout(() => {
-              btn.style.background = '#fff';
-              btn.style.color = '#007bff';
-            }, 500);
-          }
-        });
-      });
-    }
-
-    // Insertion du module juste avant les boutons Annuler/Enregistrer du formulaire
-    const formActions = targetDiv.querySelector('button[type="submit"], .actions, #Enregistrer')?.parentElement || targetDiv;
-    formActions.insertBefore(container, formActions.firstChild);
-  });
-
-  // Observer le corps de la page pour réagir quand la caissière ouvre la fiche d'un client
-  observer.observe(document.body, { childList: true, subtree: true });
-});
-</script>
-
 
 </body>
 </html>
