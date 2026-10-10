@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Espace caissière – Soft Moto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,450&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-dark:#0B1B33; --bg-dark-2:#16305A; --bg-light:#F1F4F9; --panel:#FFFFFF;
+    --accent:#1D4ED8; --accent-dark:#1E3A8A; --accent-soft:#DBE6FD;
+    --ink:#0F172A; --ink-soft:#526074; --ink-faint:#8793A5;
+    --cream:#F1F4F9; --cream-soft:#AEBBD0;
+    --error:#B42318; --error-soft:#FDE7E5;
+    --border:#DDE3EC; --radius:10px;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:"IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  html{height:100%; scroll-padding-top:env(safe-area-inset-top, 0px);}
+  body{ min-height:100%; margin:0; font-family:var(--sans); color:var(--ink); background:var(--bg-light); -webkit-font-smoothing:antialiased; }
+  a{ color:inherit; }
+
+  /* ---------- Header ---------- */
+  header.top{
+    position:relative;
+    overflow:hidden;
+    background:radial-gradient(130% 200% at 15% 0%, var(--bg-dark-2) 0%, var(--bg-dark) 60%);
+    color:var(--cream);
+    padding:16px 26px;
+    padding-top:calc(16px + env(safe-area-inset-top, 0px));
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .logotype{ display:flex; align-items:center; gap:9px; font-family:var(--serif); font-style:italic; font-weight:500; font-size:18px; }
+  .who-bar{ display:flex; align-items:center; gap:12px; }
+  .avatar{ width:32px; height:32px; border-radius:50%; background:var(--accent); color:var(--cream); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:12px; font-weight:600; flex-shrink:0; }
+  .who-bar .name{ font-size:13.5px; font-weight:600; }
+  .who-bar .role{ font-size:11.5px; color:var(--ink-faint); }
+  .logout-link{ display:flex; align-items:center; gap:6px; padding:8px 10px; border-radius:8px; color:var(--cream-soft); text-decoration:none; font-size:13px; font-weight:500; }
+  .logout-link:hover{ background:rgba(241,244,249,0.08); color:var(--cream); }
+
+  main.main{ max-width:900px; margin:0 auto; padding:30px 22px 60px; }
+
+  .panel{ background:var(--panel); border:1.5px solid var(--border); border-radius:12px; padding:22px; margin-bottom:18px; }
+  .panel h2{ font-family:var(--serif); font-weight:600; font-size:18px; margin:0 0 6px; color:var(--ink); }
+  .panel .hint{ margin:0 0 18px; color:var(--ink-soft); font-size:13.5px; }
+
+  /* ---------- Recherche client ---------- */
+  .search-row{ display:flex; gap:10px; flex-wrap:wrap; }
+  .search-row input{
+    flex:1; min-width:200px; padding:11px 14px; font-size:15px; font-family:var(--mono);
+    letter-spacing:0.5px; color:var(--ink); background:var(--panel); border:1.5px solid var(--border);
+    border-radius:8px; outline:none;
+  }
+  .search-row input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .search-row input[data-invalid="true"]{ border-color:var(--error); }
+  .search-row .btn{
+    display:inline-flex; align-items:center; gap:7px; font-family:var(--sans); font-size:14px; font-weight:600;
+    padding:11px 18px; border-radius:8px; border:1.5px solid var(--accent); cursor:pointer;
+    background:var(--accent); color:var(--cream); transition:background .15s ease;
+  }
+  .search-row .btn:hover{ background:var(--accent-dark); }
+  .search-row .btn:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+  .search-error{ margin:10px 0 0; font-size:13.5px; color:var(--error); display:none; }
+  .search-error.show{ display:block; }
+
+  /* ---------- Client trouvé ---------- */
+  #clientPanel{ display:none; }
+  .client-head{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:6px; }
+  .client-id{ display:flex; align-items:center; gap:12px; }
+  .client-id .avatar{ width:42px; height:42px; font-size:14px; }
+  .client-id .c-name{ font-family:var(--serif); font-weight:600; font-size:19px; color:var(--ink); }
+  .client-id .c-code{ font-family:var(--mono); font-size:12.5px; color:var(--ink-faint); }
+  .change-client{ background:none; border:none; color:var(--accent-dark); font-size:13px; font-weight:600; cursor:pointer; text-decoration:underline; }
+
+  .legend{ display:flex; gap:18px; margin:14px 0 18px; font-size:12.5px; color:var(--ink-soft); flex-wrap:wrap; }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .legend .dot{ width:14px; height:14px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; }
+  .legend .dot.paid{ background:var(--paye-soft); color:var(--paye-dark); }
+  .legend .dot.unpaid{ background:var(--impaye-soft); color:var(--impaye-dark); }
+  .legend .dot.future{ background:var(--border); }
+
+  .cal-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .cal-title{ font-size:13.5px; font-weight:600; color:var(--ink); text-transform:capitalize; margin:0; }
+  .cal-nav button{ background:none; border:1.5px solid var(--border); border-radius:8px; width:30px; height:30px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-soft); }
+  .cal-nav button:hover{ background:var(--bg-light); }
+  .cal-nav button:disabled{ opacity:0.4; cursor:default; }
+  .cal-day[disabled]{ cursor:default; }
+  .cal-day.loading{ opacity:0.55; pointer-events:none; }
+  .panel-error{ margin:10px 0 0; font-size:13.5px; color:var(--error); display:none; }
+  .panel-error.show{ display:block; }
+
+  .cal-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; }
+  .cal-dow{ text-align:center; font-size:11.5px; color:var(--ink-faint); font-weight:600; padding-bottom:4px; }
+  .cal-empty{ visibility:hidden; }
+
+  .cal-day{
+    aspect-ratio:1;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    border-radius:8px; border:1.5px solid var(--border); background:var(--panel);
+    cursor:pointer; font-family:var(--sans); font-size:12.5px; color:var(--ink); user-select:none;
+    transition:transform .08s ease;
+  }
+  .cal-day:hover{ transform:translateY(-1px); }
+  .cal-day:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .cal-day .num{ font-weight:600; }
+  .cal-day.paid{ background:var(--paye-soft); border-color:var(--paye); color:var(--paye-dark); }
+  .cal-day.unpaid{ background:var(--impaye-soft); border-color:var(--impaye); color:var(--impaye-dark); }
+  .cal-day .amt, .cal-day .date-sub{ font-size:9px; font-family:var(--mono); opacity:0.85; letter-spacing:-0.2px; }
+  .cal-day.future{ cursor:default; color:var(--ink-faint); background:var(--bg-light); }
+  .cal-day.future:hover{ transform:none; }
+  .cal-day.today{ box-shadow:inset 0 0 0 2px var(--ink); }
+  .cal-day{ transition:transform .12s ease, background .15s ease, border-color .15s ease; }
+  .cal-day.just-toggled{ animation:sm-pop .38s cubic-bezier(.34,1.56,.64,1); }
+  .cal-grid{ transition:opacity .16s ease, transform .16s ease; }
+  .cal-grid.switching{ opacity:0; transform:translateX(8px); }
+
+  /* ---------- Soldes ---------- */
+  .totals{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:20px; }
+  .total-box{ border-radius:12px; padding:18px 20px; border:1.5px solid; }
+  .total-box.unpaid{ background:var(--impaye-soft); border-color:var(--impaye); }
+  .total-box.paid{ background:var(--paye-soft); border-color:var(--paye); }
+  .total-box .t-label{ font-size:13px; font-weight:600; margin:0 0 8px; display:flex; align-items:center; gap:7px; }
+  .total-box.unpaid .t-label{ color:var(--impaye-dark); }
+  .total-box.paid .t-label{ color:var(--paye-dark); }
+  .total-box .t-amount{ font-family:var(--mono); font-size:23px; font-weight:600; }
+  .total-box.unpaid .t-amount{ color:var(--impaye-dark); }
+  .total-box.paid .t-amount{ color:var(--paye-dark); }
+  .total-box .t-count{ font-size:12.5px; color:var(--ink-soft); margin-top:4px; }
+
+  @media (max-width: 560px){
+    .totals{ grid-template-columns:1fr; }
+    .cal-day .num{ font-size:11.5px; }
+    .cal-day .amt, .cal-day .date-sub{ font-size:7.5px; letter-spacing:-0.4px; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+
+  /* ---------- Ma tournée du jour ---------- */
+  .tournee-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .tournee-head .search-mini{ display:flex; align-items:center; gap:8px; background:var(--bg-light); border:1.5px solid var(--border); border-radius:8px; padding:8px 11px; min-width:200px; }
+  .tournee-head .search-mini input{ border:none; outline:none; background:none; font-family:var(--sans); font-size:13.5px; color:var(--ink); width:100%; }
+  .tournee-meta{ font-size:12.5px; color:var(--ink-faint); }
+  .tournee-list{ display:flex; flex-direction:column; gap:8px; max-height:440px; overflow-y:auto; }
+  .tournee-row{
+    display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:10px; border:1.5px solid var(--border);
+    background:var(--panel); cursor:pointer; transition:background .15s ease, border-color .15s ease;
+  }
+  .tournee-row:hover{ border-color:var(--accent); }
+  .tournee-row .t-who{ flex:1; min-width:0; }
+  .tournee-row .t-name{ font-weight:600; font-size:13.5px; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tournee-row .t-code{ font-family:var(--mono); font-size:11px; color:var(--ink-faint); }
+  .tournee-row .t-reliability{ font-size:10px; font-weight:600; padding:1px 7px; border-radius:999px; margin-left:6px; }
+  .tournee-row .t-reliability.good{ background:var(--paye-soft); color:var(--paye-dark); }
+  .tournee-row .t-reliability.mid{ background:var(--amber-soft); color:var(--amber); }
+  .tournee-row .t-reliability.bad{ background:var(--impaye-soft); color:var(--impaye-dark); }
+  .tournee-row .t-status{ display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; padding:6px 12px; border-radius:999px; flex-shrink:0; }
+  .tournee-row .t-status.paid{ background:var(--paye-soft); color:var(--paye-dark); }
+  .tournee-row .t-status.unpaid{ background:var(--impaye-soft); color:var(--impaye-dark); }
+  .tournee-row.no-click{ cursor:default; }
+  .jour-chips{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px; }
+  .jour-chips button{ padding:7px 14px; border-radius:999px; border:1.5px solid var(--border); background:var(--panel); color:var(--ink-soft); font:600 13px var(--sans); cursor:pointer; transition:background .15s,border-color .15s,color .15s; }
+  .jour-chips button:hover{ border-color:var(--accent); color:var(--accent-dark); }
+  .jour-chips button.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .jour-resume{ display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin:0 0 14px; }
+  .jour-resume .r-box{ background:var(--bg-light); border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; }
+  .jour-resume .r-box.main{ background:var(--paye-soft); border-color:transparent; }
+  .jour-resume .r-lab{ font-size:11.5px; font-weight:600; color:var(--ink-soft); margin:0 0 2px; }
+  .jour-resume .r-val{ font-family:var(--mono); font-size:16px; font-weight:700; color:var(--ink); }
+  .jour-resume .r-box.main .r-val{ color:var(--paye-dark); }
+  .tournee-row .t-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .tournee-row .t-sub.warn{ color:var(--impaye-dark); font-weight:600; }
+  .tournee-row .t-status.partial{ background:var(--amber-soft); color:var(--amber); }
+  .tournee-empty{ color:var(--ink-faint); font-size:13.5px; text-align:center; padding:20px 0; }
+  .tournee-row.just-toggled{ animation:sm-pop .38s cubic-bezier(.34,1.56,.64,1); }
+
+  /* ---------- Modale : saisie du montant remis ---------- */
+  .modal-backdrop{
+    display:none; position:fixed; inset:0; background:rgba(11,27,51,0.5); backdrop-filter:blur(2px);
+    align-items:center; justify-content:center; padding:20px; z-index:100;
+  }
+  .modal-backdrop.show{ display:flex; animation:sm-modal-fade .18s ease both; }
+  .modal-card{
+    background:var(--panel); border-radius:14px; padding:24px; width:100%; max-width:360px;
+    box-shadow:0 20px 50px -12px rgba(11,27,51,0.35);
+    animation:sm-modal-pop .22s cubic-bezier(.22,.8,.32,1) both;
+  }
+  .modal-card h3{ font-family:var(--serif); font-size:19px; margin:0 0 2px; }
+  .modal-card .modal-sub{ margin:0 0 18px; color:var(--ink-soft); font-size:13.5px; }
+  .modal-card .modal-target{ font-size:12.5px; color:var(--ink-soft); margin:0 0 8px; }
+  .modal-card .modal-target strong{ color:var(--ink); font-family:var(--mono); }
+  .amount-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .amount-row input{
+    flex:1; padding:12px 14px; font-size:20px; font-family:var(--mono); font-weight:600; color:var(--ink);
+    background:var(--bg-light); border:1.5px solid var(--border); border-radius:10px; outline:none; text-align:center;
+  }
+  .amount-row input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .amount-row span{ font-size:14px; color:var(--ink-soft); font-weight:600; }
+  .quick-fill{
+    display:flex; gap:8px; margin:10px 0 4px; flex-wrap:wrap;
+  }
+  .quick-fill button{
+    flex:1; padding:8px 10px; font-size:12.5px; font-weight:600; border-radius:8px; border:1.5px solid var(--border);
+    background:var(--bg-light); color:var(--ink-soft); cursor:pointer; white-space:nowrap;
+  }
+  .quick-fill button:hover{ border-color:var(--accent); color:var(--accent-dark); }
+  .modal-error{ margin:8px 0 0; font-size:13px; color:var(--impaye-dark); display:none; }
+  .modal-error.show{ display:block; }
+  .modal-actions{ display:flex; gap:10px; margin-top:20px; }
+  .modal-actions button{ flex:1; padding:12px; border-radius:10px; font-size:14.5px; font-weight:600; cursor:pointer; border:1.5px solid transparent; }
+  .modal-actions .cancel{ background:var(--bg-light); border-color:var(--border); color:var(--ink-soft); }
+  .modal-actions .save{ background:var(--accent); color:var(--cream); }
+  .modal-actions .save:hover{ background:var(--accent-dark); }
+  .modal-actions button:disabled{ opacity:0.6; cursor:default; }
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="sm-ambient-glow" aria-hidden="true"></div>
+  <div class="logotype">
+      <span class="logo-ring" aria-hidden="true"></span>
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/>
+      <circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+      <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F1F4F9" stroke-width="1.1"/>
+      <line x1="11" y1="16" x2="11" y2="19.4" stroke="#F1F4F9" stroke-width="1.1"/>
+      <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+      <line x1="16" y1="11" x2="19.4" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+    </svg>
+    Soft Moto
+  </div>
+  <div class="who-bar">
+    <div class="avatar" id="cashierAvatar">CA</div>
+    <div>
+      <div class="name" id="cashierName">Caissière</div>
+      <div class="role">Espace caissière</div>
+    </div>
+    <a class="logout-link" id="logoutLink" href="login.html">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Déconnexion
+    </a>
+  </div>
+</header>
+
+<main class="main">
+
+  <div class="panel">
+    <div class="tournee-head">
+      <div>
+        <h2 style="margin-bottom:2px;">Liste du jour</h2>
+        <p class="hint" style="margin:0;">Tout ce qui a été payé aujourd'hui, et ceux qui n'ont pas encore payé. Cliquez une ligne pour enregistrer ou corriger un versement.</p>
+      </div>
+      <div class="search-mini">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="tourneeSearch" placeholder="Filtrer par nom ou code">
+      </div>
+    </div>
+    <div class="jour-resume" id="jourResume"></div>
+    <div class="jour-chips" id="jourChips" role="group" aria-label="Filtrer la liste du jour">
+      <button type="button" data-mode="payes" class="on">Payés</button>
+      <button type="button" data-mode="impayes">Impayés</button>
+      <button type="button" data-mode="tous">Tous</button>
+    </div>
+    <p class="tournee-meta" id="tourneeMeta">Chargement…</p>
+    <div class="tournee-list" id="tourneeList"></div>
+    <p class="tournee-empty" id="tourneeEmpty" style="display:none;"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Rechercher un conducteur précis</h2>
+    <p class="hint">Entrez le code conducteur (ex. SM-274819) pour ouvrir sa fiche : les 24 cases de vidange et les paiements jour par jour.</p>
+    <div class="search-row">
+      <input type="text" id="clientCodeInput" placeholder="SM-XXXXXX" autocomplete="off">
+      <button type="button" class="btn" id="searchBtn">Rechercher</button>
+    </div>
+    <p class="search-error" id="searchError">Aucun client trouvé avec ce code.</p>
+  </div>
+
+  <div class="panel" id="clientPanel">
+    <div class="client-head">
+      <div class="client-id">
+        <div class="avatar" id="clientAvatar">—</div>
+        <div>
+          <div class="c-name" id="clientName">—</div>
+          <div class="c-code" id="clientCode">—</div>
+        </div>
+      </div>
+      <button type="button" class="change-client" id="changeClientBtn">Changer de client</button>
+    </div>
+
+    <div class="legend">
+      <span><span class="dot paid">✓</span> Payé</span>
+      <span><span class="dot unpaid">✗</span> Impayé</span>
+      <span><span class="dot future"></span> À venir</span>
+    </div>
+
+    <div class="cal-nav">
+      <button type="button" id="prevMonthBtn" aria-label="Mois précédent">&#8249;</button>
+      <p class="cal-title" id="calTitle">—</p>
+      <button type="button" id="nextMonthBtn" aria-label="Mois suivant">&#8250;</button>
+    </div>
+    <p class="panel-error" id="calError"></p>
+    <div class="cal-grid" id="calGrid">
+      <div class="cal-dow">Lun</div><div class="cal-dow">Mar</div><div class="cal-dow">Mer</div>
+      <div class="cal-dow">Jeu</div><div class="cal-dow">Ven</div><div class="cal-dow">Sam</div><div class="cal-dow">Dim</div>
+    </div>
+
+    <div class="totals">
+      <div class="total-box unpaid">
+        <p class="t-label">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Total impayés
+        </p>
+        <div class="t-amount" id="unpaidAmount">0 F</div>
+        <p class="t-count" id="unpaidCount">0 jour</p>
+      </div>
+      <div class="total-box paid">
+        <p class="t-label">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Total payés
+        </p>
+        <div class="t-amount" id="paidAmount">0 F</div>
+        <p class="t-count" id="paidCount">0 jour</p>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="modal-backdrop" id="amountModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-card">
+    <h3 id="modalTitle">Montant remis</h3>
+    <p class="modal-sub" id="modalDate">—</p>
+    <p class="modal-target">Objectif du jour : <strong id="modalCible">—</strong></p>
+    <div class="amount-row">
+      <input type="number" id="amountInput" inputmode="numeric" min="0" step="100" autocomplete="off">
+      <span>F CFA</span>
+    </div>
+    <div class="quick-fill">
+      <button type="button" id="quickFullBtn">Montant complet</button>
+      <button type="button" id="quickZeroBtn">Rien remis</button>
+    </div>
+        <p class="moyen-label">Moyen de paiement</p>
+    <div class="moyen-row" role="group" aria-label="Moyen de paiement">
+      <button type="button" data-moyen="especes" class="on">Espèces</button>
+      <button type="button" data-moyen="momo">MOMO</button>
+      <button type="button" data-moyen="momo_regulateur">MOMO régulateur</button>
+    </div>
+        <div class="numero-box" id="numeroBox" style="display:none">
+      <p class="moyen-label">Numéro qui a reçu le transfert</p>
+      <div class="numero-list" id="numeroList"></div>
+    </div>
+    <p class="modal-error" id="modalError"></p>
+    <div class="modal-actions">
+      <button type="button" class="cancel" id="modalCancelBtn">Annuler</button>
+      <button type="button" class="save btn" id="modalSaveBtn">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script src="serveur-check.js"></script>
+<script src="theme.js"></script>
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  const JOURS_FR = ['lun','mar','mer','jeu','ven','sam','dim'];
+
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function initials(name){ return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join(''); }
+  function avatarClass(name){
+    let h = 0;
+    for(let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return 'av-' + (1 + (h % 6));
+  }
+  function api(url, opts){
+    return fetch(url, opts).then(async function(r){
+      const data = await r.json().catch(function(){ return {}; });
+      if(r.status === 401){ window.location.href = 'login.html'; throw new Error('Session expirée.'); }
+      if(!r.ok) throw new Error(data.erreur || 'Erreur serveur.');
+      return data;
+    });
+  }
+
+  $('logoutLink').addEventListener('click', function(e){
+    e.preventDefault();
+    fetch('/api/deconnexion', { method: 'POST' }).finally(function(){ window.location.href = 'login.html'; });
+  });
+
+  // ---------- Identité de la caissière (session réelle, secours = lien de l'admin) ----------
+  const params = new URLSearchParams(window.location.search);
+  api('/api/moi').then(function(moi){
+    document.getElementById('cashierName').textContent = moi.nom;
+    document.getElementById('cashierAvatar').textContent = initials(moi.nom);
+  }).catch(function(){
+    const name = params.get('name') || 'Caissière';
+    document.getElementById('cashierName').textContent = name;
+    document.getElementById('cashierAvatar').textContent = initials(name);
+  });
+
+  let DAILY_RATE = 3500; // valeur affichée avant qu'un client soit chargé (repère uniquement)
+  api('/api/config').then(function(c){ DAILY_RATE = c.versement_journalier; }).catch(function(){});
+
+  // ---------- Recherche client ----------
+  const clientCodeInput = document.getElementById('clientCodeInput');
+  const searchBtn = document.getElementById('searchBtn');
+  const searchError = document.getElementById('searchError');
+  const clientPanel = document.getElementById('clientPanel');
+  const clientAvatar = document.getElementById('clientAvatar');
+  const clientName = document.getElementById('clientName');
+  const clientCode = document.getElementById('clientCode');
+  const calTitle = document.getElementById('calTitle');
+  const calGrid = document.getElementById('calGrid');
+  const calError = document.getElementById('calError');
+  const changeClientBtn = document.getElementById('changeClientBtn');
+  const prevMonthBtn = document.getElementById('prevMonthBtn');
+  const nextMonthBtn = document.getElementById('nextMonthBtn');
+
+  let currentClient = null;
+  let viewYear, viewMonth; // viewMonth : 0-11
+  let paiementsParJour = {}; // 'YYYY-MM-DD' -> { paye, montant }
+
+  function normalizeCode(v){ return v.trim().toUpperCase().replace(/\s+/g, ''); }
+  function pad(n){ return String(n).padStart(2, '0'); }
+  function isoMois(y, m){ return y + '-' + pad(m + 1); }
+  function isoJour(y, m, d){ return isoMois(y, m) + '-' + pad(d); }
+  function jourLisible(y, m, d){ return d + ' ' + MOIS_FR[m] + ' ' + y; }
+  function dateDMY(isoDate){ const [y, m, d] = isoDate.split('-'); return d + '/' + m + '/' + y; }
+
+  function loadClient(code){
+    const norm = normalizeCode(code);
+    if(!norm) return;
+    searchBtn.disabled = true;
+    api('/api/clients/' + encodeURIComponent(norm))
+      .then(function(client){
+        searchError.classList.remove('show');
+        clientCodeInput.removeAttribute('data-invalid');
+        currentClient = client;
+
+        clientAvatar.textContent = initials(client.nom);
+        clientAvatar.className = 'avatar ' + avatarClass(client.nom);
+        clientName.textContent = client.nom;
+        clientCode.textContent = client.code;
+        clientPanel.style.display = 'block';
+        clientPanel.classList.remove('sm-rise'); void clientPanel.offsetWidth; clientPanel.classList.add('sm-rise');
+
+        const now = new Date();
+        viewYear = now.getFullYear();
+        viewMonth = now.getMonth();
+        renderCalendar();
+        clientPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      })
+      .catch(function(err){
+        searchError.textContent = esc(smMessage(err));
+        searchError.classList.add('show');
+        clientCodeInput.setAttribute('data-invalid', 'true');
+        clientPanel.style.display = 'none';
+      })
+      .finally(function(){ searchBtn.disabled = false; });
+  }
+
+  function renderCalendar(){
+    if(!currentClient) return;
+    const y = viewYear, m = viewMonth;
+    const now = new Date();
+    const isCurrentMonth = y === now.getFullYear() && m === now.getMonth();
+    const today = isCurrentMonth ? now.getDate() : 0;
+
+    calTitle.textContent = MOIS_FR[m] + ' ' + y;
+    nextMonthBtn.disabled = isCurrentMonth;
+    calError.classList.remove('show');
+
+    calGrid.querySelectorAll('.cal-day, .cal-empty').forEach(function(el){ el.remove(); });
+    calGrid.classList.add('loading');
+
+    api('/api/paiements?code_client=' + encodeURIComponent(currentClient.code) + '&mois=' + isoMois(y, m))
+      .then(function(rows){
+        paiementsParJour = {};
+        rows.forEach(function(p){ paiementsParJour[p.date] = p; });
+
+        const firstOffset = (new Date(y, m, 1).getDay() + 6) % 7; // 0 = lundi
+        const lastDate = new Date(y, m + 1, 0).getDate();
+
+        for(let i = 0; i < firstOffset; i++){
+          const empty = document.createElement('div');
+          empty.className = 'cal-empty';
+          calGrid.appendChild(empty);
+        }
+
+        for(let day = 1; day <= lastDate; day++){
+          const cell = document.createElement('button');
+          cell.type = 'button';
+          cell.className = 'cal-day';
+          cell.dataset.date = isoJour(y, m, day);
+          if(day === today) cell.classList.add('today');
+
+          const future = today > 0 && day > today;
+          const p = paiementsParJour[cell.dataset.date];
+          const paid = !!(p && p.paye);
+          const montantJour = p ? p.montant : 0;
+
+          if(future){
+            cell.classList.add('future');
+            cell.disabled = true;
+            cell.innerHTML = '<span class="num">' + day + '</span>';
+          } else {
+            cell.classList.add(paid ? 'paid' : 'unpaid');
+            cell.innerHTML = '<span class="num">' + day + '</span>' +
+              '<span aria-hidden="true">' + (paid ? '✓' : '✗') + '</span>' +
+              '<span class="date-sub">' + dateDMY(cell.dataset.date) + '</span>' +
+              (p && p.regle_le ? '<span class="date-sub" style="opacity:.85">réglé le ' + dateDMY(p.regle_le) + '</span>' : '');
+            cell.setAttribute('aria-label', jourLisible(y, m, day) + ' : ' + (paid ? 'payé, ' + montantJour.toLocaleString('fr-FR') + ' F' : 'impayé'));
+            cell.addEventListener('click', function(){ ouvrirModal(cell); });
+          }
+          calGrid.appendChild(cell);
+        }
+        recomputeTotals();
+      })
+      .catch(function(err){
+        calError.textContent = esc(smMessage(err));
+        calError.classList.add('show');
+      })
+      .finally(function(){ calGrid.classList.remove('loading'); });
+  }
+
+  // ---------- Ma tournée du jour ----------
+  const tourneeList = document.getElementById('tourneeList');
+  const tourneeMeta = document.getElementById('tourneeMeta');
+  const tourneeEmpty = document.getElementById('tourneeEmpty');
+  const tourneeSearch = document.getElementById('tourneeSearch');
+  const jourResume = document.getElementById('jourResume');
+  const jourChips = document.getElementById('jourChips');
+  let tournee = [], payesDuJour = [], totauxDuJour = null, modeListe = 'payes';
+  const MOYEN_COURT = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régulateur' };
+  const fmtF = function(n){ return Number(n || 0).toLocaleString('fr-FR') + ' F'; };
+  const jjmm = function(iso){ const a = iso.split('-'); return a[2] + '/' + a[1]; };
+
+  function reliabilityBadge(t){
+    if(t.fiabilite === null || t.fiabilite === undefined) return '';
+    const cls = t.fiabilite >= 80 ? 'good' : t.fiabilite >= 50 ? 'mid' : 'bad';
+    return '<span class="t-reliability ' + cls + '" title="' + t.fiabilite + ' % des jours payés sur les ' + t.fiabilite_jours + ' derniers jours">' + t.fiabilite + '%</span>';
+  }
+
+  function ligneHTML(it, i){
+    const nom = it.nom;
+    let status, sub = '';
+    if(it.kind === 'paye'){
+      const moy = it.moyens.map(function(m){ return MOYEN_COURT[m] || ''; }).filter(Boolean).join(' + ');
+      status = '<div class="t-status ' + (it.complet ? 'paid' : 'partial') + '">' + (it.complet ? '✓ ' : 'Partiel ') + fmtF(it.montant) + '</div>';
+      sub = '<div class="t-sub">' + esc([moy, (it.numeros || []).join(', '), it.heure].filter(Boolean).join(' · ')) +
+        (it.regularisations.length ? ' · a aussi réglé : ' + esc(it.regularisations.map(function(g){ return jjmm(g.date); }).join(', ')) : '') + '</div>';
+    } else {
+      const partiel = it.statut === 'partiel';
+      status = '<div class="t-status ' + (partiel ? 'partial' : 'unpaid') + '">' + (partiel ? 'Partiel ' + fmtF(it.montant) + ' / ' + fmtF(it.cible) : '✗ Non collecté') + '</div>';
+      if(it.jours_impayes > 0) sub = '<div class="t-sub warn">' + it.jours_impayes + ' jour' + (it.jours_impayes > 1 ? 's' : '') + ' impayé' + (it.jours_impayes > 1 ? 's' : '') + ' avant aujourd\'hui · ' + fmtF(it.montant_du) + ' dû</div>';
+    }
+    return '<div class="tournee-row' + (it.t ? '' : ' no-click') + '" data-i="' + i + '">' +
+      '<div class="avatar ' + avatarClass(nom) + '">' + esc(initials(nom)) + '</div>' +
+      '<div class="t-who"><div class="t-name">' + esc(nom) + (it.t ? reliabilityBadge(it.t) : '') + '</div>' +
+      '<div class="t-code">' + esc(it.code) + '</div>' + sub + '</div>' + status + '</div>';
+  }
+
+  function renderTournee(){
+    const q = tourneeSearch.value.trim().toLowerCase();
+    const filtre = function(x){ return !q || x.nom.toLowerCase().includes(q) || x.code.toLowerCase().includes(q); };
+    const parCode = {}; tournee.forEach(function(t){ parCode[t.code] = t; });
+    const payes = payesDuJour.map(function(p){ return Object.assign({ kind: 'paye', t: parCode[p.code] || null }, p); });
+    const impayes = tournee.filter(function(t){ return !t.paye; }).map(function(t){ return Object.assign({ kind: 'impaye', t: t }, t); });
+    const nbImp = totauxDuJour ? totauxDuJour.nb_impayes : impayes.length;
+
+    // Résumé du jour
+    if(totauxDuJour){
+      const pm = totauxDuJour.par_moyen;
+      jourResume.innerHTML =
+        '<div class="r-box main"><p class="r-lab">Reçu aujourd\'hui</p><div class="r-val">' + fmtF(totauxDuJour.encaisse) + '</div></div>' +
+        '<div class="r-box"><p class="r-lab">Espèces</p><div class="r-val">' + fmtF(pm.especes) + '</div></div>' +
+        '<div class="r-box"><p class="r-lab">MOMO</p><div class="r-val">' + fmtF(pm.momo) + '</div></div>' +
+        '<div class="r-box"><p class="r-lab">MOMO régulateur</p><div class="r-val">' + fmtF(pm.momo_regulateur) + '</div></div>' +
+        (pm.non_precise ? '<div class="r-box"><p class="r-lab">Moyen non précisé</p><div class="r-val">' + fmtF(pm.non_precise) + '</div></div>' : '') +
+        Object.keys(totauxDuJour.par_numero || {}).map(function(n){ return '<div class="r-box"><p class="r-lab">Reçu sur ' + esc(n) + '</p><div class="r-val">' + fmtF(totauxDuJour.par_numero[n]) + '</div></div>'; }).join('');
+    }
+    // Pastilles avec compteurs
+    jourChips.querySelectorAll('button').forEach(function(b){
+      const m = b.dataset.mode, n = m === 'payes' ? payes.length : m === 'impayes' ? nbImp : payes.length + impayes.length;
+      b.textContent = (m === 'payes' ? 'Payés' : m === 'impayes' ? 'Impayés' : 'Tous') + ' (' + n + ')';
+      b.classList.toggle('on', m === modeListe);
+    });
+
+    let list = modeListe === 'payes' ? payes : modeListe === 'impayes' ? impayes : payes.concat(impayes.filter(function(i){ return !payes.some(function(p){ return p.code === i.code; }); }));
+    list = list.filter(filtre);
+    tourneeMeta.textContent = tournee.length || payes.length
+      ? payes.length + ' ont versé · ' + nbImp + ' conducteur' + (nbImp > 1 ? 's' : '') + ' actif' + (nbImp > 1 ? 's' : '') + ' pas encore à jour aujourd\'hui'
+      : '';
+
+    tourneeList.innerHTML = list.map(ligneHTML).join('');
+    tourneeList.dataset.ref = 'ok';
+    window.__tourneeCourante = list.map(function(it){ return it.t; });
+
+    const vide = modeListe === 'payes' ? "Personne n'a encore payé aujourd'hui." : modeListe === 'impayes' ? 'Tous les conducteurs actifs sont à jour aujourd\'hui. Bravo !' : "Aucun conducteur actif pour l'instant.";
+    const msg = !list.length ? (q ? 'Aucun conducteur ne correspond à cette recherche.' : vide) : '';
+    tourneeEmpty.textContent = msg;
+    tourneeEmpty.style.display = msg ? 'block' : 'none';
+  }
+
+  function chargerTournee(){
+    api('/api/tournee')
+      .then(function(d){ tournee = d.tournee; payesDuJour = d.payes || []; totauxDuJour = d.totaux || null; renderTournee(); })
+      .catch(function(err){
+        tourneeMeta.textContent = '';
+        tourneeEmpty.textContent = esc(smMessage(err));
+        tourneeEmpty.style.display = 'block';
+      });
+  }
+  let rechargeTimer = null;
+  function rechargerTourneeBientot(){ clearTimeout(rechargeTimer); rechargeTimer = setTimeout(chargerTournee, 200); }
+  chargerTournee();
+  jourChips.addEventListener('click', function(e){ const b = e.target.closest('button'); if(!b) return; modeListe = b.dataset.mode; renderTournee(); });
+  tourneeSearch.addEventListener('input', renderTournee);
+
+  tourneeList.addEventListener('click', function(e){
+    const row = e.target.closest('.tournee-row');
+    if(!row) return;
+    const t = window.__tourneeCourante[Number(row.dataset.i)];
+    if(!t) return;
+    ouvrirModalContexte({
+      code: t.code, nom: t.nom, date: aujourdhuiISO(), cible: t.cible, montantExistant: t.montant || null, moyenExistant: t.moyen, numeroExistant: t.numero_momo,
+      onSaved: function(p){
+        t.paye = p.paye; t.montant = p.montant; t.moyen = p.moyen; t.numero_momo = p.numero_momo;
+        renderTournee();
+        rechargerTourneeBientot(); // met à jour la liste de ce qui a été reçu
+
+      }
+    });
+  });
+
+  // Garde le calendrier et la tournée synchronisés quand un même jour est modifié depuis l'un ou l'autre.
+  function synchroniserApresPaiement(code, date, p){
+    rechargerTourneeBientot();
+    if(date === aujourdhuiISO()){
+      const t = tournee.find(function(x){ return x.code === code; });
+      if(t && (t.paye !== p.paye || t.montant !== p.montant)){ t.paye = p.paye; t.montant = p.montant; t.moyen = p.moyen; t.numero_momo = p.numero_momo; renderTournee(); }
+    }
+    if(currentClient && currentClient.code === code){
+      const cellVisible = calGrid.querySelector('.cal-day[data-date="' + date + '"]');
+      if(cellVisible && paiementsParJour[date] !== p){
+        appliquerPaiementSurCellule(cellVisible, p);
+        recomputeTotals();
+      }
+    }
+  }
+  function aujourdhuiISO(){
+    const n = new Date();
+    return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate());
+  }
+
+  // ---------- Modale : saisie du montant remis pour un jour (calendrier ou tournée) ----------
+  const amountModal = document.getElementById('amountModal');
+  const modalDate = document.getElementById('modalDate');
+  const modalCible = document.getElementById('modalCible');
+  const amountInput = document.getElementById('amountInput');
+  const modalError = document.getElementById('modalError');
+  const modalSaveBtn = document.getElementById('modalSaveBtn');
+  const modalCancelBtn = document.getElementById('modalCancelBtn');
+  const quickFullBtn = document.getElementById('quickFullBtn');
+  const quickZeroBtn = document.getElementById('quickZeroBtn');
+  let contexteEnCours = null; // { code, date, cible, onSaved(p) }
+
+  function ouvrirModalContexte(ctx){
+    contexteEnCours = ctx;
+    const [y, m, d] = ctx.date.split('-').map(Number);
+    modalDate.textContent = (ctx.nom ? ctx.nom + ' — ' : '') + jourLisible(y, m - 1, d);
+    modalCible.textContent = ctx.cible.toLocaleString('fr-FR') + ' F';
+    amountInput.value = ctx.montantExistant != null ? ctx.montantExistant : ctx.cible;
+    smMoyenSet(ctx.moyenExistant);
+    smNumeroSet(ctx.numeroExistant);
+    modalError.classList.remove('show');
+    amountInput.removeAttribute('data-invalid');
+
+    amountModal.classList.add('show');
+    setTimeout(function(){ amountInput.focus(); amountInput.select(); }, 50);
+  }
+
+  function appliquerPaiementSurCellule(cell, p){
+    paiementsParJour[cell.dataset.date] = p;
+    cell.classList.toggle('paid', p.paye);
+    cell.classList.toggle('unpaid', !p.paye);
+    cell.innerHTML = '<span class="num">' + Number(cell.dataset.date.split('-')[2]) + '</span>' +
+      '<span aria-hidden="true">' + (p.paye ? '✓' : '✗') + '</span>' +
+      '<span class="date-sub">' + dateDMY(cell.dataset.date) + '</span>' +
+      (p.regle_le ? '<span class="date-sub" style="opacity:.85">réglé le ' + dateDMY(p.regle_le) + '</span>' : '');
+    cell.classList.remove('just-toggled');
+    void cell.offsetWidth;
+    cell.classList.add('just-toggled');
+  }
+
+  function ouvrirModal(cell){
+    const existant = paiementsParJour[cell.dataset.date];
+    ouvrirModalContexte({
+      code: currentClient.code, date: cell.dataset.date, cible: currentClient.montant_journalier_effectif,
+      montantExistant: existant ? existant.montant : null, moyenExistant: existant ? existant.moyen : null, numeroExistant: existant ? existant.numero_momo : null,
+      onSaved: function(p){
+        appliquerPaiementSurCellule(cell, p);
+        recomputeTotals();
+      }
+    });
+  }
+
+  function fermerModal(){ amountModal.classList.remove('show'); contexteEnCours = null; }
+
+  quickFullBtn.addEventListener('click', function(){ amountInput.value = contexteEnCours ? contexteEnCours.cible : 0; amountInput.focus(); });
+  quickZeroBtn.addEventListener('click', function(){ amountInput.value = 0; amountInput.focus(); });
+  modalCancelBtn.addEventListener('click', fermerModal);
+  amountModal.addEventListener('click', function(e){ if(e.target === amountModal) fermerModal(); });
+  amountInput.addEventListener('keydown', function(e){ if(e.key === 'Enter') enregistrerMontant(); });
+
+  function enregistrerMontant(){
+    const ctx = contexteEnCours;
+    if(!ctx) return;
+    const montant = Math.round(Number(amountInput.value));
+    if(!Number.isFinite(montant) || montant < 0){
+      amountInput.setAttribute('data-invalid', 'true');
+      modalError.textContent = 'Entrez un montant valide.';
+      modalError.classList.add('show');
+      return;
+    }
+
+    const errNum = smNumeroErreur(montant);
+    if(errNum){ modalError.textContent = errNum; modalError.classList.add('show'); return; }
+
+    modalSaveBtn.disabled = true;
+    api('/api/paiements', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code_client: ctx.code, date: ctx.date, montant: montant, moyen: smMoyenGet(), numero_momo: smNumeroGet() || undefined })
+    })
+      .then(function(p){
+        ctx.onSaved(p);
+        // Si le même conducteur/jour est visible ailleurs (tournée + calendrier), on le met à jour aussi.
+        synchroniserApresPaiement(ctx.code, ctx.date, p);
+        (p.ajustements || []).forEach(function(a){ synchroniserApresPaiement(ctx.code, a.date, a); });
+        if(p.reporte && window.smToast) window.smToast(p.reporte.toLocaleString('fr-FR') + ' F de surplus ont comblé ' + p.ajustements.length + (p.ajustements.length > 1 ? ' jours impayés.' : ' jour impayé.'));
+        if(p.paye) window.smCelebrate(modalSaveBtn);
+        fermerModal();
+      })
+      .catch(function(err){
+        modalError.textContent = esc(smMessage(err));
+        modalError.classList.add('show');
+      })
+      .finally(function(){ modalSaveBtn.disabled = false; });
+  }
+  modalSaveBtn.addEventListener('click', enregistrerMontant);
+
+  function recomputeTotals(){
+    const cible = currentClient ? currentClient.montant_journalier_effectif : 0;
+    let paidAmount = 0, paidDays = 0, unpaidAmount = 0, unpaidDays = 0;
+    calGrid.querySelectorAll('.cal-day.paid, .cal-day.unpaid').forEach(function(cell){
+      const p = paiementsParJour[cell.dataset.date];
+      const montant = p ? p.montant : 0;
+      if(cell.classList.contains('paid')){ paidAmount += montant; paidDays++; }
+      else { unpaidAmount += Math.max(0, cible - montant); unpaidDays++; }
+    });
+    document.getElementById('paidAmount').textContent = paidAmount.toLocaleString('fr-FR') + ' F';
+    document.getElementById('unpaidAmount').textContent = unpaidAmount.toLocaleString('fr-FR') + ' F';
+    document.getElementById('paidCount').textContent = paidDays + (paidDays > 1 ? ' jours' : ' jour');
+    document.getElementById('unpaidCount').textContent = unpaidDays + (unpaidDays > 1 ? ' jours' : ' jour');
+  }
+
+  function changeMonth(delta){
+    calGrid.classList.add('switching');
+    setTimeout(function(){
+      viewMonth += delta;
+      if(viewMonth < 0){ viewMonth = 11; viewYear -= 1; }
+      if(viewMonth > 11){ viewMonth = 0; viewYear += 1; }
+      renderCalendar();
+      requestAnimationFrame(function(){ calGrid.classList.remove('switching'); });
+    }, 140);
+  }
+  prevMonthBtn.addEventListener('click', function(){ changeMonth(-1); });
+  nextMonthBtn.addEventListener('click', function(){ if(!nextMonthBtn.disabled) changeMonth(1); });
+
+  // La recherche par code ouvre la fiche du conducteur (vidange + redevance)
+  function ouvrirFiche(code){
+    const norm = normalizeCode(code);
+    if(!norm) return;
+    searchBtn.disabled = true;
+    api('/api/clients/' + encodeURIComponent(norm))
+      .then(function(c){
+        const url = 'fiche-conducteur.html?code=' + encodeURIComponent(c.code);
+        if(window.smGo) window.smGo(url); else window.location.href = url;
+      })
+      .catch(function(err){
+        searchError.textContent = esc(smMessage(err));
+        searchError.classList.add('show');
+        clientCodeInput.setAttribute('data-invalid', 'true');
+        searchBtn.disabled = false;
+      });
+  }
+  searchBtn.addEventListener('click', function(){ ouvrirFiche(clientCodeInput.value); });
+  clientCodeInput.addEventListener('keydown', function(e){ if(e.key === 'Enter') ouvrirFiche(clientCodeInput.value); });
+  clientCodeInput.addEventListener('input', function(){
+    searchError.classList.remove('show');
+    clientCodeInput.removeAttribute('data-invalid');
+  });
+
+  changeClientBtn.addEventListener('click', function(){
+    clientPanel.style.display = 'none';
+    currentClient = null;
+    clientCodeInput.value = '';
+    clientCodeInput.focus();
+  });
+
+  if(params.get('code')) loadClient(params.get('code'));
+})();
+</script>
+
+</body>
+</html>

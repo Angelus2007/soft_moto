@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paramètres – Soft Moto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,450&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-dark:#0B1B33; --bg-dark-2:#16305A; --bg-light:#F1F4F9; --panel:#FFFFFF;
+    --accent:#1D4ED8; --accent-dark:#1E3A8A; --accent-soft:#DBE6FD;
+    --amber:#C77D0A; --amber-soft:#FCEBC8;
+    --ink:#0F172A; --ink-soft:#526074; --ink-faint:#8793A5;
+    --cream:#F1F4F9; --cream-soft:#AEBBD0;
+    --error:#B42318; --error-soft:#FDE7E5;
+    --border:#DDE3EC; --radius:10px;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:"IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  html{height:100%; scroll-padding-top:env(safe-area-inset-top, 0px);}
+  body{ min-height:100%; margin:0; font-family:var(--sans); color:var(--ink); background:var(--bg-light); -webkit-font-smoothing:antialiased; }
+  a{ color:inherit; }
+
+  .app{ display:grid; grid-template-columns:250px 1fr; min-height:100vh; }
+  .sidebar{
+    background:radial-gradient(130% 110% at 10% 0%, var(--bg-dark-2) 0%, var(--bg-dark) 60%);
+    color:var(--cream); display:flex; flex-direction:column; padding:26px 20px 20px;
+    position:relative; overflow:hidden; z-index:20;
+  }
+  .logotype{ display:flex; align-items:center; gap:9px; font-family:var(--serif); font-style:italic; font-weight:500; font-size:18px; letter-spacing:0.2px; color:var(--cream); padding:2px 8px 26px; }
+  nav.nav{ display:flex; flex-direction:column; gap:3px; margin-top:6px; }
+  .nav a{ display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:8px; text-decoration:none; font-size:14.5px; font-weight:500; color:var(--cream-soft); transition:background .15s ease, color .15s ease; }
+  .nav a svg{ flex-shrink:0; opacity:0.85; }
+  .nav a:hover{ background:rgba(241,244,249,0.07); color:var(--cream); }
+  .nav a.active{ background:var(--accent); color:var(--cream); }
+  .nav a.active svg{ opacity:1; }
+  .nav a:focus-visible{ outline:2px solid var(--accent-soft); outline-offset:2px; }
+  .sidebar-spacer{ flex:1; }
+  .sidebar-profile{ display:flex; align-items:center; gap:10px; padding:12px 10px; border-top:1px solid rgba(241,244,249,0.12); }
+  .avatar{ width:34px; height:34px; border-radius:50%; background:var(--accent); color:var(--cream); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:13px; font-weight:600; flex-shrink:0; }
+  .sidebar-profile .who{ line-height:1.3; min-width:0; }
+  .sidebar-profile .who .name{ font-size:13.5px; font-weight:600; color:var(--cream); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sidebar-profile .who .role{ font-size:12px; color:var(--ink-faint); }
+  .logout-link{ margin-left:auto; display:flex; padding:6px; border-radius:7px; color:var(--ink-faint); text-decoration:none; flex-shrink:0; }
+  .logout-link:hover{ color:var(--cream); background:rgba(241,244,249,0.08); }
+
+  main.main{ padding:28px 34px 60px; min-width:0; max-width:760px; }
+  .topbar{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:24px; flex-wrap:wrap; }
+  .menu-toggle{ display:none; background:var(--panel); border:1.5px solid var(--border); border-radius:8px; padding:8px; margin-bottom:14px; cursor:pointer; }
+  .topbar h1{ font-family:var(--serif); font-weight:600; font-size:26px; margin:0 0 6px; color:var(--ink); }
+  .topbar .sub{ margin:0; color:var(--ink-soft); font-size:14.5px; }
+  .profile-chip{ display:flex; align-items:center; gap:9px; background:var(--panel); border:1.5px solid var(--border); border-radius:9px; padding:6px 12px 6px 6px; }
+  .profile-chip .name{ font-size:13.5px; font-weight:600; }
+  .profile-chip .role{ font-size:11.5px; color:var(--ink-soft); }
+
+  .panel{ background:var(--panel); border:1.5px solid var(--border); border-radius:12px; padding:24px; margin-bottom:20px; }
+  .panel h2{ font-family:var(--serif); font-weight:600; font-size:18px; margin:0 0 4px; color:var(--ink); }
+  .panel .panel-sub{ margin:0 0 20px; color:var(--ink-soft); font-size:13.5px; }
+
+  .info-row{ display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:13.5px; }
+  .info-row:last-child{ border-bottom:none; }
+  .info-row .k{ color:var(--ink-soft); }
+  .info-row .v{ font-weight:600; color:var(--ink); }
+  .info-row .v.mono{ font-family:var(--mono); font-weight:500; }
+
+  .field{ margin-bottom:16px; }
+  .field label{ display:block; font-size:12.5px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; }
+  .field input{ width:100%; padding:11px 13px; font-size:14.5px; font-family:var(--sans); color:var(--ink); background:var(--bg-light); border:1.5px solid var(--border); border-radius:9px; outline:none; }
+  .field input[data-invalid="true"]{ border-color:var(--impaye); }
+  .field input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .field .hint{ font-size:12px; color:var(--ink-faint); margin-top:5px; }
+  .field-row{ display:flex; gap:14px; }
+  .field-row .field{ flex:1; }
+
+  .form-msg{ margin:4px 0 14px; font-size:13px; display:none; }
+  .form-msg.error{ color:var(--impaye-dark); }
+  .form-msg.success{ color:var(--paye-dark); }
+  .form-msg.show{ display:block; }
+
+  .btn{ padding:11px 18px; border-radius:9px; border:1.5px solid var(--accent); background:var(--accent); color:var(--cream); font-weight:600; font-size:14px; cursor:pointer; }
+  .btn:hover{ background:var(--accent-dark); }
+  .btn:disabled{ opacity:0.6; cursor:default; }
+
+  .quick-links{ display:flex; gap:10px; flex-wrap:wrap; }
+  .quick-links a{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-radius:9px; border:1.5px solid var(--border); background:var(--bg-light); text-decoration:none; color:var(--ink); font-size:13.5px; font-weight:600; }
+  .quick-links a:hover{ border-color:var(--accent); color:var(--accent-dark); }
+
+  @media (max-width: 780px){
+    .app{ grid-template-columns:1fr; }
+    .sidebar{ position:fixed; inset:0 30% 0 0; transform:translateX(-100%); transition:transform .2s ease; width:100%; max-width:270px; }
+    .sidebar.open{ transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,0.3); }
+    .menu-toggle{ display:inline-flex; }
+    main.main{ padding:20px 18px 50px; }
+    .field-row{ flex-direction:column; gap:0; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sm-ambient-glow" aria-hidden="true"></div>
+    <div class="logotype">
+      <span class="logo-ring" aria-hidden="true"></span>
+      <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/>
+        <circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+        <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="11" y1="16" x2="11" y2="19.4" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="16" y1="11" x2="19.4" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+      </svg>
+      Soft Moto
+    </div>
+
+    <nav class="nav">
+      <a href="admin.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+        Tableau de bord
+      </a>
+      <a href="conducteurs.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Conducteurs
+      </a>
+      <a href="collectes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Collectes journalières
+      </a>
+      <a href="motos.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h9V8H6zM15 8h3l3 4v5h-1"/></svg>
+        Motos &amp; financement
+      </a>
+      <a href="employes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
+        Employés
+      </a>
+      <a href="parametres.html" class="active">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Paramètres
+      </a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-profile">
+      <div class="avatar">AD</div>
+      <div class="who">
+        <div class="name">Admin Soft Moto</div>
+        <div class="role">Gestionnaire</div>
+      </div>
+      <a class="logout-link" id="logoutLink" href="login.html" aria-label="Déconnexion" title="Déconnexion">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <button class="menu-toggle" id="menuToggle" aria-label="Ouvrir le menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+
+    <div class="topbar">
+      <div>
+        <h1>Paramètres</h1>
+        <p class="sub">Compte, sécurité et réglages de collecte</p>
+      </div>
+      <div class="profile-chip">
+        <div class="avatar">AD</div>
+        <div>
+          <div class="name">Admin</div>
+          <div class="role">Soft Moto</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Mon compte</h2>
+      <p class="panel-sub">Informations liées à votre session actuelle.</p>
+      <div class="info-row"><span class="k">Nom</span><span class="v" id="infoNom">—</span></div>
+      <div class="info-row"><span class="k">E-mail</span><span class="v mono" id="infoEmail">—</span></div>
+      <div class="info-row"><span class="k">Rôle</span><span class="v" id="infoRole">—</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>Changer mon mot de passe</h2>
+      <p class="panel-sub">Utile si un accès vous a été créé avec un mot de passe temporaire.</p>
+      <div class="field">
+        <label for="mdpActuel">Mot de passe actuel</label>
+        <input type="password" id="mdpActuel" autocomplete="current-password">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="mdpNouveau">Nouveau mot de passe</label>
+          <input type="password" id="mdpNouveau" autocomplete="new-password">
+          <p class="hint">8 à 72 caractères.</p>
+        </div>
+        <div class="field">
+          <label for="mdpConfirme">Confirmer le nouveau mot de passe</label>
+          <input type="password" id="mdpConfirme" autocomplete="new-password">
+        </div>
+      </div>
+      <p class="form-msg" id="mdpMsg"></p>
+      <button type="button" class="btn" id="mdpSaveBtn">Mettre à jour le mot de passe</button>
+    </div>
+
+    <div class="panel">
+      <h2>Montant journalier par défaut</h2>
+      <p class="panel-sub">Somme attendue chaque jour pour un conducteur, sauf montant personnalisé (page Motos &amp; financement).</p>
+      <div class="field" style="max-width:220px;">
+        <label for="versementInput">Montant par défaut (F CFA)</label>
+        <input type="number" inputmode="numeric" id="versementInput" min="100" step="100">
+      </div>
+      <p class="form-msg" id="versementMsg"></p>
+      <button type="button" class="btn" id="versementSaveBtn">Enregistrer</button>
+    </div>
+
+    <div class="panel">
+      <h2>Numéros Mobile Money</h2>
+      <p class="panel-sub">Les trois numéros proposés à la caissière quand le moyen de paiement est MOMO ou MOMO régulateur (elle coche celui qui a reçu le transfert). Les numéros affichés au départ sont fictifs : remplacez-les par les vôtres.</p>
+      <div class="field" style="max-width:280px;"><label for="momo1">Numéro 1</label><input type="tel" id="momo1" autocomplete="off"></div>
+      <div class="field" style="max-width:280px;"><label for="momo2">Numéro 2</label><input type="tel" id="momo2" autocomplete="off"></div>
+      <div class="field" style="max-width:280px;"><label for="momo3">Numéro 3</label><input type="tel" id="momo3" autocomplete="off"></div>
+      <p class="form-msg" id="momoMsg"></p>
+      <button type="button" class="btn" id="momoSaveBtn">Enregistrer les numéros</button>
+    </div>
+
+    <div class="panel">
+      <h2>Informations système</h2>
+      <div class="info-row"><span class="k">Fuseau horaire</span><span class="v mono" id="infoFuseau">—</span></div>
+      <div class="info-row"><span class="k">Base de données</span><span class="v mono">softmoto.db</span></div>
+      <p class="hint" style="margin-top:14px;">Pensez à sauvegarder régulièrement le fichier <code>softmoto.db</code> — c'est lui qui contient toutes les données (comptes, conducteurs, paiements).</p>
+    </div>
+
+    <div class="panel">
+      <h2>Accès rapides</h2>
+      <div class="quick-links">
+        <a href="employes.html">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
+          Gérer les caissières
+        </a>
+        <a href="conducteurs.html">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          Gérer les conducteurs
+        </a>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="serveur-check.js"></script>
+<script src="theme.js"></script>
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const initials = (name) => name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  function avatarClass(name){
+    let h = 0;
+    for(let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return 'av-' + (1 + (h % 6));
+  }
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function api(url, opts){
+    return fetch(url, opts).then(async function(r){
+      const data = await r.json().catch(function(){ return {}; });
+      if(r.status === 401){ window.location.href = 'login.html'; throw new Error('Session expirée.'); }
+      if(!r.ok) throw new Error(data.erreur || 'Erreur serveur.');
+      return data;
+    });
+  }
+
+  $('menuToggle').addEventListener('click', function(){ $('sidebar').classList.toggle('open'); });
+  $('logoutLink').addEventListener('click', function(e){
+    e.preventDefault();
+    fetch('/api/deconnexion', { method: 'POST' }).finally(function(){ window.location.href = 'login.html'; });
+  });
+
+  api('/api/moi').then(function(moi){
+    const roleLabel = moi.role === 'admin' ? 'Administrateur' : 'Caissière';
+    document.querySelectorAll('.sidebar-profile, .profile-chip').forEach(function(bloc){
+      const av = bloc.querySelector('.avatar');
+      if(av){ av.textContent = initials(moi.nom); av.className = 'avatar ' + avatarClass(moi.nom); }
+      const nm = bloc.querySelector('.name');
+      if(nm) nm.textContent = moi.nom;
+      const rl = bloc.querySelector('.role');
+      if(rl) rl.textContent = roleLabel;
+    });
+    $('infoNom').textContent = moi.nom;
+    $('infoEmail').textContent = moi.email;
+    $('infoRole').textContent = roleLabel;
+  }).catch(function(){});
+
+  api('/api/config').then(function(c){
+    $('versementInput').value = c.versement_journalier;
+    $('infoFuseau').textContent = c.fuseau;
+    (c.numeros_momo || []).forEach(function(n, i){ $('momo' + (i + 1)).value = n; });
+  }).catch(function(){});
+
+  function afficherMsg(el, texte, ok){
+    el.textContent = texte;
+    el.className = 'form-msg show ' + (ok ? 'success' : 'error');
+  }
+
+  // ---------- Changer mon mot de passe ----------
+  const mdpActuel = $('mdpActuel');
+  const mdpNouveau = $('mdpNouveau');
+  const mdpConfirme = $('mdpConfirme');
+  const mdpMsg = $('mdpMsg');
+  const mdpSaveBtn = $('mdpSaveBtn');
+
+  mdpSaveBtn.addEventListener('click', function(){
+    [mdpActuel, mdpNouveau, mdpConfirme].forEach(function(i){ i.removeAttribute('data-invalid'); });
+    mdpMsg.classList.remove('show');
+
+    if(!mdpActuel.value){
+      mdpActuel.setAttribute('data-invalid', 'true');
+      return afficherMsg(mdpMsg, 'Entrez votre mot de passe actuel.', false);
+    }
+    if(mdpNouveau.value.length < 8 || mdpNouveau.value.length > 72){
+      mdpNouveau.setAttribute('data-invalid', 'true');
+      return afficherMsg(mdpMsg, 'Le nouveau mot de passe doit contenir entre 8 et 72 caractères.', false);
+    }
+    if(mdpNouveau.value !== mdpConfirme.value){
+      mdpConfirme.setAttribute('data-invalid', 'true');
+      return afficherMsg(mdpMsg, 'Les deux mots de passe ne correspondent pas.', false);
+    }
+
+    mdpSaveBtn.disabled = true;
+    api('/api/moi/mot-de-passe', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ motDePasseActuel: mdpActuel.value, nouveauMotDePasse: mdpNouveau.value })
+    })
+      .then(function(){
+        afficherMsg(mdpMsg, 'Mot de passe mis à jour.', true);
+        mdpActuel.value = ''; mdpNouveau.value = ''; mdpConfirme.value = '';
+      })
+      .catch(function(err){ afficherMsg(mdpMsg, esc(smMessage(err)), false); })
+      .finally(function(){ mdpSaveBtn.disabled = false; });
+  });
+
+  // ---------- Montant journalier par défaut ----------
+  const versementInput = $('versementInput');
+  const versementMsg = $('versementMsg');
+  const versementSaveBtn = $('versementSaveBtn');
+
+  versementSaveBtn.addEventListener('click', function(){
+    versementInput.removeAttribute('data-invalid');
+    versementMsg.classList.remove('show');
+    const montant = Math.round(Number(versementInput.value));
+    if(!Number.isFinite(montant) || montant <= 0){
+      versementInput.setAttribute('data-invalid', 'true');
+      return afficherMsg(versementMsg, 'Entrez un montant valide.', false);
+    }
+    versementSaveBtn.disabled = true;
+    api('/api/config', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ versement_journalier: montant })
+    })
+      .then(function(){ afficherMsg(versementMsg, 'Montant par défaut mis à jour.', true); })
+      .catch(function(err){ afficherMsg(versementMsg, esc(smMessage(err)), false); })
+      .finally(function(){ versementSaveBtn.disabled = false; });
+  });
+
+  // ---------- Numéros Mobile Money ----------
+  const momoMsg = $('momoMsg'), momoSaveBtn = $('momoSaveBtn');
+  momoSaveBtn.addEventListener('click', function(){
+    const numeros = [1, 2, 3].map(function(i){ return $('momo' + i).value.trim(); });
+    momoMsg.classList.remove('show');
+    if(numeros.some(function(n){ return !n; })) return afficherMsg(momoMsg, 'Entrez les trois numéros.', false);
+    if(new Set(numeros).size !== 3) return afficherMsg(momoMsg, 'Les trois numéros doivent être différents.', false);
+    momoSaveBtn.disabled = true;
+    api('/api/config', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ numeros_momo: numeros })
+    })
+      .then(function(){ afficherMsg(momoMsg, 'Numéros enregistrés.', true); })
+      .catch(function(err){ afficherMsg(momoMsg, esc(smMessage(err)), false); })
+      .finally(function(){ momoSaveBtn.disabled = false; });
+  });
+})();
+</script>
+
+</body>
+</html>

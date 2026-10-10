@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Employés – Soft Moto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,450&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-dark:#0B1B33; --bg-dark-2:#16305A; --bg-light:#F1F4F9; --panel:#FFFFFF;
+    --accent:#1D4ED8; --accent-dark:#1E3A8A; --accent-soft:#DBE6FD;
+    --amber:#C77D0A; --amber-soft:#FCEBC8;
+    --ink:#0F172A; --ink-soft:#526074; --ink-faint:#8793A5;
+    --cream:#F1F4F9; --cream-soft:#AEBBD0;
+    --error:#B42318; --error-soft:#FDE7E5;
+    --border:#DDE3EC; --radius:10px;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:"IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  html{height:100%; scroll-padding-top:env(safe-area-inset-top, 0px);}
+  body{ min-height:100%; margin:0; font-family:var(--sans); color:var(--ink); background:var(--bg-light); -webkit-font-smoothing:antialiased; }
+  a{ color:inherit; }
+
+  .app{ display:grid; grid-template-columns:250px 1fr; min-height:100vh; }
+
+  .sidebar{
+    background:radial-gradient(130% 110% at 10% 0%, var(--bg-dark-2) 0%, var(--bg-dark) 60%);
+    color:var(--cream); display:flex; flex-direction:column; padding:26px 20px 20px; position:relative; overflow:hidden; z-index:20;
+  }
+  .logotype{ display:flex; align-items:center; gap:9px; font-family:var(--serif); font-style:italic; font-weight:500; font-size:18px; color:var(--cream); padding:2px 8px 26px; }
+  nav.nav{ display:flex; flex-direction:column; gap:3px; margin-top:6px; }
+  .nav a{ display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:8px; text-decoration:none; font-size:14.5px; font-weight:500; color:var(--cream-soft); transition:background .15s ease, color .15s ease; }
+  .nav a svg{ flex-shrink:0; opacity:0.85; }
+  .nav a:hover{ background:rgba(241,244,249,0.07); color:var(--cream); }
+  .nav a.active{ background:var(--accent); color:var(--cream); }
+  .nav a.active svg{ opacity:1; }
+  .nav a:focus-visible{ outline:2px solid var(--accent-soft); outline-offset:2px; }
+  .sidebar-spacer{ flex:1; }
+  .sidebar-profile{ display:flex; align-items:center; gap:10px; padding:12px 10px; border-top:1px solid rgba(241,244,249,0.12); }
+  .avatar{ width:34px; height:34px; border-radius:50%; background:var(--accent); color:var(--cream); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:13px; font-weight:600; flex-shrink:0; }
+  .sidebar-profile .who{ line-height:1.3; min-width:0; }
+  .sidebar-profile .who .name{ font-size:13.5px; font-weight:600; color:var(--cream); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sidebar-profile .who .role{ font-size:12px; color:var(--ink-faint); }
+  .logout-link{ margin-left:auto; display:flex; padding:6px; border-radius:7px; color:var(--ink-faint); text-decoration:none; flex-shrink:0; }
+  .logout-link:hover{ color:var(--cream); background:rgba(241,244,249,0.08); }
+
+  main.main{ padding:28px 34px 60px; min-width:0; }
+  .menu-toggle{ display:none; background:var(--panel); border:1.5px solid var(--border); border-radius:8px; padding:8px; margin-bottom:14px; cursor:pointer; }
+
+  .topbar{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:26px; flex-wrap:wrap; }
+  .topbar h1{ font-family:var(--serif); font-weight:600; font-size:26px; margin:0 0 6px; color:var(--ink); }
+  .topbar .sub{ margin:0; color:var(--ink-soft); font-size:14.5px; max-width:56ch; }
+
+  .stats{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:22px; }
+  .stat{ background:var(--panel); border:1.5px solid var(--border); border-left:3.5px solid var(--stat-line, var(--accent)); border-radius:12px; padding:16px 20px; }
+  .stat .label{ font-size:13px; color:var(--ink-soft); margin:0 0 8px; }
+  .stat .value{ font-family:var(--mono); font-size:22px; font-weight:600; color:var(--ink); }
+  .stat.s2{ --stat-line:var(--accent); }
+  .stat.s3{ --stat-line:var(--error); }
+
+  .panel{ background:var(--panel); border:1.5px solid var(--border); border-radius:12px; padding:22px; margin-bottom:18px; }
+  .panel-head{ display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:16px; flex-wrap:wrap; }
+  .panel-head h2{ font-family:var(--serif); font-weight:600; font-size:17px; margin:0; color:var(--ink); display:flex; align-items:center; gap:9px; }
+  .count-badge{ font-family:var(--mono); font-size:12px; font-weight:600; background:var(--amber-soft); color:var(--amber); padding:2px 9px; border-radius:999px; }
+  .panel-head .meta{ font-size:12.5px; color:var(--ink-faint); }
+
+  .btn{ display:inline-flex; align-items:center; gap:7px; font-family:var(--sans); font-size:13.5px; font-weight:600; padding:9px 15px; border-radius:8px; border:1.5px solid var(--accent); cursor:pointer; background:var(--accent); color:var(--cream); transition:background .15s ease; }
+  .btn:hover{ background:var(--accent-dark); }
+  .btn.ghost{ background:var(--panel); color:var(--ink); border-color:var(--border); }
+  .btn.ghost:hover{ background:var(--bg-light); }
+  .btn.sm{ padding:6px 11px; font-size:12.5px; border-radius:7px; }
+  .btn.danger-line{ background:var(--panel); color:var(--error); border-color:var(--error); }
+  .btn.danger-line:hover{ background:var(--error-soft); }
+  .btn:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+  .btn:disabled{ opacity:.55; cursor:default; }
+
+  .add-form{ display:none; grid-template-columns:1.1fr 1.2fr 1fr auto auto; gap:12px; align-items:flex-end; background:var(--bg-light); border:1.5px solid var(--border); border-radius:10px; padding:16px; margin-bottom:18px; }
+  .add-form.open{ display:grid; }
+  .add-form .field{ display:flex; flex-direction:column; gap:6px; }
+  .add-form label{ font-size:12.5px; font-weight:500; color:var(--ink-soft); }
+  .add-form input{ padding:10px 12px; font-size:14px; font-family:var(--sans); color:var(--ink); background:var(--panel); border:1.5px solid var(--border); border-radius:8px; outline:none; }
+  .add-form input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .add-form input[data-invalid="true"]{ border-color:var(--error); }
+  .add-form .field-error{ font-size:12px; color:var(--error); min-height:14px; }
+
+  .toast{ display:none; align-items:center; justify-content:space-between; gap:14px; background:var(--accent-soft); border:1.5px solid var(--accent); color:var(--accent-dark); border-radius:10px; padding:13px 16px; margin-bottom:18px; font-size:14px; flex-wrap:wrap; }
+  .toast.show{ display:flex; animation:sm-rise .3s cubic-bezier(.22,.8,.32,1) both; }
+  .toast-icon{ flex-shrink:0; }
+  .toast .toast-body{ display:flex; align-items:center; gap:10px; flex:1; min-width:0; }
+  .toast .em{ font-family:var(--mono); font-weight:600; }
+  .toast button{ background:none; border:none; color:var(--accent-dark); font-weight:600; font-size:13px; cursor:pointer; text-decoration:underline; }
+  .toast.err{ background:var(--error-soft); border-color:var(--error); color:var(--error); }
+  .toast.err button{ color:var(--error); }
+
+  .pending-list{ display:flex; flex-direction:column; gap:0; }
+  .pending-row{ display:flex; align-items:center; gap:14px; padding:13px 0; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .pending-row:last-child{ border-bottom:none; }
+  .pending-who{ display:flex; align-items:center; gap:10px; flex:1; min-width:220px; }
+  .pending-who .p-name{ font-weight:600; font-size:13.5px; }
+  .pending-who .p-email{ font-family:var(--mono); font-size:12px; color:var(--ink-faint); }
+  .pending-when{ font-size:12px; color:var(--ink-faint); min-width:110px; }
+  .pending-actions{ display:flex; gap:8px; }
+  .empty-state{ color:var(--ink-faint); font-size:13.5px; padding:6px 0 2px; }
+
+  table{ width:100%; border-collapse:collapse; }
+  thead th{ text-align:left; font-size:12px; font-weight:500; color:var(--ink-faint); padding:0 10px 10px; border-bottom:1px solid var(--border); }
+  tbody td{ padding:12px 10px; border-bottom:1px solid var(--border); font-size:13.5px; vertical-align:middle; }
+  tbody tr:last-child td{ border-bottom:none; }
+  .driver-cell{ display:flex; align-items:center; gap:10px; }
+  .driver-cell .avatar{ width:28px; height:28px; font-size:11px; }
+  .driver-cell .d-name{ font-weight:600; font-size:13.5px; line-height:1.3; }
+  .driver-cell .d-phone{ font-size:11.5px; color:var(--ink-faint); }
+  td.email-val{ font-family:var(--mono); font-weight:600; letter-spacing:0.2px; font-size:12.5px; }
+
+  .badge{ display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; }
+  .badge.active{ background:var(--accent-soft); color:var(--accent-dark); }
+  .badge.suspended{ background:var(--error-soft); color:var(--error); }
+
+  .actions-cell{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+  @media (max-width: 780px){
+    .app{ grid-template-columns:1fr; }
+    .sidebar{ position:fixed; inset:0 30% 0 0; transform:translateX(-100%); transition:transform .2s ease; width:100%; max-width:270px; }
+    .sidebar.open{ transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,0.3); }
+    .menu-toggle{ display:inline-flex; }
+    main.main{ padding:20px 18px 50px; }
+    .stats{ grid-template-columns:1fr; }
+    .add-form{ grid-template-columns:1fr; }
+    table, thead, tbody, tr{ display:block; }
+    thead{ display:none; }
+    tbody tr{ border-bottom:1px solid var(--border); padding:10px 0; }
+    tbody td{ display:flex; justify-content:space-between; align-items:center; border-bottom:none; padding:6px 0; }
+    tbody td::before{ content:attr(data-label); font-size:11.5px; color:var(--ink-faint); font-weight:500; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sm-ambient-glow" aria-hidden="true"></div>
+    <div class="logotype">
+      <span class="logo-ring" aria-hidden="true"></span>
+      <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/>
+        <circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+        <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="11" y1="16" x2="11" y2="19.4" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="16" y1="11" x2="19.4" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+      </svg>
+      Soft Moto
+    </div>
+
+    <nav class="nav">
+      <a href="admin.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+        Tableau de bord
+      </a>
+      <a href="conducteurs.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Conducteurs
+      </a>
+      <a href="collectes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Collectes journalières
+      </a>
+      <a href="motos.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h9V8H6zM15 8h3l3 4v5h-1"/></svg>
+        Motos &amp; financement
+      </a>
+      <a href="employes.html" class="active">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
+        Employés
+      </a>
+      <a href="parametres.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Paramètres
+      </a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-profile">
+      <div class="avatar">AD</div>
+      <div class="who"><div class="name">Admin Soft Moto</div><div class="role">Gestionnaire</div></div>
+      <a class="logout-link" id="logoutLink" href="login.html" aria-label="Déconnexion" title="Déconnexion">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <button class="menu-toggle" id="menuToggle" aria-label="Ouvrir le menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+
+    <div class="topbar">
+      <div>
+        <h1>Employés</h1>
+        <p class="sub">Chaque compte, chaque validation d'accès et chaque connexion sont enregistrés dans la base de données du serveur.</p>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><p class="label">Caissières enregistrées</p><div class="value" id="statTotal">—</div></div>
+      <div class="stat s2"><p class="label">Accès actifs</p><div class="value" id="statActive">—</div></div>
+      <div class="stat s3"><p class="label">Accès suspendus</p><div class="value" id="statSuspended">—</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Demandes en attente <span class="count-badge" id="pendingCount">0</span></h2>
+        <span class="meta">Comptes créés par les caissières elles-mêmes (via « Créer un compte » sur la page de connexion)</span>
+      </div>
+      <div class="pending-list" id="pendingList"></div>
+      <p class="empty-state" id="pendingEmpty">Aucune demande pour l'instant.</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Liste des caissières</h2>
+        <button class="btn" id="toggleFormBtn" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Ajouter directement
+        </button>
+      </div>
+
+      <form class="add-form" id="addForm">
+        <div class="field">
+          <label for="newName">Nom complet</label>
+          <input type="text" id="newName" placeholder="ex. Judith Kpodar" autocomplete="off">
+          <span class="field-error" id="newNameError"></span>
+        </div>
+        <div class="field">
+          <label for="newEmail">Adresse e-mail</label>
+          <input type="email" id="newEmail" placeholder="ex. judith.k@softmoto.bj" autocomplete="off">
+          <span class="field-error" id="newEmailError"></span>
+        </div>
+        <div class="field">
+          <label for="newPhone">Téléphone (optionnel)</label>
+          <input type="tel" id="newPhone" placeholder="+229 XX XX XX XX" autocomplete="off">
+          <span class="field-error"></span>
+        </div>
+        <button type="submit" class="btn">Accorder l'accès</button>
+        <button type="button" class="btn ghost" id="cancelFormBtn">Annuler</button>
+      </form>
+
+      <div class="toast" id="toast" role="status"></div>
+
+      <table>
+        <thead>
+          <tr><th>E-mail</th><th>Caissière</th><th>Inscrite le</th><th>Statut</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="employeesBody"></tbody>
+      </table>
+      <p class="empty-state" id="employeesEmpty" style="display:none;">Aucune caissière pour l'instant.</p>
+    </div>
+  </main>
+</div>
+
+<script src="serveur-check.js"></script>
+<script src="theme.js"></script>
+<script>
+(function(){
+  document.getElementById('menuToggle').addEventListener('click', function(){
+    document.getElementById('sidebar').classList.toggle('open');
+  });
+
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function api(url, opts){
+    return fetch(url, opts).then(async function(r){
+      const data = await r.json().catch(function(){ return {}; });
+      if(r.status === 401){ window.location.href = 'login.html'; throw new Error('Session expirée.'); }
+      if(!r.ok) throw new Error(data.erreur || 'Erreur serveur.');
+      return data;
+    });
+  }
+  document.getElementById('logoutLink').addEventListener('click', function(e){
+    e.preventDefault();
+    fetch('/api/deconnexion', { method: 'POST' }).finally(function(){ window.location.href = 'login.html'; });
+  });
+
+  // ---------- Profil réel (session) dans la barre latérale et l'en-tête ----------
+  api('/api/moi').then(function(moi){
+    const roleLabel = moi.role === 'admin' ? 'Administrateur' : 'Caissière';
+    document.querySelectorAll('.sidebar-profile, .profile-chip').forEach(function(bloc){
+      const av = bloc.querySelector('.avatar');
+      if(av){ av.textContent = initials(moi.nom); av.className = 'avatar ' + avatarClass(moi.nom); }
+      const nm = bloc.querySelector('.name');
+      if(nm) nm.textContent = moi.nom;
+      const rl = bloc.querySelector('.role');
+      if(rl) rl.textContent = roleLabel;
+    });
+  }).catch(function(){});
+
+  function initials(name){ return name.trim().split(/\s+/).slice(0,2).map(w => w[0].toUpperCase()).join(''); }
+  function avatarClass(name){
+    let h = 0;
+    for(let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return 'av-' + (1 + (h % 6));
+  }
+  function formatDateFR(isoLike){
+    try {
+      const mois = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+      const d = new Date(isoLike.replace(' ', 'T'));
+      return d.getDate().toString().padStart(2,'0') + ' ' + mois[d.getMonth()] + ' ' + d.getFullYear();
+    } catch(err){ return isoLike; }
+  }
+
+  const employeesBody = document.getElementById('employeesBody');
+  const employeesEmpty = document.getElementById('employeesEmpty');
+  const pendingList = document.getElementById('pendingList');
+  const pendingEmpty = document.getElementById('pendingEmpty');
+  const pendingCount = document.getElementById('pendingCount');
+  const toast = document.getElementById('toast');
+
+  // Les messages sont du HTML de confiance : toute donnée saisie par un utilisateur y passe par esc().
+  function showToast(message, isError, sticky){
+    const icon = isError
+      ? '<svg class="toast-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>'
+      : '<svg class="toast-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" stroke-dasharray="24" stroke-dashoffset="24" style="animation:sm-check-in .4s .15s ease forwards"/></svg>';
+    toast.innerHTML = '<span class="toast-body">' + icon + '<span>' + message + '</span></span>' + (sticky ? '<button type="button" id="closeToast">Fermer</button>' : '');
+    toast.className = 'toast show' + (isError ? ' err' : '');
+    clearTimeout(showToast._t);
+    if(sticky){ document.getElementById('closeToast').addEventListener('click', function(){ toast.classList.remove('show'); }); }
+    else { showToast._t = setTimeout(() => { toast.classList.remove('show'); }, 4000); }
+  }
+
+  // ---------- Chargement depuis l'API ----------
+  function loadAll(){
+    return api('/api/comptes?role=caissiere')
+      .then((comptes) => {
+        const pending = comptes.filter(c => c.statut === 'en_attente');
+        const others = comptes.filter(c => c.statut !== 'en_attente');
+        renderPending(pending);
+        renderTable(others);
+      })
+      .catch((err) => showToast(err.message === 'Failed to fetch'
+        ? 'Impossible de contacter le serveur. Vérifiez qu’il est bien démarré (npm start).'
+        : esc(smMessage(err)), true));
+  }
+
+  function renderPending(list){
+    pendingCount.textContent = list.length;
+    pendingEmpty.style.display = list.length ? 'none' : 'block';
+    pendingList.innerHTML = list.map(function(req){
+      return '<div class="pending-row" data-id="' + req.id + '">' +
+        '<div class="pending-who"><div class="avatar ' + avatarClass(req.nom) + '">' + esc(initials(req.nom)) + '</div>' +
+        '<div><div class="p-name">' + esc(req.nom) + '</div><div class="p-email">' + esc(req.email) + '</div></div></div>' +
+        '<div class="pending-when">' + formatDateFR(req.date_creation) + '</div>' +
+        '<div class="pending-actions">' +
+        '<button type="button" class="btn sm approve-btn" data-id="' + req.id + '">Accorder l\'accès</button>' +
+        '<button type="button" class="btn ghost sm reject-btn" data-id="' + req.id + '">Refuser</button>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  function renderTable(list){
+    employeesEmpty.style.display = list.length ? 'none' : 'block';
+    employeesBody.innerHTML = list.map(function(c){
+      const link = 'caissiere.html?email=' + encodeURIComponent(c.email) + '&name=' + encodeURIComponent(c.nom);
+      const isActive = c.statut === 'actif';
+      return '<tr data-id="' + c.id + '">' +
+        '<td class="email-val" data-label="E-mail">' + esc(c.email) + '</td>' +
+        '<td data-label="Caissière"><div class="driver-cell"><div class="avatar ' + avatarClass(c.nom) + '">' + esc(initials(c.nom)) + '</div>' +
+        '<div><div class="d-name">' + esc(c.nom) + '</div><div class="d-phone">' + esc(c.telephone || '—') + '</div></div></div></td>' +
+        '<td data-label="Inscrite le">' + formatDateFR(c.date_creation) + '</td>' +
+        '<td data-label="Statut"><span class="badge ' + (isActive ? 'active' : 'suspended') + '">' + (isActive ? 'Actif' : 'Suspendu') + '</span></td>' +
+        '<td data-label="Actions"><div class="actions-cell">' +
+        '<a class="btn ghost sm" href="' + link + '">Voir sa page</a>' +
+        '<button type="button" class="btn ' + (isActive ? 'danger-line' : '') + ' sm toggle-access-btn" data-id="' + c.id + '" data-next="' + (isActive ? 'suspendu' : 'actif') + '">' +
+        (isActive ? 'Suspendre' : 'Réactiver') + '</button></div></td></tr>';
+    }).join('');
+
+    document.getElementById('statTotal').textContent = list.length;
+    document.getElementById('statActive').textContent = list.filter(c => c.statut === 'actif').length;
+    document.getElementById('statSuspended').textContent = list.filter(c => c.statut === 'suspendu').length;
+  }
+
+  loadAll();
+
+  // ---------- Approuver / refuser une demande ----------
+  pendingList.addEventListener('click', function(e){
+    const approveBtn = e.target.closest('.approve-btn');
+    const rejectBtn = e.target.closest('.reject-btn');
+    if(!approveBtn && !rejectBtn) return;
+    const id = (approveBtn || rejectBtn).dataset.id;
+
+    if(approveBtn){
+      api('/api/comptes/' + id, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'actif' })
+      })
+        .then(() => { showToast('Accès accordé.'); loadAll(); })
+        .catch((err) => showToast(esc(smMessage(err)), true));
+    } else {
+      if(!window.confirm('Refuser et supprimer cette demande ?')) return;
+      api('/api/comptes/' + id, { method: 'DELETE' })
+        .then(() => { showToast('Demande refusée.'); loadAll(); })
+        .catch((err) => showToast(esc(smMessage(err)), true));
+    }
+  });
+
+  // ---------- Suspendre / réactiver ----------
+  employeesBody.addEventListener('click', function(e){
+    const btn = e.target.closest('.toggle-access-btn');
+    if(!btn) return;
+    api('/api/comptes/' + btn.dataset.id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: btn.dataset.next })
+    })
+      .then(() => loadAll())
+      .catch((err) => showToast(esc(smMessage(err)), true));
+  });
+
+  // ---------- Ajout direct par l'admin ----------
+  const toggleFormBtn = document.getElementById('toggleFormBtn');
+  const cancelFormBtn = document.getElementById('cancelFormBtn');
+  const addForm = document.getElementById('addForm');
+  const newName = document.getElementById('newName');
+  const newEmail = document.getElementById('newEmail');
+  const newPhone = document.getElementById('newPhone');
+  const newNameError = document.getElementById('newNameError');
+  const newEmailError = document.getElementById('newEmailError');
+
+  function validEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+  function openForm(){ addForm.classList.add('open'); newName.focus(); }
+  function closeForm(){
+    addForm.classList.remove('open');
+    newName.value = ''; newEmail.value = ''; newPhone.value = '';
+    [newName, newEmail].forEach(i => i.removeAttribute('data-invalid'));
+    newNameError.textContent = ''; newEmailError.textContent = '';
+  }
+  toggleFormBtn.addEventListener('click', function(){ addForm.classList.contains('open') ? closeForm() : openForm(); });
+  cancelFormBtn.addEventListener('click', closeForm);
+
+  addForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    let hasError = false;
+    const name = newName.value.trim();
+    const email = newEmail.value.trim();
+
+    if(!name){ newName.setAttribute('data-invalid','true'); newNameError.textContent = 'Entrez le nom de la caissière.'; hasError = true; }
+    else { newName.removeAttribute('data-invalid'); newNameError.textContent = ''; }
+
+    if(!email || !validEmail(email)){
+      newEmail.setAttribute('data-invalid','true');
+      newEmailError.textContent = !email ? "Entrez l'adresse e-mail." : 'Adresse e-mail invalide.';
+      hasError = true;
+    } else { newEmail.removeAttribute('data-invalid'); newEmailError.textContent = ''; }
+
+    if(hasError) return;
+
+    api('/api/comptes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nom: name, email: email, telephone: newPhone.value.trim() })
+    })
+      .then((data) => {
+        showToast('Accès accordé à <strong>' + esc(name) + '</strong> — <span class="em">' + esc(email) + '</span>. ' +
+          'Mot de passe temporaire à lui transmettre : <span class="em">' + esc(data.motDePasseTemporaire) + '</span>', false, true);
+        closeForm();
+        loadAll();
+      })
+      .catch((err) => {
+        newEmail.setAttribute('data-invalid','true');
+        newEmailError.textContent = smMessage(err);
+      });
+  });
+})();
+</script>
+
+</body>
+</html>

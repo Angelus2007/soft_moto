@@ -1,0 +1,362 @@
+/* Soft Moto — couche visuelle partagée entre les pages.
+   Palette d'identité, animations et micro-interactions. Respecte prefers-reduced-motion. */
+
+:root{
+  /* Palette de marque : marine profond, gris froid, bleu franc, or discret. */
+  --bg-dark:#0B1B33; --bg-dark-2:#16305A; --bg-light:#F1F4F9; --panel:#FFFFFF;
+  --accent:#1D4ED8; --accent-dark:#1E3A8A; --accent-soft:#DBE6FD;
+  --amber:#C77D0A; --amber-soft:#FCEBC8;
+  --ink:#0F172A; --ink-soft:#526074; --ink-faint:#8793A5;
+  --cream:#F1F4F9; --cream-soft:#AEBBD0;
+  --border:#DDE3EC; --error:#B42318; --error-soft:#FDE7E5;
+  --route: #C77D0A;         /* or discret : trajet, célébration, mise en avant */
+  --route-dark: #8A5A08;
+  /* Avatars : teintes froides et sobres, jamais vert ni rouge (réservés aux statuts) */
+  --av-1:#1D4ED8; --av-2:#4338CA; --av-3:#0E7490; --av-4:#475569; --av-5:#86198F; --av-6:#92400E;
+  --av-1-tx:#F1F4F9; --av-2-tx:#F1F4F9; --av-3-tx:#F1F4F9; --av-4-tx:#F1F4F9; --av-5-tx:#F1F4F9; --av-6-tx:#F1F4F9;
+  /* Statuts : vert pur = payé, rouge pur = non payé. Aucune autre couleur ne s'en approche. */
+  --paye:#00A000; --paye-dark:#006E00; --paye-soft:#DDF6DD;
+  --impaye:#E00000; --impaye-dark:#A30000; --impaye-soft:#FFE1E1;
+}
+
+/* ---------- Défilement ---------- */
+*{ scrollbar-color: var(--ink-faint) transparent; scrollbar-width: thin; }
+*::-webkit-scrollbar{ width:9px; height:9px; }
+*::-webkit-scrollbar-track{ background:transparent; }
+*::-webkit-scrollbar-thumb{ background:var(--cream-soft); border-radius:99px; }
+*::-webkit-scrollbar-thumb:hover{ background:var(--ink-faint); }
+
+/* ---------- Focus clavier ---------- */
+a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-visible{
+  outline:2px solid var(--accent); outline-offset:2px; border-radius:4px;
+}
+
+/* ---------- Avatars d'identité ---------- */
+/* Couleur dérivée du nom (voir smAvatarClass dans les pages) plutôt qu'une teinte unique pour tout le monde. */
+.avatar.av-1{ background:var(--av-1); color:var(--av-1-tx); }
+.avatar.av-2{ background:var(--av-2); color:var(--av-2-tx); }
+.avatar.av-3{ background:var(--av-3); color:var(--av-3-tx); }
+.avatar.av-4{ background:var(--av-4); color:var(--av-4-tx); }
+.avatar.av-5{ background:var(--av-5); color:var(--av-5-tx); }
+.avatar.av-6{ background:var(--av-6); color:var(--av-6-tx); }
+
+/* ---------- Lignes de tableau ---------- */
+tbody tr{ transition:background .15s ease; }
+tbody tr:hover{ background:var(--bg-light); }
+
+/* ---------- Boutons : retour au clic ---------- */
+button{ transition:transform .1s ease, background .15s ease, box-shadow .15s ease; }
+button:active{ transform:scale(0.97); }
+.btn, button.submit{ position:relative; overflow:hidden; }
+
+/* ---------- Badges avec puce ---------- */
+.badge{ position:relative; }
+.badge::before{ content:''; width:6px; height:6px; border-radius:50%; margin-right:6px; background:currentColor; opacity:0.7; }
+
+/* ---------- Animations ---------- */
+@keyframes sm-pop{
+  0%{ transform:scale(1); }
+  35%{ transform:scale(1.16); }
+  100%{ transform:scale(1); }
+}
+@keyframes sm-check-in{
+  from{ stroke-dashoffset:24; }
+  to{ stroke-dashoffset:0; }
+}
+@keyframes sm-rise{
+  from{ opacity:0; transform:translateY(10px); }
+  to{ opacity:1; transform:translateY(0); }
+}
+@keyframes sm-toast-in{
+  from{ opacity:0; transform:translate(-50%, -12px) scale(0.98); }
+  to{ opacity:1; transform:translate(-50%, 0) scale(1); }
+}
+/* Pour une fenêtre déjà centrée par flex (modale plein écran) : ne jamais utiliser sm-toast-in
+   ici, car son translateX(-50%) décale l'élément de la moitié de SA PROPRE largeur, donc à gauche. */
+@keyframes sm-modal-fade{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes sm-modal-pop{
+  from{ opacity:0; transform:scale(0.95) translateY(8px); }
+  to{ opacity:1; transform:scale(1) translateY(0); }
+}
+@keyframes sm-route-draw{
+  to{ stroke-dashoffset:0; }
+}
+@keyframes sm-route-dot{
+  to{ offset-distance:100%; }
+}
+@keyframes sm-glow-pulse{
+  0%, 100%{ opacity:0.55; }
+  50%{ opacity:1; }
+}
+
+.sm-rise{ animation:sm-rise .5s cubic-bezier(.22,.8,.32,1) both; }
+
+/* ---------- Lueur d'ambiance sur les fonds sombres ---------- */
+@keyframes sm-ambient-drift{
+  0%, 100%{ transform:translate(-6%, -4%) scale(1); }
+  50%{ transform:translate(6%, 5%) scale(1.12); }
+}
+.sm-ambient-glow{
+  position:absolute; inset:-20% -30%; z-index:0; pointer-events:none;
+  background:radial-gradient(closest-side, rgba(199,125,10,0.16), transparent 70%);
+  animation:sm-ambient-drift 16s ease-in-out infinite;
+}
+
+/* ---------- Halo du logo ---------- */
+.logotype{ position:relative; }
+.logotype .logo-ring{
+  position:absolute; left:0; top:50%; width:22px; height:22px; border-radius:50%;
+  transform:translateY(-50%); border:1.5px solid var(--route); opacity:0;
+  animation:sm-logo-ring 3.2s ease-out infinite;
+}
+@keyframes sm-logo-ring{
+  0%{ opacity:0.55; transform:translateY(-50%) scale(0.8); }
+  80%{ opacity:0; transform:translateY(-50%) scale(1.7); }
+  100%{ opacity:0; transform:translateY(-50%) scale(1.7); }
+}
+
+/* ---------- Liens de navigation : pastille glissante ---------- */
+.nav a{ position:relative; overflow:hidden; }
+.nav a::before{
+  content:''; position:absolute; inset:0; border-radius:8px; background:var(--accent);
+  transform:scaleX(0); transform-origin:left; opacity:0; transition:transform .28s cubic-bezier(.22,.8,.32,1), opacity .2s ease;
+  z-index:-1;
+}
+.nav a:hover::before{ transform:scaleX(1); opacity:0.14; }
+.nav a.active::before{ display:none; }
+.nav a svg{ transition:transform .2s cubic-bezier(.34,1.56,.64,1); }
+.nav a:hover svg{ transform:translateX(2px) scale(1.06); }
+
+/* ---------- Effet de vague au clic (boutons) ---------- */
+.sm-ripple{
+  position:absolute; border-radius:50%; background:rgba(255,255,255,0.55);
+  transform:scale(0); pointer-events:none; animation:sm-ripple-out .55s ease-out forwards;
+}
+button.submit .sm-ripple, .btn .sm-ripple{ mix-blend-mode:overlay; }
+.btn.ghost .sm-ripple, button.submit.ghost .sm-ripple{ background:rgba(15,23,42,0.12); mix-blend-mode:normal; }
+@keyframes sm-ripple-out{ to{ transform:scale(1); opacity:0; } }
+
+/* ---------- Badges qui demandent une action ---------- */
+.badge.wait, .badge.late, .badge.new, .badge.suspended{
+  animation:sm-badge-pulse 2.6s ease-in-out infinite;
+}
+@keyframes sm-badge-pulse{ 0%, 100%{ opacity:1; } 50%{ opacity:0.6; } }
+
+/* ---------- Design émotionnel : états vides accueillants ---------- */
+.empty-state{
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  padding:34px 20px !important; text-align:center; color:var(--ink-soft) !important;
+  animation:sm-rise .45s cubic-bezier(.22,.8,.32,1) both;
+}
+.empty-state::before{
+  content:''; width:46px; height:46px; flex-shrink:0; opacity:0.55;
+  background:center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236A6178' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 7H4a1 1 0 0 0-1 1v3l2 8a2 2 0 0 0 2 1.5h10a2 2 0 0 0 2-1.5l2-8V8a1 1 0 0 0-1-1Z'/%3E%3Cpath d='M9 7V5.5A2.5 2.5 0 0 1 11.5 3h1A2.5 2.5 0 0 1 15 5.5V7'/%3E%3Cpath d='M9 11.5a3 3 0 0 0 6 0'/%3E%3C/svg%3E");
+}
+
+/* ---------- Design émotionnel : salutation personnalisée ---------- */
+.greeting-name{ color:var(--accent-dark); font-weight:600; }
+
+/* ---------- Design émotionnel : jalon atteint (moto remboursée, objectif tenu) ---------- */
+@keyframes sm-milestone-glow{
+  0%, 100%{ box-shadow:0 0 0 0 rgba(0,160,0,0.35); }
+  50%{ box-shadow:0 0 0 7px rgba(0,160,0,0); }
+}
+.sm-milestone{ animation:sm-milestone-glow 1.8s ease-out 2; }
+.sm-milestone-badge{
+  display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700;
+  color:var(--paye-dark); background:var(--paye-soft); border-radius:999px; padding:3px 9px 3px 7px;
+  animation:sm-pop .5s cubic-bezier(.34,1.56,.64,1) both;
+}
+
+/* ---------- Design émotionnel : confettis de célébration ---------- */
+.sm-confetti-piece{
+  position:fixed; top:0; left:0; width:7px; height:10px; pointer-events:none; z-index:9999;
+  border-radius:2px; will-change:transform, opacity;
+  animation:sm-confetti-fall var(--sm-dur, 900ms) var(--sm-delay, 0ms) cubic-bezier(.17,.67,.4,1) forwards;
+}
+@keyframes sm-confetti-fall{
+  0%{ transform:translate(0, 0) rotate(0deg); opacity:1; }
+  100%{ transform:translate(var(--sm-x, 60px), var(--sm-y, 140px)) rotate(var(--sm-rot, 260deg)); opacity:0; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration:0.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:0.001ms !important; scroll-behavior:auto !important;
+  }
+}
+
+/* =====================================================================
+   MOTION DESIGN — système commun à tout le site
+   1. Entrée orchestrée (une fois)   2. Navigation entre pages
+   3. Données : cascades, compteurs   4. Réponse aux gestes
+   5. Fenêtres modales               6. Connexion
+   Les animations d'entrée utilisent « backwards » : l'état final reste celui de la page,
+   donc les survols (:hover) ne sont jamais bloqués. Tout est neutralisé par prefers-reduced-motion.
+   ===================================================================== */
+:root{
+  --ease-out: cubic-bezier(.22,.8,.32,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes sm-slide-in{ from{ opacity:0; transform:translateX(-14px); } to{ opacity:1; transform:none; } }
+@keyframes sm-fade-down{ from{ opacity:0; transform:translateY(-10px); } to{ opacity:1; transform:none; } }
+@keyframes sm-cell-in{ from{ opacity:0; transform:translateY(8px) scale(.96); } to{ opacity:1; transform:none; } }
+@keyframes sm-view-in{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:none; } }
+@keyframes sm-bar-in{ from{ transform:scaleY(0); opacity:0; } to{ transform:scaleY(1); opacity:1; } }
+@keyframes sm-shake{ 20%,60%{ transform:translateX(-5px); } 40%,80%{ transform:translateX(5px); } }
+@keyframes sm-current-pulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(199,125,10,.35); } 50%{ box-shadow:0 0 0 6px rgba(199,125,10,0); } }
+@keyframes sm-shimmer{ to{ background-position:-200% 0; } }
+
+/* ---------- 1. Entrée orchestrée : menu, puis titre, puis contenu ---------- */
+html.sm-intro header.top{ animation:sm-fade-down .55s var(--ease-out) backwards; }
+html.sm-intro .sidebar .nav a{ animation:sm-slide-in .5s var(--ease-out) backwards; }
+html.sm-intro .sidebar .nav a:nth-child(1){ animation-delay:.05s; }
+html.sm-intro .sidebar .nav a:nth-child(2){ animation-delay:.10s; }
+html.sm-intro .sidebar .nav a:nth-child(3){ animation-delay:.15s; }
+html.sm-intro .sidebar .nav a:nth-child(4){ animation-delay:.20s; }
+html.sm-intro .sidebar .nav a:nth-child(5){ animation-delay:.25s; }
+html.sm-intro .sidebar .nav a:nth-child(6){ animation-delay:.30s; }
+html.sm-intro .sidebar .nav a:nth-child(7){ animation-delay:.35s; }
+html.sm-intro .sidebar-profile{ animation:sm-fade-down .5s var(--ease-out) .4s backwards; }
+
+html.sm-intro main.main > *:not(.menu-toggle){ animation:sm-rise .65s var(--ease-out) backwards; }
+html.sm-intro main.main > :nth-child(2){ animation-delay:.10s; }
+html.sm-intro main.main > :nth-child(3){ animation-delay:.20s; }
+html.sm-intro main.main > :nth-child(4){ animation-delay:.30s; }
+html.sm-intro main.main > :nth-child(5){ animation-delay:.40s; }
+html.sm-intro main.main > :nth-child(n+6){ animation-delay:.48s; }
+
+/* Cartes de chiffres : elles arrivent l'une après l'autre */
+html.sm-intro :is(.stats, .kpis, .summary-strip) > *{ animation:sm-rise .6s var(--ease-out) backwards; }
+html.sm-intro :is(.stats, .kpis, .summary-strip) > :nth-child(1){ animation-delay:.22s; }
+html.sm-intro :is(.stats, .kpis, .summary-strip) > :nth-child(2){ animation-delay:.30s; }
+html.sm-intro :is(.stats, .kpis, .summary-strip) > :nth-child(3){ animation-delay:.38s; }
+html.sm-intro :is(.stats, .kpis, .summary-strip) > :nth-child(4){ animation-delay:.46s; }
+
+/* ---------- 2. Navigation entre pages ---------- */
+body{ transition:opacity .2s ease; }
+html.sm-leaving body{ opacity:0; }
+
+/* Repère de la page active : un trait qui se déploie à côté du lien */
+.nav a.active::after{
+  content:''; position:absolute; left:0; top:24%; bottom:24%; width:3px; border-radius:3px;
+  background:var(--route); transform-origin:center; animation:sm-bar-in .5s var(--ease-out) .35s backwards;
+}
+
+/* ---------- 3. Données qui arrivent ---------- */
+/* Lignes de tableaux, listes, jours du calendrier : posées par theme.js (smCascadeAdded) */
+.sm-in{ animation:sm-cell-in .45s var(--ease-out) backwards; animation-delay:calc(var(--i, 0) * 32ms); }
+.cal-day.sm-in{ animation-delay:calc(var(--i, 0) * 11ms); animation-duration:.35s; }
+.cal-day.sm-in.just-toggled{ animation:sm-pop .38s var(--ease-spring); }
+.sm-cascade > *{ animation:sm-cell-in .5s var(--ease-out) backwards; animation-delay:calc(var(--i, 0) * 28ms); }
+.sm-view-in{ animation:sm-view-in .45s var(--ease-out) backwards; }
+
+/* Barre de progression qui se remplit */
+.sm-bar{ height:6px; border-radius:99px; background:var(--border); overflow:hidden; margin-top:10px; }
+.sm-bar > i{ display:block; height:100%; width:100%; border-radius:inherit; background:linear-gradient(90deg,var(--paye),var(--paye-dark)); transform-origin:left; transform:scaleX(var(--p,0)); transition:transform 1s var(--ease-out) .15s; }
+.progress-bar > span{ transition-timing-function:var(--ease-out); }
+
+/* ---------- 4. Réponse aux gestes ---------- */
+.stat, .kpi, .summary-card, .box-card, .panel{ transition:transform .25s var(--ease-out), box-shadow .25s var(--ease-out), border-color .2s ease; }
+.stat:hover, .kpi:hover, .summary-card:hover{ transform:translateY(-3px); box-shadow:0 14px 28px -18px rgba(15,23,42,.35); }
+.period-box{ transition:transform .2s var(--ease-spring), box-shadow .2s ease, border-color .2s ease, background .2s ease; }
+.period-box:hover{ transform:translateY(-3px) scale(1.03); }
+.period-box:active{ transform:scale(.97); }
+.period-box.current:not(.selected){ animation:sm-current-pulse 2.4s ease-in-out infinite; }
+.cal-day:not(.future):hover{ transform:translateY(-2px) scale(1.04); }
+.moto-row, .tournee-row, .financing-row{ transition:background .18s ease, border-color .18s ease, transform .2s var(--ease-out); }
+.moto-row:hover, .tournee-row:hover{ transform:translateX(3px); }
+
+input, select, textarea{ transition:border-color .2s ease, box-shadow .2s ease, background-color .2s ease; }
+input[data-invalid="true"]{ animation:sm-shake .35s ease; }
+.status-toggle button{ transition:background .25s ease, color .25s ease; }
+.badge{ transition:background .2s ease, color .2s ease; }
+.logout-link, .nav a{ transition:background .2s ease, color .2s ease; }
+
+/* Squelette de chargement */
+.skeleton .period-box{ min-height:62px; background:linear-gradient(100deg,var(--bg-light) 30%,#fff 50%,var(--bg-light) 70%); background-size:200% 100%; animation:sm-shimmer 1.2s linear infinite; }
+
+/* ---------- 5. Fenêtres modales : entrée ET sortie ---------- */
+.modal-backdrop, .modal-backdrop.show{
+  display:flex; animation:none;
+  opacity:0; visibility:hidden; pointer-events:none;
+  transition:opacity .22s ease, visibility 0s linear .22s;
+}
+.modal-backdrop.show{ opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
+.modal-backdrop .modal-card{
+  animation:none; opacity:0; transform:translateY(14px) scale(.96);
+  transition:opacity .22s ease, transform .3s var(--ease-out);
+}
+.modal-backdrop.show .modal-card{ opacity:1; transform:none; }
+.modal-error.show{ animation:sm-view-in .3s var(--ease-out); }
+.search-error.show, .panel-error.show, .ds-error.show{ animation:sm-view-in .3s var(--ease-out); }
+
+/* ---------- 6. Écran de connexion ---------- */
+html.sm-intro .side .logotype{ animation:sm-fade-down .6s var(--ease-out) .1s backwards; }
+html.sm-intro .side-copy > *{ animation:sm-rise .85s var(--ease-out) backwards; }
+html.sm-intro .side-copy > :nth-child(1){ animation-delay:.35s; }
+html.sm-intro .side-copy > :nth-child(2){ animation-delay:.5s; }
+html.sm-intro .side-foot{ animation:sm-fade-down .8s ease 1s backwards; }
+html.sm-intro #loginView .field, html.sm-intro #loginView button.submit{ animation:sm-rise .55s var(--ease-out) backwards; }
+html.sm-intro #loginView .field:nth-of-type(1){ animation-delay:.45s; }
+html.sm-intro #loginView .field:nth-of-type(2){ animation-delay:.55s; }
+html.sm-intro #loginView button.submit{ animation-delay:.68s; }
+
+
+/* =====================================================================
+   STATUTS : vert pur (payé) et rouge pur (non payé), en aplat plein, lisibles d'un coup d'œil
+   ===================================================================== */
+.cal-day.paid{ background:var(--paye); border-color:var(--paye); color:#fff; }
+.cal-day.unpaid{ background:var(--impaye); border-color:var(--impaye); color:#fff; }
+.cal-day.today{ box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--ink); }
+.legend .dot.paid{ background:var(--paye); color:#fff; }
+.legend .dot.unpaid{ background:var(--impaye); color:#fff; }
+.tournee-row .t-status.paid{ background:var(--paye); color:#fff; }
+.tournee-row .t-status.unpaid{ background:var(--impaye); color:#fff; }
+.badge.paid{ background:var(--paye); color:#fff; }
+.badge.late{ background:var(--impaye); color:#fff; }
+.total-box.paid{ background:var(--paye-soft); border-color:var(--paye); }
+.total-box.unpaid{ background:var(--impaye-soft); border-color:var(--impaye); }
+.total-box.paid .t-amount, .total-box.paid .t-label{ color:var(--paye-dark); }
+.total-box.unpaid .t-amount, .total-box.unpaid .t-label{ color:var(--impaye-dark); }
+
+/* Message flottant */
+.sm-toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,16px);background:var(--bg-dark);color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:0 10px 30px rgba(11,27,51,.35);opacity:0;transition:opacity .3s ease,transform .3s ease;z-index:9999;max-width:90vw;text-align:center}
+.sm-toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* Moyen de paiement (fenêtre de saisie) */
+.moyen-label{margin:12px 0 6px;font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em}
+.moyen-row{display:flex;gap:8px;flex-wrap:wrap}
+.moyen-row button{flex:1;min-width:92px;padding:9px 10px;font-size:13px;font-weight:600;border-radius:9px;border:1.5px solid var(--border);background:var(--panel);color:var(--ink-soft);cursor:pointer;transition:background .15s,border-color .15s,color .15s,transform .15s}
+.moyen-row button:hover{border-color:var(--accent);color:var(--accent-dark)}
+.moyen-row button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.moyen-tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:700;background:var(--accent-soft);color:var(--accent-dark)}
+
+/* Type de contrat (boutons cliquables) */
+.type-label{margin:0 0 6px;font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em}
+.type-row{display:flex;gap:8px;flex-wrap:wrap}
+.type-row button{flex:1;min-width:150px;padding:11px 14px;font-size:13px;font-weight:700;letter-spacing:.03em;border-radius:10px;border:1.5px solid var(--border);background:var(--panel);color:var(--ink-soft);cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.type-row button:hover{border-color:var(--accent);color:var(--accent-dark)}
+.type-row button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.type-row[data-invalid="true"] button{border-color:var(--error)}
+
+/* Montant : flèches × 2 / ÷ 2 */
+.sm-stepper{position:relative;display:block;flex:1 1 auto;min-width:0}
+.sm-stepper input{width:100%;padding-right:42px !important}
+.sm-stepper input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.sm-stepper input::-webkit-outer-spin-button,.sm-stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.sm-steps{position:absolute;top:5px;bottom:5px;right:5px;width:28px;display:flex;flex-direction:column;gap:2px}
+.sm-steps button{flex:1;min-height:0;padding:0;border:0;border-radius:6px;background:var(--accent-soft);color:var(--accent-dark);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s,transform .1s}
+.sm-steps button:hover{background:var(--accent);color:#fff}
+.sm-steps button:active{transform:scale(.92)}
+.step-hint{margin:6px 0 0;font-size:11.5px;color:var(--ink-faint)}
+
+/* Numéro Mobile Money */
+.numero-box{margin-top:2px}
+.numero-list{display:flex;flex-direction:column;gap:6px}
+.numero-opt{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;background:var(--panel);cursor:pointer;transition:border-color .15s,background .15s}
+.numero-opt:hover{border-color:var(--accent)}
+.numero-opt input{accent-color:var(--accent);width:17px;height:17px;margin:0;flex-shrink:0}
+.numero-opt .num{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--ink)}
+.numero-opt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.amount-row > span:not(.sm-stepper){white-space:nowrap}

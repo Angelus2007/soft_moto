@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vidange &amp; Redevance – Soft Moto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,450&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-dark:#0B1B33;
+    --bg-dark-2:#16305A;
+    --bg-light:#F1F4F9;
+    --panel:#FFFFFF;
+    --accent:#1D4ED8;
+    --accent-dark:#1E3A8A;
+    --accent-soft:#DBE6FD;
+    --amber:#C77D0A;
+    --amber-soft:#FCEBC8;
+    --ink:#0F172A;
+    --ink-soft:#526074;
+    --ink-faint:#8793A5;
+    --cream:#F1F4F9;
+    --cream-soft:#AEBBD0;
+    --error:#B42318;
+    --error-soft:#FDE7E5;
+    --border:#DDE3EC;
+    --radius:10px;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:"IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html{height:100%; scroll-padding-top:env(safe-area-inset-top, 0px);}
+  body{
+    min-height:100%;
+    margin:0;
+    font-family:var(--sans);
+    color:var(--ink);
+    background:var(--bg-light);
+    -webkit-font-smoothing:antialiased;
+  }
+  a{ color:inherit; }
+
+  /* ---------- Layout ---------- */
+  .app{ display:grid; grid-template-columns:250px 1fr; min-height:100vh; }
+
+  /* ---------- Sidebar (identique aux autres pages admin) ---------- */
+  .sidebar{
+    background:radial-gradient(130% 110% at 10% 0%, var(--bg-dark-2) 0%, var(--bg-dark) 60%);
+    color:var(--cream);
+    display:flex;
+    flex-direction:column;
+    padding:26px 20px 20px;
+    position:relative;
+    overflow:hidden;
+    z-index:20;
+  }
+  .logotype{
+    display:flex; align-items:center; gap:9px;
+    font-family:var(--serif); font-style:italic; font-weight:500; font-size:18px;
+    color:var(--cream); padding:2px 8px 26px;
+  }
+  nav.nav{ display:flex; flex-direction:column; gap:3px; margin-top:6px; }
+  .nav a{
+    display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:8px;
+    text-decoration:none; font-size:14.5px; font-weight:500; color:var(--cream-soft);
+    transition:background .15s ease, color .15s ease;
+  }
+  .nav a svg{ flex-shrink:0; opacity:0.85; }
+  .nav a:hover{ background:rgba(241,244,249,0.07); color:var(--cream); }
+  .nav a.active{ background:var(--accent); color:var(--cream); }
+  .nav a.active svg{ opacity:1; }
+  .nav a:focus-visible{ outline:2px solid var(--accent-soft); outline-offset:2px; }
+  .sidebar-spacer{ flex:1; }
+  .sidebar-profile{
+    display:flex; align-items:center; gap:10px; padding:12px 10px;
+    border-top:1px solid rgba(241,244,249,0.12);
+  }
+  .avatar{
+    width:34px; height:34px; border-radius:50%; background:var(--accent); color:var(--cream);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:13px; font-weight:600; flex-shrink:0;
+  }
+  .sidebar-profile .who{ line-height:1.3; min-width:0; }
+  .sidebar-profile .who .name{ font-size:13.5px; font-weight:600; color:var(--cream); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sidebar-profile .who .role{ font-size:12px; color:var(--ink-faint); }
+  .logout-link{ margin-left:auto; display:flex; padding:6px; border-radius:7px; color:var(--ink-faint); text-decoration:none; flex-shrink:0; }
+  .logout-link:hover{ color:var(--cream); background:rgba(241,244,249,0.08); }
+
+  /* ---------- Page ---------- */
+  main.main{ padding:28px 34px 60px; min-width:0; max-width:1120px; width:100%; }
+  .menu-toggle{ display:none; background:var(--panel); border:1.5px solid var(--border); border-radius:8px; padding:8px; margin-bottom:14px; cursor:pointer; }
+  .solobar{ display:none; align-items:center; justify-content:space-between; gap:12px; padding:14px 26px; background:radial-gradient(130% 200% at 15% 0%, var(--bg-dark-2) 0%, var(--bg-dark) 60%); color:var(--cream); }
+  .solobar .brand{ font-family:var(--serif); font-style:italic; font-weight:500; font-size:18px; }
+  .solobar .who{ display:flex; align-items:center; gap:10px; font-size:13.5px; font-weight:600; }
+  .solobar a{ color:var(--cream-soft); text-decoration:none; font-size:13px; font-weight:500; padding:7px 10px; border-radius:8px; }
+  .solobar a:hover{ background:rgba(241,244,249,.08); color:var(--cream); }
+  .app.solo{ grid-template-columns:1fr; grid-template-rows:auto 1fr; }
+  .app.solo .sidebar, .app.solo .menu-toggle{ display:none; }
+  .app.solo .solobar{ display:flex; }
+  .app.solo main.main{ margin:0 auto; }
+
+  .back{ display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--accent-dark); text-decoration:none; margin-bottom:14px; }
+  .back:hover{ text-decoration:underline; }
+  .topbar{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:24px; flex-wrap:wrap; }
+  .topbar h1{ font-family:var(--serif); font-weight:600; font-size:26px; margin:0 0 6px; }
+  .topbar .sub{ margin:0; color:var(--ink-soft); font-size:14.5px; max-width:520px; }
+  .rech{ display:flex; gap:8px; flex-wrap:wrap; }
+  .rech input{ min-width:210px; padding:10px 13px; font:500 14.5px var(--mono); letter-spacing:.5px; color:var(--ink); background:var(--panel); border:1.5px solid var(--border); border-radius:9px; outline:none; }
+  .rech input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .rech input[data-invalid="true"]{ border-color:var(--error); }
+  .rech .btn{ padding:10px 18px; border-radius:9px; border:1.5px solid var(--accent); background:var(--accent); color:#fff; font:600 14px var(--sans); cursor:pointer; }
+  .rech .btn:hover{ background:var(--accent-dark); }
+  .rech-error{ display:none; width:100%; margin:6px 0 0; font-size:13px; color:var(--error); }
+  .rech-error.show{ display:block; }
+  .vide{ background:var(--panel); border:1.5px dashed var(--border); border-radius:14px; padding:34px 22px; text-align:center; color:var(--ink-soft); font-size:14.5px; }
+
+  /* ---------- Fiche ---------- */
+  #ficheView{ display:none; }
+  .driver-head{ display:flex; align-items:center; gap:14px; margin-bottom:18px; }
+  .driver-head .avatar{ width:48px; height:48px; font-size:16px; }
+  .driver-head .c-name{ font-family:var(--serif); font-size:23px; font-weight:600; line-height:1.2; }
+  .driver-head .c-code{ font:500 12.5px var(--mono); color:var(--ink-faint); }
+  .kpis{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:22px; }
+  .kpi{ background:var(--panel); border:1.5px solid var(--border); border-radius:14px; padding:16px 18px; }
+  .kpi .k-label{ font-size:12.5px; color:var(--ink-soft); font-weight:600; margin:0 0 6px; }
+  .kpi .k-val{ font:600 24px var(--mono); }
+  .kpi.ok .k-val{ color:var(--paye-dark); } .kpi.ko .k-val{ color:var(--impaye-dark); }
+
+  .tabs{ position:relative; display:inline-flex; background:var(--panel); border:1.5px solid var(--border); border-radius:12px; padding:4px; margin-bottom:18px; }
+  .tabs button{ position:relative; z-index:1; border:0; background:none; padding:9px 24px; font:600 14px var(--sans); color:var(--ink-soft); cursor:pointer; border-radius:9px; transition:color .25s; }
+  .tabs button[aria-selected="true"]{ color:#fff; }
+  .tab-pill{ position:absolute; z-index:0; top:4px; bottom:4px; left:4px; border-radius:9px; background:var(--accent); transition:transform .38s cubic-bezier(.22,.8,.32,1), width .38s cubic-bezier(.22,.8,.32,1); }
+  .contrat-actions{ display:flex; gap:10px; flex-wrap:wrap; margin:14px 0 16px; }
+  .c-btn{ padding:10px 18px; border-radius:9px; border:1.5px solid var(--accent); background:var(--accent); color:#fff; font:600 14px var(--sans); cursor:pointer; transition:background .15s; }
+  .c-btn:hover{ background:var(--accent-dark); }
+  .c-btn.ghost{ background:var(--panel); color:var(--accent-dark); }
+  .c-btn.ghost:hover{ background:var(--accent-soft); }
+  .tab-panel{ display:none; }
+  .tab-panel.show{ display:block; animation:sm-view-in .45s cubic-bezier(.22,.8,.32,1) backwards; }
+  .box-card{ background:var(--panel); border:1.5px solid var(--border); border-radius:16px; padding:24px; box-shadow:0 10px 28px -18px rgba(15,23,42,.25); }
+  .box-card h2{ font-family:var(--serif); font-size:20px; margin:0 0 6px; }
+  .box-card .desc{ margin:0 0 18px; color:var(--ink-soft); font-size:13.5px; line-height:1.55; }
+
+  /* VIDANGE : 24 cases */
+  .periods-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
+  .period-box{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-height:68px; padding:12px 6px; text-align:center; font:inherit; color:var(--ink); cursor:pointer; background:var(--bg-light); border:1.5px solid var(--border); border-radius:11px; position:relative; }
+  .period-box:disabled{ cursor:default; }
+  .p-num{ font:600 10.5px var(--mono); color:var(--ink-faint); letter-spacing:.3px; }
+  .p-range{ font-size:11.5px; font-weight:600; line-height:1.25; }
+  .p-state{ font:700 10.5px var(--mono); }
+  .period-box.st-paid{ background:var(--paye); border-color:var(--paye); color:#fff; }
+  .period-box.st-unpaid{ background:var(--impaye); border-color:var(--impaye); color:#fff; }
+  .period-box.st-paid .p-num, .period-box.st-unpaid .p-num{ color:rgba(255,255,255,.8); }
+  .period-box.st-part{ background:var(--amber-soft); border-color:var(--amber); }
+  .period-box.st-part .p-state{ color:var(--amber); }
+  .period-box.st-future, .period-box.st-none{ opacity:.55; }
+  .period-box.current{ box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--ink); }
+  .period-box.selected{ box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+  .period-box.current .p-num::after{ content:' · en cours'; }
+  .legende{ display:flex; gap:16px; margin-top:16px; flex-wrap:wrap; font-size:12px; color:var(--ink-soft); }
+  .legende span{ display:inline-flex; align-items:center; gap:6px; }
+  .legende i{ width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .l-paid{ background:var(--paye); } .l-unpaid{ background:var(--impaye); }
+  .l-part{ background:var(--amber-soft); border:1.5px solid var(--amber); }
+  .l-future{ background:var(--bg-light); border:1.5px solid var(--border); }
+
+  /* REDEVANCE : partie caissière */
+  .chip-periode{ display:none; align-items:center; gap:10px; margin:0 0 14px; padding:8px 12px; background:var(--accent-soft); color:var(--accent-dark); border-radius:9px; font-size:13px; font-weight:600; }
+  .chip-periode.show{ display:flex; }
+  .chip-periode button{ margin-left:auto; border:0; background:none; color:var(--accent-dark); font:600 12.5px var(--sans); text-decoration:underline; cursor:pointer; }
+  .cal-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .cal-title{ font-size:15px; font-weight:600; margin:0; text-transform:capitalize; }
+  .cal-nav button{ background:none; border:1.5px solid var(--border); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-soft); font-size:18px; }
+  .cal-nav button:hover:not(:disabled){ background:var(--bg-light); }
+  .cal-nav button:disabled{ opacity:.35; cursor:default; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .cal-dow{ text-align:center; font-size:11.5px; color:var(--ink-faint); font-weight:600; padding-bottom:4px; }
+  .cal-empty{ visibility:hidden; }
+  .cal-day{ aspect-ratio:1.45; min-height:52px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; border-radius:9px; border:1.5px solid var(--border); background:var(--panel); cursor:pointer; font:inherit; font-size:12.5px; color:var(--ink); }
+  .cal-day .num{ font-weight:700; font-size:13px; }
+  .cal-day .amt{ font:600 9.5px var(--mono); opacity:.95; }
+  .cal-day.future{ cursor:default; color:var(--ink-faint); background:var(--bg-light); }
+  .cal-day.in-periode:not(.paid):not(.unpaid){ border-color:var(--accent); }
+  .cal-day.in-periode{ outline:2.5px solid var(--accent); outline-offset:1px; }
+  .totals{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:20px; }
+  .total-box{ border-radius:12px; padding:16px 18px; border:1.5px solid; }
+  .total-box .t-label{ font-size:13px; font-weight:600; margin:0 0 6px; display:flex; align-items:center; gap:7px; }
+  .total-box .t-amount{ font:600 23px var(--mono); }
+  .total-box .t-count{ font-size:12.5px; color:var(--ink-soft); margin-top:4px; }
+  .panel-error{ display:none; margin:10px 0 0; font-size:13.5px; color:var(--error); }
+  .panel-error.show{ display:block; }
+
+  /* Modale : montant remis */
+  .modal-backdrop{ position:fixed; inset:0; background:rgba(11,27,51,.55); backdrop-filter:blur(2px); align-items:center; justify-content:center; padding:20px; z-index:100; }
+  .modal-card{ background:var(--panel); border-radius:14px; padding:24px; width:100%; max-width:360px; box-shadow:0 20px 50px -12px rgba(11,27,51,.4); }
+  .modal-card h3{ font-family:var(--serif); font-size:19px; margin:0 0 2px; }
+  .modal-sub{ margin:0 0 16px; color:var(--ink-soft); font-size:13.5px; }
+  .modal-target{ font-size:12.5px; color:var(--ink-soft); margin:0 0 8px; }
+  .modal-target strong{ color:var(--ink); font-family:var(--mono); }
+  .amount-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .amount-row input{ flex:1; padding:12px 14px; font:600 20px var(--mono); color:var(--ink); background:var(--bg-light); border:1.5px solid var(--border); border-radius:10px; outline:none; text-align:center; }
+  .amount-row input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .amount-row span{ font-size:14px; color:var(--ink-soft); font-weight:600; }
+  .quick-fill{ display:flex; gap:8px; margin:10px 0 4px; }
+  .quick-fill button{ flex:1; padding:8px 10px; font-size:12.5px; font-weight:600; border-radius:8px; border:1.5px solid var(--border); background:var(--bg-light); color:var(--ink-soft); cursor:pointer; }
+  .quick-fill button:hover{ border-color:var(--accent); color:var(--accent-dark); }
+  .modal-error{ display:none; margin:8px 0 0; font-size:13px; color:var(--impaye-dark); }
+  .modal-error.show{ display:block; }
+  .modal-actions{ display:flex; gap:10px; margin-top:20px; }
+  .modal-actions button{ flex:1; padding:12px; border-radius:10px; font-size:14.5px; font-weight:600; cursor:pointer; border:1.5px solid transparent; }
+  .modal-actions .cancel{ background:var(--bg-light); border-color:var(--border); color:var(--ink-soft); }
+  .modal-actions .save{ background:var(--accent); color:#fff; }
+  .modal-actions .save:hover{ background:var(--accent-dark); }
+  .modal-actions button:disabled{ opacity:.6; cursor:default; }
+
+  @media (max-width:980px){ .periods-grid{ grid-template-columns:repeat(4,1fr); } }
+  @media (max-width:680px){
+    .app{ grid-template-columns:1fr; }
+    .sidebar{ position:fixed; inset:0 30% 0 0; transform:translateX(-100%); transition:transform .25s ease; width:100%; max-width:270px; }
+    .sidebar.open{ transform:translateX(0); }
+    .menu-toggle{ display:inline-flex; }
+    main.main{ padding:20px 16px 40px; }
+    .periods-grid{ grid-template-columns:repeat(3,1fr); }
+    .kpis, .totals{ grid-template-columns:1fr; }
+    .cal-grid{ gap:4px; } .cal-day .amt{ font-size:8px; }
+  }
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sm-ambient-glow" aria-hidden="true"></div>
+    <div class="logotype">
+      <span class="logo-ring" aria-hidden="true"></span>
+      <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/>
+        <circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+        <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="11" y1="16" x2="11" y2="19.4" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="16" y1="11" x2="19.4" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+      </svg>
+      Soft Moto
+    </div>
+
+    <nav class="nav">
+      <a href="admin.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+        Tableau de bord
+      </a>
+      <a href="conducteurs.html" class="active">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Conducteurs
+      </a>
+      <a href="collectes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Collectes journalières
+      </a>
+      <a href="motos.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h9V8H6zM15 8h3l3 4v5h-1"/></svg>
+        Motos &amp; financement
+      </a>
+      <a href="employes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
+        Employés
+      </a>
+      <a href="parametres.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Paramètres
+      </a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-profile">
+      <div class="avatar">AD</div>
+      <div class="who"><div class="name">Admin Soft Moto</div><div class="role">Gestionnaire</div></div>
+      <a class="logout-link" id="logoutLink" href="login.html" aria-label="Déconnexion" title="Déconnexion">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </a>
+    </div>
+  </aside>
+
+  <header class="solobar">
+    <span class="brand">Soft Moto</span>
+    <span class="who"><span id="soloNom">Caissière</span><a href="login.html" id="soloLogout">Déconnexion</a></span>
+  </header>
+
+  <main class="main">
+    <button class="menu-toggle" id="menuToggle" aria-label="Ouvrir le menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+
+    <a class="back" id="backLink" href="conducteurs.html">&#8592; <span id="backText">Conducteurs</span></a>
+
+    <div class="topbar">
+      <div>
+        <h1>Vidange &amp; Redevance</h1>
+        <p class="sub">Les 24 périodes de vidange du conducteur et ses paiements jour par jour.</p>
+      </div>
+      <form class="rech" id="rechForm" autocomplete="off">
+        <input type="text" id="codeInput" placeholder="SM-XXXXXX" aria-label="Code conducteur">
+        <button type="submit" class="btn">Ouvrir</button>
+        <p class="rech-error" id="rechError" role="alert"></p>
+      </form>
+    </div>
+
+    <p class="vide" id="vide">Entrez le code d'un conducteur pour ouvrir sa fiche.</p>
+
+    <section id="ficheView" aria-live="polite">
+      <div class="driver-head">
+        <div class="avatar" id="dAvatar">—</div>
+        <div><div class="c-name" id="dName">—</div><div class="c-code" id="dCode">—</div></div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi ok"><p class="k-label">Total versé cette année</p><div class="k-val" id="kPaid">0 F</div></div>
+        <div class="kpi ko"><p class="k-label">Jours impayés</p><div class="k-val" id="kUnpaid">0</div></div>
+        <div class="kpi"><p class="k-label">Périodes réglées</p><div class="k-val" id="kDone">0 / 24</div><div class="sm-bar"><i id="kBar"></i></div></div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <span class="tab-pill" id="tabPill"></span>
+        <button type="button" role="tab" id="tabVidange" aria-selected="true">Vidange</button>
+        <button type="button" role="tab" id="tabRedevance" aria-selected="false">Redevance</button>
+        <button type="button" role="tab" id="tabContrat" aria-selected="false">Contrat</button>
+      </div>
+
+      <div class="tab-panel show" id="panelVidange" role="tabpanel">
+        <div class="box-card">
+          <h2>Vidange : les 24 périodes de l'année</h2>
+          <p class="desc">Chaque case couvre 14 jours. Vert : tout est payé. Rouge : rien n'est payé. Touchez une case pour voir ses paiements dans Redevance.</p>
+          <div class="periods-grid" id="driverPeriods"></div>
+          <div class="legende">
+            <span><i class="l-paid"></i> Tout payé</span>
+            <span><i class="l-part"></i> Partiel</span>
+            <span><i class="l-unpaid"></i> Non payé</span>
+            <span><i class="l-future"></i> À venir ou hors contrat</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panelRedevance" role="tabpanel">
+        <div class="box-card">
+          <h2>Redevance : paiements jour par jour</h2>
+          <p class="desc" id="rSub">Touchez un jour pour enregistrer le montant remis.</p>
+          <div class="chip-periode" id="chipPeriode"><span id="chipText">—</span><button type="button" id="chipClear">Retirer</button></div>
+          <div class="cal-nav">
+            <button type="button" id="prevMonthBtn" aria-label="Mois précédent">&#8249;</button>
+            <p class="cal-title" id="calTitle">—</p>
+            <button type="button" id="nextMonthBtn" aria-label="Mois suivant">&#8250;</button>
+          </div>
+          <p class="panel-error" id="calError"></p>
+          <div class="cal-grid" id="calGrid">
+            <div class="cal-dow">Lun</div><div class="cal-dow">Mar</div><div class="cal-dow">Mer</div>
+            <div class="cal-dow">Jeu</div><div class="cal-dow">Ven</div><div class="cal-dow">Sam</div><div class="cal-dow">Dim</div>
+          </div>
+          <div class="legende">
+            <span><i class="l-paid"></i> Payé</span>
+            <span><i class="l-unpaid"></i> Non payé</span>
+            <span><i class="l-future"></i> À venir ou hors contrat</span>
+          </div>
+          <div class="totals">
+            <div class="total-box unpaid"><p class="t-label">Total impayés</p><div class="t-amount" id="unpaidAmount">0 F</div><p class="t-count" id="unpaidCount">0 jour</p></div>
+            <div class="total-box paid"><p class="t-label">Total payés</p><div class="t-amount" id="paidAmount">0 F</div><p class="t-count" id="paidCount">0 jour</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panelContrat" role="tabpanel">
+        <div class="box-card">
+          <h2>Contrat du conducteur</h2>
+          <p class="desc">Contrat n° <strong id="contratNo">—</strong>, généré avec le code du conducteur et les informations de son dossier.</p>
+          <p class="type-label">TYPE DE CONTRAT :</p>
+          <div class="type-row" id="ficheTypeRow" role="group" aria-label="Type de contrat">
+            <button type="button" data-type="journee_payee">Contrat JOURNÉE PAYÉE</button>
+            <button type="button" data-type="droit_usage">Contrat DROIT D’USAGE</button>
+          </div>
+          <p class="desc" id="contratNote" style="margin:10px 0 0"></p>
+          <div class="contrat-actions">
+            <button type="button" class="c-btn" id="contratDl">Télécharger le contrat (Word)</button>
+            <button type="button" class="c-btn ghost" id="contratPrint">Imprimer / PDF</button>
+            <button type="button" class="c-btn ghost" id="contratSave" style="display:none">Enregistrer ce type pour ce conducteur</button>
+          </div>
+          <div class="sm-feuille" id="contratFeuille"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="amountModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-card">
+    <h3 id="modalTitle">Montant remis</h3>
+    <p class="modal-sub" id="modalDate">—</p>
+    <p class="modal-target">Objectif du jour : <strong id="modalCible">—</strong></p>
+    <div class="amount-row"><input type="number" id="amountInput" inputmode="numeric" min="0" step="100" autocomplete="off"><span>F CFA</span></div>
+    <div class="quick-fill">
+      <button type="button" id="quickFullBtn">Montant complet</button>
+      <button type="button" id="quickZeroBtn">Rien remis</button>
+    </div>
+        <p class="moyen-label">Moyen de paiement</p>
+    <div class="moyen-row" role="group" aria-label="Moyen de paiement">
+      <button type="button" data-moyen="especes" class="on">Espèces</button>
+      <button type="button" data-moyen="momo">MOMO</button>
+      <button type="button" data-moyen="momo_regulateur">MOMO régulateur</button>
+    </div>
+        <div class="numero-box" id="numeroBox" style="display:none">
+      <p class="moyen-label">Numéro qui a reçu le transfert</p>
+      <div class="numero-list" id="numeroList"></div>
+    </div>
+    <p class="modal-error" id="modalError"></p>
+    <div class="modal-actions">
+      <button type="button" class="cancel" id="modalCancelBtn">Annuler</button>
+      <button type="button" class="save btn" id="modalSaveBtn">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script src="serveur-check.js"></script>
+<script src="theme.js"></script>
+<script src="contrat.js"></script>
+<script src="fiche-conducteur.js"></script>
+</body>
+</html>
