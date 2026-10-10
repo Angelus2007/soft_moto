@@ -324,8 +324,9 @@
       <form class="add-form" id="addForm">
         <p class="section-title">Conducteur</p>
         <div class="field">
-          <label for="newCode">Code conducteur (saisi par l’admin)</label>
-          <input type="text" id="newCode" placeholder="ex. SM-000123" autocomplete="off" maxlength="20">
+          <label for="newCode">Code conducteur <span aria-hidden="true">*</span></label>
+          <input type="text" id="newCode" name="code" placeholder="Saisir le code, ex. SM-000123" autocomplete="off" maxlength="20" required aria-describedby="newCodeHelp newCodeError">
+          <small id="newCodeHelp">Ce code est choisi et saisi manuellement par l’administrateur. Il ne sera pas généré automatiquement.</small>
           <span class="field-error" id="newCodeError"></span>
         </div>
         <div class="field">
