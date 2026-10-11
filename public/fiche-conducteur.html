@@ -148,7 +148,13 @@
   /* VIDANGE : 24 cases */
   .periods-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
   .period-box{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-height:68px; padding:12px 6px; text-align:center; font:inherit; color:var(--ink); cursor:pointer; background:var(--bg-light); border:1.5px solid var(--border); border-radius:11px; position:relative; }
-  .period-box:disabled{ cursor:default; }
+  .period-box.st-none, .period-box.st-future{ cursor:default; }
+  .p-check{ display:flex; align-items:center; gap:6px; margin-top:4px; padding:4px 8px; border-radius:7px; background:rgba(255,255,255,.92); color:var(--ink); font:600 11px var(--sans); cursor:pointer; user-select:none; }
+  .p-check input{ width:15px; height:15px; margin:0; accent-color:var(--paye); cursor:pointer; }
+  .p-check input:disabled{ cursor:default; }
+  .period-box.st-paid .p-check{ background:rgba(255,255,255,.95); color:var(--paye-dark); }
+  .period-box.st-due{ background:var(--amber-soft); border-color:var(--amber); }
+  .period-box.st-due .p-state{ color:var(--amber); }
   .p-num{ font:600 10.5px var(--mono); color:var(--ink-faint); letter-spacing:.3px; }
   .p-range{ font-size:11.5px; font-weight:600; line-height:1.25; }
   .p-state{ font:700 10.5px var(--mono); }
@@ -161,6 +167,23 @@
   .period-box.current{ box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--ink); }
   .period-box.selected{ box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
   .period-box.current .p-num::after{ content:' · en cours'; }
+  /* REDEVANCE par semaine / par mois : une carte par période */
+  .per-list{ display:flex; flex-direction:column; gap:12px; max-height:640px; overflow:auto; padding-right:2px; }
+  .per-card{ border:1.5px solid var(--border); border-radius:13px; padding:14px 16px; background:var(--panel); }
+  .per-card.paid{ border-color:var(--paye); } .per-card.unpaid{ border-color:var(--impaye); } .per-card.due{ border-color:var(--amber); }
+  .per-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .per-head strong{ font-size:15px; } .per-head .per-dates{ color:var(--ink-soft); font-size:12.5px; }
+  .per-badge{ margin-left:auto; padding:3px 11px; border-radius:999px; font:700 12px var(--sans); color:#fff; }
+  .per-badge.paid{ background:var(--paye); } .per-badge.unpaid{ background:var(--impaye); }
+  .per-badge.due{ background:var(--amber-soft); color:var(--amber); border:1.5px solid var(--amber); }
+  .per-bar{ height:7px; border-radius:99px; background:var(--bg-light); margin:10px 0 6px; overflow:hidden; }
+  .per-bar i{ display:block; height:100%; background:var(--paye); border-radius:99px; }
+  .per-card.unpaid .per-bar i{ background:var(--impaye); } .per-card.due .per-bar i{ background:var(--amber); }
+  .per-amt{ font:700 14px var(--mono); }
+  .per-lines{ list-style:none; margin:8px 0 0; padding:0; font-size:12.5px; color:var(--ink-soft); }
+  .per-lines li{ display:flex; align-items:center; gap:8px; padding:3px 0; }
+  .per-lines button{ margin-left:auto; border:0; background:none; color:var(--accent-dark); font:600 12px var(--sans); text-decoration:underline; cursor:pointer; }
+  .per-add{ margin-top:10px; }
   .legende{ display:flex; gap:16px; margin-top:16px; flex-wrap:wrap; font-size:12px; color:var(--ink-soft); }
   .legende span{ display:inline-flex; align-items:center; gap:6px; }
   .legende i{ width:12px; height:12px; border-radius:3px; display:inline-block; }
@@ -305,13 +328,13 @@
         <p class="sub">Les 24 périodes de vidange du conducteur et ses paiements jour par jour.</p>
       </div>
       <form class="rech" id="rechForm" autocomplete="off">
-        <input type="text" id="codeInput" placeholder="SM-XXXXXX" aria-label="Code conducteur">
+        <input type="text" id="codeInput" placeholder="Code ou plaque" aria-label="Code ou plaque du conducteur">
         <button type="submit" class="btn">Ouvrir</button>
         <p class="rech-error" id="rechError" role="alert"></p>
       </form>
     </div>
 
-    <p class="vide" id="vide">Entrez le code d'un conducteur pour ouvrir sa fiche.</p>
+    <p class="vide" id="vide">Entrez le code ou la plaque d'un conducteur pour ouvrir sa fiche.</p>
 
     <section id="ficheView" aria-live="polite">
       <div class="driver-head">
@@ -321,8 +344,8 @@
 
       <div class="kpis">
         <div class="kpi ok"><p class="k-label">Total versé cette année</p><div class="k-val" id="kPaid">0 F</div></div>
-        <div class="kpi ko"><p class="k-label">Jours impayés</p><div class="k-val" id="kUnpaid">0</div></div>
-        <div class="kpi"><p class="k-label">Périodes réglées</p><div class="k-val" id="kDone">0 / 24</div><div class="sm-bar"><i id="kBar"></i></div></div>
+        <div class="kpi ko"><p class="k-label" id="kUnpaidLabel">Jours impayés</p><div class="k-val" id="kUnpaid">0</div></div>
+        <div class="kpi"><p class="k-label">Vidanges payées</p><div class="k-val" id="kDone">0 / 24</div><div class="sm-bar"><i id="kBar"></i></div></div>
       </div>
 
       <div class="tabs" role="tablist">
@@ -335,12 +358,12 @@
       <div class="tab-panel show" id="panelVidange" role="tabpanel">
         <div class="box-card">
           <h2>Vidange : les 24 périodes de l'année</h2>
-          <p class="desc">Chaque case couvre 14 jours. Vert : tout est payé. Rouge : rien n'est payé. Touchez une case pour voir ses paiements dans Redevance.</p>
+          <p class="desc">Chaque case couvre 14 jours. La vidange coûte <strong id="vidMontant">100 F</strong> par période : <strong>cochez « Vidange payée »</strong> quand le conducteur l'a réglée. Touchez le reste de la case pour voir ses paiements dans Redevance.</p>
           <div class="periods-grid" id="driverPeriods"></div>
           <div class="legende">
-            <span><i class="l-paid"></i> Tout payé</span>
-            <span><i class="l-part"></i> Partiel</span>
-            <span><i class="l-unpaid"></i> Non payé</span>
+            <span><i class="l-paid"></i> Vidange payée</span>
+            <span><i class="l-part"></i> À payer (période en cours)</span>
+            <span><i class="l-unpaid"></i> Non payée (période terminée)</span>
             <span><i class="l-future"></i> À venir ou hors contrat</span>
           </div>
         </div>
@@ -348,8 +371,12 @@
 
       <div class="tab-panel" id="panelRedevance" role="tabpanel">
         <div class="box-card">
-          <h2>Redevance : paiements jour par jour</h2>
+          <h2 id="rTitre">Redevance : paiements jour par jour</h2>
           <p class="desc" id="rSub">Touchez un jour pour enregistrer le montant remis.</p>
+          <div id="vuePeriodes" style="display:none">
+            <div class="per-list" id="perList"></div>
+          </div>
+          <div id="vueJour">
           <div class="chip-periode" id="chipPeriode"><span id="chipText">—</span><button type="button" id="chipClear">Retirer</button></div>
           <div class="cal-nav">
             <button type="button" id="prevMonthBtn" aria-label="Mois précédent">&#8249;</button>
@@ -370,6 +397,7 @@
             <div class="total-box unpaid"><p class="t-label">Total impayés</p><div class="t-amount" id="unpaidAmount">0 F</div><p class="t-count" id="unpaidCount">0 jour</p></div>
             <div class="total-box paid"><p class="t-label">Total payés</p><div class="t-amount" id="paidAmount">0 F</div><p class="t-count" id="paidCount">0 jour</p></div>
           </div>
+          </div>
         </div>
       </div>
 
@@ -381,6 +409,15 @@
           <div class="type-row" id="ficheTypeRow" role="group" aria-label="Type de contrat">
             <button type="button" data-type="journee_payee">Contrat JOURNÉE PAYÉE</button>
             <button type="button" data-type="droit_usage">Contrat DROIT D’USAGE</button>
+          </div>
+          <div id="freqBloc" style="display:none; margin-top:16px;">
+            <p class="type-label">REDEVANCE PAYÉE :</p>
+            <div class="type-row" id="ficheFreqRow" role="group" aria-label="Fréquence de paiement de la redevance">
+              <button type="button" data-freq="jour">Par jour</button>
+              <button type="button" data-freq="semaine">Par semaine</button>
+              <button type="button" data-freq="mois">Par mois</button>
+            </div>
+            <p class="desc" style="margin:8px 0 0">Le montant de base du conducteur est le montant d'une période (un jour, une semaine ou un mois). Les paiements déjà saisis ne sont pas modifiés.</p>
           </div>
           <p class="desc" id="contratNote" style="margin:10px 0 0"></p>
           <div class="contrat-actions">
@@ -399,7 +436,7 @@
   <div class="modal-card">
     <h3 id="modalTitle">Montant remis</h3>
     <p class="modal-sub" id="modalDate">—</p>
-    <p class="modal-target">Objectif du jour : <strong id="modalCible">—</strong></p>
+    <p class="modal-target"><span id="modalCibleLabel">Objectif du jour</span> : <strong id="modalCible">—</strong></p>
     <div class="amount-row"><input type="number" id="amountInput" inputmode="numeric" min="0" step="100" autocomplete="off"><span>F CFA</span></div>
     <div class="quick-fill">
       <button type="button" id="quickFullBtn">Montant complet</button>
