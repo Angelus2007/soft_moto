@@ -252,6 +252,23 @@
 
 <main class="main">
 
+  <div class="panel" id="pointPanel">
+    <div class="tournee-head">
+      <div>
+        <h2 style="margin-bottom:2px;">Mon point <span id="pointQui" style="font-weight:400;color:var(--ink-faint);font-size:14px;"></span></h2>
+        <p class="hint" style="margin:0;">Ce que <strong>vous</strong> avez encaissé : vos versements uniquement, pas ceux des autres caissières.</p>
+      </div>
+      <div class="search-mini" style="max-width:190px;">
+        <input type="date" id="pointDate" aria-label="Jour du point">
+      </div>
+    </div>
+    <div class="jour-resume" id="pointResume"></div>
+    <p class="tournee-meta" id="pointMeta">Chargement…</p>
+    <div class="tournee-list" id="pointList" style="max-height:300px;"></div>
+    <p class="tournee-empty" id="pointEmpty" style="display:none;"></p>
+    <p class="tournee-meta" id="pointMois" style="margin-top:12px;"></p>
+  </div>
+
   <div class="panel">
     <div class="tournee-head">
       <div>
@@ -276,7 +293,7 @@
 
   <div class="panel">
     <h2>Rechercher un conducteur précis</h2>
-    <p class="hint">Entrez le code du conducteur (ex. SM-274819) ou sa plaque d'immatriculation pour ouvrir sa fiche : les 24 cases de vidange et les paiements jour par jour.</p>
+    <p class="hint">Entrez le code du conducteur (ex. SM-274819) ou sa plaque d'immatriculation pour ouvrir sa fiche : la vidange (décompte de 14 jours) et les paiements jour par jour.</p>
     <div class="search-row">
       <input type="text" id="clientCodeInput" placeholder="Code ou plaque" autocomplete="off">
       <button type="button" class="btn" id="searchBtn">Rechercher</button>
@@ -362,7 +379,7 @@
     <div class="moyen-row" role="group" aria-label="Moyen de paiement">
       <button type="button" data-moyen="especes" class="on">Espèces</button>
       <button type="button" data-moyen="momo">MOMO</button>
-      <button type="button" data-moyen="momo_regulateur">MOMO régulateur</button>
+      <button type="button" data-moyen="momo_regulateur">MOMO régularisation</button>
     </div>
         <div class="numero-box" id="numeroBox" style="display:none">
       <p class="moyen-label">Numéro qui a reçu le transfert</p>
@@ -414,6 +431,16 @@
   api('/api/moi').then(function(moi){
     document.getElementById('cashierName').textContent = moi.nom;
     document.getElementById('cashierAvatar').textContent = initials(moi.nom);
+    if(moi.role === 'admin'){
+      // L'administrateur peut aussi enregistrer des paiements : il retrouve ici le même écran que les caissières.
+      const role = document.querySelector('.who-bar .role');
+      if(role) role.textContent = 'Paiements (administrateur)';
+      const lien = document.createElement('a');
+      lien.href = 'admin.html'; lien.className = 'logout-link'; lien.style.marginRight = '8px';
+      lien.textContent = '← Tableau de bord';
+      const out = document.getElementById('logoutLink');
+      out.parentNode.insertBefore(lien, out);
+    }
   }).catch(function(){
     const name = params.get('name') || 'Caissière';
     document.getElementById('cashierName').textContent = name;
@@ -545,6 +572,47 @@
       .finally(function(){ calGrid.classList.remove('loading'); });
   }
 
+  // ---------- Mon point personnel ----------
+  const pointDate = document.getElementById('pointDate');
+  const pointList = document.getElementById('pointList');
+  const MOY_POINT = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régularisation' };
+  const fF = function(n){ return Number(n || 0).toLocaleString('fr-FR') + ' F'; };
+  function chargerPoint(){
+    const d = pointDate.value;
+    api('/api/mon-point' + (d ? '?date=' + encodeURIComponent(d) : '')).then(function(p){
+      if(!pointDate.value) pointDate.value = p.date;
+      const estAuj = p.date === p.aujourdhui;
+      document.getElementById('pointQui').textContent = '· ' + p.caissiere;
+      const j = p.jour, pm = j.par_moyen;
+      document.getElementById('pointResume').innerHTML =
+        '<div class="r-box main"><p class="r-lab">' + (estAuj ? "Encaissé aujourd'hui" : 'Encaissé le ' + p.date.split('-').reverse().join('/')) + '</p><div class="r-val">' + fF(j.encaisse) + '</div></div>' +
+        '<div class="r-box"><p class="r-lab">Espèces</p><div class="r-val">' + fF(pm.especes) + '</div></div>' +
+        '<div class="r-box"><p class="r-lab">MOMO</p><div class="r-val">' + fF(pm.momo) + '</div></div>' +
+        '<div class="r-box"><p class="r-lab">MOMO régularisation</p><div class="r-val">' + fF(pm.momo_regulateur) + '</div></div>' +
+        (pm.non_precise ? '<div class="r-box"><p class="r-lab">Moyen non précisé</p><div class="r-val">' + fF(pm.non_precise) + '</div></div>' : '') +
+        (j.vidanges_nb ? '<div class="r-box"><p class="r-lab">Vidanges payées (' + j.vidanges_nb + ')</p><div class="r-val">' + fF(j.vidanges_total) + '</div></div>' : '');
+      document.getElementById('pointMeta').textContent = j.nb_conducteurs
+        ? j.nb_conducteurs + ' conducteur' + (j.nb_conducteurs > 1 ? 's ont versé' : ' a versé') + ' entre vos mains ce jour-là'
+        : '';
+      pointList.innerHTML = j.lignes.map(function(l){
+        return '<div class="tournee-row no-click"><div class="avatar ' + avatarClass(l.nom) + '">' + esc(initials(l.nom)) + '</div>' +
+          '<div class="t-who"><div class="t-name">' + esc(l.nom) + '</div><div class="t-code">' + esc(l.code) + '</div>' +
+          '<div class="t-sub">' + esc(l.moyens.map(function(m){ return MOY_POINT[m] || ''; }).filter(Boolean).join(' + ')) + (l.heure ? ' · ' + esc(l.heure) : '') + '</div></div>' +
+          '<div class="t-status paid">' + fF(l.montant) + '</div></div>';
+      }).join('');
+      const vide = document.getElementById('pointEmpty');
+      vide.textContent = j.lignes.length ? '' : (estAuj ? "Vous n'avez encore rien encaissé aujourd'hui." : "Vous n'avez rien encaissé ce jour-là.");
+      vide.style.display = j.lignes.length ? 'none' : 'block';
+      document.getElementById('pointMois').textContent = 'Total de vos encaissements sur le mois (' + p.mois.mois.split('-').reverse().join('/') + ') : ' + fF(p.mois.encaisse) +
+        ' · ' + p.mois.nb_conducteurs + ' conducteur' + (p.mois.nb_conducteurs > 1 ? 's' : '');
+    }).catch(function(err){
+      document.getElementById('pointMeta').textContent = '';
+      const vide = document.getElementById('pointEmpty'); vide.textContent = smMessage(err); vide.style.display = 'block';
+    });
+  }
+  pointDate.addEventListener('change', chargerPoint);
+  chargerPoint();
+
   // ---------- Ma tournée du jour ----------
   const tourneeList = document.getElementById('tourneeList');
   const tourneeMeta = document.getElementById('tourneeMeta');
@@ -553,7 +621,7 @@
   const jourResume = document.getElementById('jourResume');
   const jourChips = document.getElementById('jourChips');
   let tournee = [], payesDuJour = [], totauxDuJour = null, modeListe = 'payes';
-  const MOYEN_COURT = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régulateur' };
+  const MOYEN_COURT = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régularisation' };
   const fmtF = function(n){ return Number(n || 0).toLocaleString('fr-FR') + ' F'; };
   const jjmm = function(iso){ const a = iso.split('-'); return a[2] + '/' + a[1]; };
 
@@ -599,7 +667,7 @@
         '<div class="r-box main"><p class="r-lab">Reçu aujourd\'hui</p><div class="r-val">' + fmtF(totauxDuJour.encaisse) + '</div></div>' +
         '<div class="r-box"><p class="r-lab">Espèces</p><div class="r-val">' + fmtF(pm.especes) + '</div></div>' +
         '<div class="r-box"><p class="r-lab">MOMO</p><div class="r-val">' + fmtF(pm.momo) + '</div></div>' +
-        '<div class="r-box"><p class="r-lab">MOMO régulateur</p><div class="r-val">' + fmtF(pm.momo_regulateur) + '</div></div>' +
+        '<div class="r-box"><p class="r-lab">MOMO régularisation</p><div class="r-val">' + fmtF(pm.momo_regulateur) + '</div></div>' +
         (totauxDuJour.vidanges_nb ? '<div class="r-box"><p class="r-lab">Vidanges payées (' + totauxDuJour.vidanges_nb + ')</p><div class="r-val">' + fmtF(totauxDuJour.vidanges_total) + '</div></div>' : '') +
         (pm.non_precise ? '<div class="r-box"><p class="r-lab">Moyen non précisé</p><div class="r-val">' + fmtF(pm.non_precise) + '</div></div>' : '') +
         Object.keys(totauxDuJour.par_numero || {}).map(function(n){ return '<div class="r-box"><p class="r-lab">Reçu sur ' + esc(n) + '</p><div class="r-val">' + fmtF(totauxDuJour.par_numero[n]) + '</div></div>'; }).join('');
@@ -637,7 +705,7 @@
       });
   }
   let rechargeTimer = null;
-  function rechargerTourneeBientot(){ clearTimeout(rechargeTimer); rechargeTimer = setTimeout(chargerTournee, 200); }
+  function rechargerTourneeBientot(){ clearTimeout(rechargeTimer); rechargeTimer = setTimeout(function(){ chargerTournee(); chargerPoint(); }, 200); }
   chargerTournee();
   jourChips.addEventListener('click', function(e){ const b = e.target.closest('button'); if(!b) return; modeListe = b.dataset.mode; renderTournee(); });
   tourneeSearch.addEventListener('input', renderTournee);
