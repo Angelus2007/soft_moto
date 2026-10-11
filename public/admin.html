@@ -596,6 +596,20 @@
       </div>
     </div>
 
+    <!-- Vidanges en retard (admin) -->
+    <div class="panel" id="vidRetardPanel" style="margin-bottom:20px;">
+      <div class="panel-head">
+        <h2>Vidanges en retard</h2>
+        <span class="meta" id="vidRetardMeta"></span>
+        <a class="act-btn ok" id="vidRetardExport" href="/api/vidanges/retards?format=csv" style="text-decoration:none; display:inline-block;" title="Fichier Excel : code, nom, téléphone, adresse, plaque, dernière vidange, jours de retard et témoin">Exporter (Excel)</a>
+      </div>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Conducteur</th><th>Dernière vidange payée</th><th>Due le</th><th>Retard</th></tr></thead>
+        <tbody id="vidRetardBody"></tbody>
+      </table></div>
+      <p class="empty-state" id="vidRetardEmpty" style="display:none;"></p>
+    </div>
+
     <!-- Impayés cumulés (admin) -->
     <div class="panel" id="impayesPanel" style="margin-bottom:20px;">
       <div class="panel-head">
@@ -764,7 +778,7 @@
     $('impayesExport').style.display = susp ? 'none' : '';
     if(!susp) $('impayesExport').href = '/api/impayes?format=csv&min=' + seuil;
     $('impTh1').textContent = susp ? 'Téléphone' : 'Jours impayés';
-    $('impTh2').textContent = susp ? 'Inscrit le' : 'Montant dû';
+    $('impTh2').textContent = susp ? 'Archivé le' : 'Montant dû';
     $('impTh3').textContent = susp ? '' : 'Impayés depuis';
     if(!impayesDonnees){ return; }
     const cmp = impayesDonnees.compteurs;
@@ -781,7 +795,7 @@
       html = liste.map(function(c){
         return '<tr>' + cellConducteur(c.nom, c.code) +
           '<td>' + (c.telephone ? '<a href="tel:' + esc(c.telephone.replace(/\s+/g, '')) + '">' + esc(c.telephone) + '</a>' : '—') + '</td>' +
-          '<td>' + esc(jourLisible((c.date_creation || '').slice(0, 10))) + '</td><td></td>' +
+          '<td>' + esc(jourLisible((c.date_archivage || c.date_creation || '').slice(0, 10))) + '</td><td></td>' +
           '<td><button type="button" class="act-btn ok" data-act="reactiver" data-id="' + c.id + '" data-nom="' + esc(c.nom) + '">Réactiver</button></td></tr>';
       }).join('');
       $('impayesMeta').textContent = n + ' conducteur' + (n > 1 ? 's' : '') + ' suspendu' + (n > 1 ? 's' : '') + ' (absents des collectes du jour)';
@@ -804,15 +818,33 @@
     $('impayesEmpty').style.display = n ? 'none' : 'block';
   }
 
+  /* ---------- Vidanges en retard (admin) ---------- */
+  function chargerVidangesRetard(){
+    api('/api/vidanges/retards').then(function(d){
+      const l = d.conducteurs, n = l.length;
+      $('vidRetardMeta').textContent = n + ' conducteur' + (n > 1 ? 's' : '') + ' en retard' + (d.sans_vidange ? ' · ' + d.sans_vidange + ' sans vidange payée (pas de décompte)' : '');
+      $('vidRetardExport').style.display = n ? '' : 'none';
+      $('vidRetardBody').innerHTML = l.map(function(c){
+        const tel = c.telephone ? '<span class="sub-note"><a href="tel:' + esc(c.telephone.replace(/\s+/g, '')) + '">' + esc(c.telephone) + '</a></span>' : '';
+        return '<tr>' + cellConducteur(c.nom, c.code + (c.immatriculation ? ' · ' + c.immatriculation : ''), tel) +
+          '<td>' + esc(jourLisible(c.derniere)) + '</td><td>' + esc(jourLisible(c.due)) + '</td>' +
+          '<td><span class="days-pill' + (c.jours_retard < 3 ? ' mid' : '') + '">' + c.jours_retard + ' j</span></td></tr>';
+      }).join('');
+      $('vidRetardEmpty').textContent = n ? '' : 'Aucune vidange en retard.';
+      $('vidRetardEmpty').style.display = n ? 'none' : 'block';
+    }).catch(function(err){ $('vidRetardEmpty').textContent = smMessage(err); $('vidRetardEmpty').style.display = 'block'; });
+  }
+  chargerVidangesRetard();
+
   function chargerImpayes(){
     const seuils = ['2', '3', '4', '5'];
-    Promise.all([api('/api/impayes?min=1'), api('/api/clients')]).then(function(r){
+    Promise.all([api('/api/impayes?min=1'), api('/api/archives')]).then(function(r){
       const tous = r[0].conducteurs;
       const listes = {};
       seuils.forEach(function(s){ listes[s] = tous.filter(function(c){ return c.jours_impayes >= Number(s); }); });
       impayesDonnees = {
         compteurs: r[0].compteurs, listes: listes, seuil_saisie: r[0].seuil_saisie,
-        suspendus: r[1].filter(function(c){ return c.statut === 'inactif'; })
+        suspendus: r[1]
       };
       renderImpayes();
     }).catch(function(err){
@@ -825,11 +857,11 @@
     const b = e.target.closest('button[data-act]'); if(!b) return;
     const susp = b.dataset.act === 'suspendre';
     const question = susp
-      ? 'Suspendre ' + b.dataset.nom + ' ?\n\nIl ne figurera plus dans les collectes du jour. Vous pourrez le réactiver à tout moment depuis « Suspendus ».'
+      ? 'Suspendre ' + b.dataset.nom + ' ?\n\nIl ne figurera plus dans les collectes du jour et sera rangé dans « Archives ». Vous pourrez le réactiver à tout moment depuis « Suspendus » ou la page Archives.'
       : 'Réactiver ' + b.dataset.nom + ' ? Il réapparaîtra dans les collectes du jour.';
     if(!window.confirm(question)) return;
     b.disabled = true;
-    api('/api/clients/' + b.dataset.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: susp ? 'inactif' : 'actif' }) })
+    api('/api/clients/' + b.dataset.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: susp ? 'suspendu' : 'actif' }) })
       .then(function(){
         if(window.smToast) smToast(b.dataset.nom + (susp ? ' est suspendu.' : ' est réactivé.'));
         chargerImpayes(); load();
