@@ -222,7 +222,7 @@ window.smCelebrate = function (origin) {
 
 /* Moyen de paiement : window.smMoyenSet(valeur) / window.smMoyenGet() / window.smMoyenLabel(valeur) */
 (function () {
-  var LABELS = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régulateur' };
+  var LABELS = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régularisation' };
   window.smMoyenLabel = function (v) { return LABELS[v] || ''; };
   window.smMoyenSet = function (v) {
     v = LABELS[v] ? v : 'especes';
@@ -282,7 +282,7 @@ window.smCelebrate = function (origin) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
 
-/* ---------- Numéro Mobile Money (MOMO / MOMO régulateur) ---------- */
+/* ---------- Numéro Mobile Money (MOMO / MOMO régularisation) ---------- */
 (function () {
   var DEFAUT = ['+229 01 90 00 00 01', '+229 01 90 00 00 02', '+229 01 90 00 00 03']; // fictifs : modifiables dans Paramètres
   var liste = DEFAUT.slice();
@@ -319,4 +319,48 @@ window.smCelebrate = function (origin) {
     }).catch(function () { /* on garde les numéros par défaut */ });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+
+/* ---------- Payer des jours en avance (fenêtre de saisie du montant) ---------- */
+(function () {
+  var ctx = { actif: true, arrieres: 0, date: '', note: '' };
+  function base() { var el = document.getElementById('modalCible'); return el ? (parseInt(el.textContent.replace(/\D/g, ''), 10) || 0) : 0; }
+  function plus(iso, n) { var d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+  function jm(iso) { var a = iso.split('-'); return a[2] + '/' + a[1]; }
+  function maj() {
+    var box = document.getElementById('avanceBox'), info = document.getElementById('avanceInfo'), inp = document.getElementById('amountInput');
+    if (!box || !info || !inp) return;
+    box.style.display = ctx.actif ? '' : 'none';
+    var cible = base(), a = Number(inp.value) || 0, txt = '';
+    if (ctx.actif && cible > 0 && ctx.date) {
+      // le surplus règle d'abord les jours impayés, puis paie les jours suivants
+      var n = Math.floor(Math.max(0, a - ctx.arrieres) / cible) - 1;
+      if (n >= 1) txt = 'Environ ce jour + ' + n + ' jour' + (n > 1 ? 's' : '') + ' payé' + (n > 1 ? 's' : '') + ' d\'avance (jusqu\'au ' + jm(plus(ctx.date, n)) + '). Le surplus règle d\'abord les jours impayés, puis les jours suivants.';
+    }
+    info.textContent = (ctx.note ? ctx.note + ' ' : '') + txt;
+  }
+  window.smAvanceContexte = function (o) { ctx = { actif: o.actif !== false, arrieres: o.arrieres || 0, date: o.date || '', note: o.note || '' }; maj(); };
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('.avance-row button');
+    if (b) {
+      var inp = document.getElementById('amountInput'); if (!inp) return;
+      inp.value = String(Math.min(10000000, (Number(inp.value) || 0) + Number(b.dataset.jours) * base()));
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+    // « Montant complet » / « Rien remis » changent le champ sans événement
+    if (e.target.closest && e.target.closest('#quickFullBtn, #quickZeroBtn')) setTimeout(maj, 0);
+  });
+  document.addEventListener('input', function (e) { if (e.target && e.target.id === 'amountInput') maj(); });
+
+  // Message de confirmation après un enregistrement (jours impayés comblés et/ou jours payés d'avance)
+  window.smReportMessage = function (p) {
+    var f = function (n) { return Math.round(n).toLocaleString('fr-FR') + ' F'; }, parts = [];
+    if (p.reporte > 0) parts.push(f(p.reporte) + ' de surplus ont comblé ' + p.ajustements.length + (p.ajustements.length > 1 ? ' jours impayés.' : ' jour impayé.'));
+    if (p.avances && p.avances.length) {
+      var d = p.avances[p.avances.length - 1].date.split('-'), n = p.avances.length;
+      parts.push(n + ' jour' + (n > 1 ? 's' : '') + ' payé' + (n > 1 ? 's' : '') + ' d\'avance, jusqu\'au ' + d[2] + '/' + d[1] + '.');
+    }
+    return parts.join(' ');
+  };
 })();
