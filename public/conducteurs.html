@@ -9,23 +9,23 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,450&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg-dark:#171A30;
-    --bg-dark-2:#262A52;
-    --bg-light:#F2ECDC;
+    --bg-dark:#0B1B33;
+    --bg-dark-2:#16305A;
+    --bg-light:#F1F4F9;
     --panel:#FFFFFF;
-    --accent:#C1440E;
-    --accent-dark:#8F3209;
-    --accent-soft:#F5DACB;
-    --amber:#C98A2E;
-    --amber-soft:#F3E3C4;
-    --ink:#201C33;
-    --ink-soft:#6A6178;
-    --ink-faint:#A79FB0;
-    --cream:#F2ECDC;
-    --cream-soft:#C7B9C0;
-    --error:#B23A55;
-    --error-soft:#F5DEE3;
-    --border:#E4DCC8;
+    --accent:#1D4ED8;
+    --accent-dark:#1E3A8A;
+    --accent-soft:#DBE6FD;
+    --amber:#C77D0A;
+    --amber-soft:#FCEBC8;
+    --ink:#0F172A;
+    --ink-soft:#526074;
+    --ink-faint:#8793A5;
+    --cream:#F1F4F9;
+    --cream-soft:#AEBBD0;
+    --error:#B42318;
+    --error-soft:#FDE7E5;
+    --border:#DDE3EC;
     --radius:10px;
     --serif:"Fraunces", Georgia, "Times New Roman", serif;
     --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -70,14 +70,14 @@
     transition:background .15s ease, color .15s ease;
   }
   .nav a svg{ flex-shrink:0; opacity:0.85; }
-  .nav a:hover{ background:rgba(242,236,220,0.07); color:var(--cream); }
+  .nav a:hover{ background:rgba(241,244,249,0.07); color:var(--cream); }
   .nav a.active{ background:var(--accent); color:var(--cream); }
   .nav a.active svg{ opacity:1; }
   .nav a:focus-visible{ outline:2px solid var(--accent-soft); outline-offset:2px; }
   .sidebar-spacer{ flex:1; }
   .sidebar-profile{
     display:flex; align-items:center; gap:10px; padding:12px 10px;
-    border-top:1px solid rgba(242,236,220,0.12);
+    border-top:1px solid rgba(241,244,249,0.12);
   }
   .avatar{
     width:34px; height:34px; border-radius:50%; background:var(--accent); color:var(--cream);
@@ -88,7 +88,7 @@
   .sidebar-profile .who .name{ font-size:13.5px; font-weight:600; color:var(--cream); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .sidebar-profile .who .role{ font-size:12px; color:var(--ink-faint); }
   .logout-link{ margin-left:auto; display:flex; padding:6px; border-radius:7px; color:var(--ink-faint); text-decoration:none; flex-shrink:0; }
-  .logout-link:hover{ color:var(--cream); background:rgba(242,236,220,0.08); }
+  .logout-link:hover{ color:var(--cream); background:rgba(241,244,249,0.08); }
 
   /* ---------- Main ---------- */
   main.main{ padding:28px 34px 60px; min-width:0; }
@@ -135,7 +135,7 @@
 
   /* ---------- Formulaire d'ajout ---------- */
   .add-form{
-    display:grid;
+    display:none;
     grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
     gap:14px;
     align-items:flex-end;
@@ -164,12 +164,12 @@
 
   .toast{
     display:none; position:fixed; inset:0; z-index:200; align-items:center; justify-content:center;
-    background:rgba(23,26,48,0.45); backdrop-filter:blur(2px); padding:20px;
+    background:rgba(11,27,51,0.45); backdrop-filter:blur(2px); padding:20px;
   }
   .toast.show{ display:flex; animation:sm-modal-fade .18s ease both; }
   .toast-card{
     background:var(--panel); border:1.5px solid var(--accent); border-radius:14px;
-    padding:22px 24px; max-width:400px; width:100%; box-shadow:0 20px 50px -12px rgba(23,26,48,0.35);
+    padding:22px 24px; max-width:400px; width:100%; box-shadow:0 20px 50px -12px rgba(11,27,51,0.35);
     display:flex; flex-direction:column; gap:16px;
     animation:sm-modal-pop .22s cubic-bezier(.22,.8,.32,1) both;
   }
@@ -195,12 +195,21 @@
   .driver-cell .d-name{ font-weight:600; font-size:13.5px; line-height:1.3; }
   .driver-cell .d-phone{ font-size:11.5px; color:var(--ink-faint); }
   td.code-val{ font-family:var(--mono); font-weight:600; letter-spacing:0.5px; }
-  .driver-follow-link{color:var(--accent);text-decoration:none;font-weight:800;display:inline-flex;align-items:center;gap:5px;padding:5px 7px;border-radius:7px;} .driver-follow-link:hover{background:var(--accent-soft);text-decoration:underline;}
 
   .badge{ display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; }
   .badge.active{ background:var(--accent-soft); color:var(--accent-dark); }
-  .badge.inactive{ background:#EBE4D5; color:var(--ink-faint); }
+  .badge.inactive{ background:#E6EAF1; color:var(--ink-faint); }
   .badge.new{ background:var(--amber-soft); color:var(--amber); }
+  .row-actions{ display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+  .row-actions button{ border:1.5px solid var(--border); background:var(--panel); color:var(--ink); border-radius:8px; padding:6px 11px; font:600 12px var(--sans); cursor:pointer; }
+  .row-actions button:hover{ border-color:var(--accent); color:var(--accent-dark); }
+  .row-actions button.danger:hover{ border-color:var(--error); color:var(--error); }
+  .modal-edit{ display:none; position:fixed; inset:0; z-index:200; background:rgba(11,27,51,.55); align-items:flex-start; justify-content:center; padding:24px 14px; overflow-y:auto; }
+  .modal-edit.show{ display:flex; }
+  .modal-edit .card{ background:var(--panel); border-radius:14px; width:100%; max-width:820px; padding:22px 20px; box-shadow:0 24px 60px -12px rgba(11,27,51,.45); }
+  .modal-edit h2{ font-family:var(--serif); font-size:21px; margin:0 0 4px; }
+  .modal-edit .sub{ margin:0 0 14px; color:var(--ink-soft); font-size:13px; }
+  .d-moto{ color:var(--ink-faint); font-size:12px; }
 
   @media (max-width: 780px){
     .app{ grid-template-columns:1fr; }
@@ -221,6 +230,8 @@
   }
 
   @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+  td.code-val .code-link{ color:var(--accent-dark); border-bottom:1.5px dashed currentColor; padding-bottom:1px; transition:color .15s, border-color .15s; }
+  td.code-val .code-link:hover{ color:var(--accent); border-bottom-style:solid; }
 </style>
 <link rel="stylesheet" href="theme.css">
 </head>
@@ -233,12 +244,12 @@
     <div class="logotype">
       <span class="logo-ring" aria-hidden="true"></span>
       <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-        <circle cx="11" cy="11" r="9.3" stroke="#F2ECDC" stroke-width="1.3"/>
-        <circle cx="11" cy="11" r="2.6" fill="#C1440E"/>
-        <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F2ECDC" stroke-width="1.1"/>
-        <line x1="11" y1="16" x2="11" y2="19.4" stroke="#F2ECDC" stroke-width="1.1"/>
-        <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F2ECDC" stroke-width="1.1"/>
-        <line x1="16" y1="11" x2="19.4" y2="11" stroke="#F2ECDC" stroke-width="1.1"/>
+        <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/>
+        <circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+        <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="11" y1="16" x2="11" y2="19.4" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+        <line x1="16" y1="11" x2="19.4" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
       </svg>
       Soft Moto
     </div>
@@ -256,17 +267,21 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         Collectes journalières
       </a>
+      <a href="caissiere.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>
+        Paiements
+      </a>
       <a href="motos.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h9V8H6zM15 8h3l3 4v5h-1"/></svg>
         Motos &amp; financement
       </a>
-      <a href="vidange-redevance.html">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-        Vidange &amp; Redevance
-      </a>
       <a href="employes.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
         Employés
+      </a>
+      <a href="archives.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        Archives
       </a>
       <a href="parametres.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -293,12 +308,12 @@
     <div class="topbar">
       <div>
         <h1>Conducteurs</h1>
-        <p class="sub">Le code du conducteur est saisi manuellement par l’administrateur.</p>
+        <p class="sub">Le code de chaque conducteur est saisi par l'administrateur à l'inscription et doit être unique.</p>
       </div>
       <div class="top-actions">
         <div class="search">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="searchInput" placeholder="Rechercher par nom, code ou plaque…">
+          <input type="text" id="searchInput" placeholder="Code, nom ou plaque, puis Entrée pour ouvrir la fiche…">
         </div>
         <div class="profile-chip">
           <div class="avatar">AD</div>
@@ -322,12 +337,11 @@
         </button>
       </div>
 
-      <form class="add-form" id="addForm" style="display:grid !important; visibility:visible !important; opacity:1 !important;">
+      <form class="add-form" id="addForm">
         <p class="section-title">Conducteur</p>
         <div class="field">
-          <label for="newCode">Code conducteur <span aria-hidden="true">*</span></label>
-          <input type="text" id="newCode" name="code" placeholder="Saisir le code, ex. SM-000123" autocomplete="off" maxlength="20" required aria-describedby="newCodeHelp newCodeError">
-          <small id="newCodeHelp">Ce code est choisi et saisi manuellement par l’administrateur. Il ne sera pas généré automatiquement.</small>
+          <label for="newCode">Code du conducteur</label>
+          <input type="text" id="newCode" placeholder="ex. SM-274819" autocomplete="off" maxlength="20" style="text-transform:uppercase;">
           <span class="field-error" id="newCodeError"></span>
         </div>
         <div class="field">
@@ -344,11 +358,6 @@
           <label for="newAddress">Adresse</label>
           <input type="text" id="newAddress" placeholder="ex. Cotonou, Akpakpa" autocomplete="off">
           <span class="field-error" id="newAddressError"></span>
-        </div>
-        <div class="field">
-          <label for="newPlate">Numéro de plaque</label>
-          <input type="text" id="newPlate" placeholder="ex. AB 1234 RB" autocomplete="off" maxlength="30">
-          <span class="field-error" id="newPlateError"></span>
         </div>
 
         <p class="section-title">Témoin</p>
@@ -368,7 +377,45 @@
           <span class="field-error" id="newWitnessAddressError"></span>
         </div>
 
+        <p class="section-title">Visite</p>
+        <div class="field">
+          <label for="newVisiteur">Nom du visiteur <span style="font-weight:400; color:var(--ink-faint);">— optionnel</span></label>
+          <input type="text" id="newVisiteur" placeholder="ex. Koffi Mensah" autocomplete="off">
+        </div>
+
         <p class="section-title">Contrat</p>
+        <div class="field" style="grid-column:1/-1">
+          <p class="type-label">TYPE DE CONTRAT :</p>
+          <div class="type-row" id="newTypeRow" role="group" aria-label="Type de contrat">
+            <button type="button" data-type="journee_payee">Contrat JOURNÉE PAYÉE</button>
+            <button type="button" data-type="droit_usage">Contrat DROIT D’USAGE</button>
+          </div>
+          <span class="field-error" id="newTypeError"></span>
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <p class="type-label">REDEVANCE PAYÉE :</p>
+          <div class="type-row" id="newFreqRow" role="group" aria-label="Fréquence de paiement de la redevance">
+            <button type="button" data-freq="jour" class="on">Par jour</button>
+            <button type="button" data-freq="semaine">Par semaine</button>
+            <button type="button" data-freq="mois">Par mois</button>
+          </div>
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <p class="type-label">ÉTAT DE LA MOTO :</p>
+          <div class="type-row" id="newEtatRow" role="group" aria-label="État de la moto">
+            <button type="button" data-etat="neuve">Moto NEUVE</button>
+            <button type="button" data-etat="usagee">Moto USAGÉE</button>
+          </div>
+          <span class="field-error" id="newEtatError"></span>
+        </div>
+        <div class="field">
+          <label for="newMarque">Marque de la moto</label>
+          <input type="text" id="newMarque" value="TVS" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="newPlate">Immatriculation (plaque) <span style="font-weight:400; color:var(--ink-faint);">— optionnel</span></label>
+          <input type="text" id="newPlate" placeholder="ex. EP 1234 RB" autocomplete="off">
+        </div>
         <div class="field">
           <label for="newStartDate">Date de début</label>
           <input type="date" id="newStartDate">
@@ -380,22 +427,13 @@
           <span class="field-error" id="newEndDateError"></span>
         </div>
         <div class="field">
-          <label for="newFrequency">Période de paiement</label>
-          <select id="newFrequency">
-            <option value="journalier">Journalier</option>
-            <option value="hebdomadaire">Hebdomadaire</option>
-            <option value="mensuel">Mensuel</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="newPrice">Montant de base (F CFA)</label>
-          <input type="number" id="newPrice" min="0" step="100" placeholder="Ex. 3500" autocomplete="off">
+          <label for="newPrice" id="newPriceLabel">Montant de base journalier (F CFA)</label>
+          <input type="number" id="newPrice" min="0" step="100" placeholder="ex. 3500" autocomplete="off">
           <span class="field-error" id="newPriceError"></span>
         </div>
         <div class="field">
-          <label for="newMotoPrice">Montant dû (F CFA)</label>
-          <input type="number" id="newMotoPrice" min="0" step="1" placeholder="Calculé automatiquement" readonly aria-readonly="true" autocomplete="off">
-          <small style="display:block;color:var(--ink-faint);margin-top:5px;">Calculé selon le montant de base, la période de paiement et les dates du contrat.</small>
+          <label for="newMotoPrice">Montant dû (F CFA) <span style="font-weight:400; color:var(--ink-faint);">— calculé automatiquement</span></label>
+          <input type="text" id="newMotoPrice" readonly placeholder="montant de base × durée du contrat" autocomplete="off" style="background:var(--bg-light); font-weight:600;">
           <span class="field-error" id="newMotoPriceError"></span>
         </div>
 
@@ -406,11 +444,57 @@
         </div>
       </form>
 
+      <div class="modal-edit" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitre">
+        <div class="card">
+          <h2 id="editTitre">Modifier le conducteur</h2>
+          <p class="sub" id="editSub"></p>
+          <form class="add-form open" id="editForm" novalidate>
+            <p class="section-title">Conducteur</p>
+            <div class="field"><label for="edCode">Code</label><input type="text" id="edCode" maxlength="20" autocomplete="off" style="text-transform:uppercase;"></div>
+            <div class="field"><label for="edName">Nom et prénoms</label><input type="text" id="edName" autocomplete="off"></div>
+            <div class="field"><label for="edPhone">Téléphone</label><input type="tel" id="edPhone" autocomplete="off"></div>
+            <div class="field"><label for="edAddress">Adresse</label><input type="text" id="edAddress" autocomplete="off"></div>
+            <div class="field"><label for="edVisiteur">Nom du visiteur</label><input type="text" id="edVisiteur" autocomplete="off"></div>
+
+            <p class="section-title">Témoin</p>
+            <div class="field"><label for="edWName">Nom et prénoms</label><input type="text" id="edWName" autocomplete="off"></div>
+            <div class="field"><label for="edWPhone">Téléphone</label><input type="tel" id="edWPhone" autocomplete="off"></div>
+            <div class="field"><label for="edWAddress">Adresse</label><input type="text" id="edWAddress" autocomplete="off"></div>
+
+            <p class="section-title">Moto et contrat</p>
+            <div class="field" style="grid-column:1/-1"><p class="type-label">ÉTAT DE LA MOTO :</p>
+              <div class="type-row" id="edEtatRow"><button type="button" data-v="neuve">Moto NEUVE</button><button type="button" data-v="usagee">Moto USAGÉE</button></div></div>
+            <div class="field" style="grid-column:1/-1"><p class="type-label">TYPE DE CONTRAT :</p>
+              <div class="type-row" id="edTypeRow"><button type="button" data-v="journee_payee">Contrat JOURNÉE PAYÉE</button><button type="button" data-v="droit_usage">Contrat DROIT D’USAGE</button></div></div>
+            <div class="field" style="grid-column:1/-1"><p class="type-label">REDEVANCE PAYÉE :</p>
+              <div class="type-row" id="edFreqRow"><button type="button" data-v="jour">Par jour</button><button type="button" data-v="semaine">Par semaine</button><button type="button" data-v="mois">Par mois</button></div></div>
+            <div class="field"><label for="edMarque">Marque de la moto</label><input type="text" id="edMarque" autocomplete="off"></div>
+            <div class="field"><label for="edPlate">Immatriculation (plaque)</label><input type="text" id="edPlate" autocomplete="off"></div>
+            <div class="field"><label for="edStart">Date de début</label><input type="date" id="edStart"></div>
+            <div class="field"><label for="edEnd">Date de fin</label><input type="date" id="edEnd"></div>
+            <div class="field"><label for="edPrice">Montant de base (F CFA, par période)</label><input type="number" id="edPrice" min="0" step="100"></div>
+            <div class="field"><label for="edMotoPrice">Montant dû (F CFA) — calculé automatiquement</label><input type="text" id="edMotoPrice" readonly style="background:var(--bg-light); font-weight:600;"></div>
+
+            <p class="section-title">Statut</p>
+            <div class="field" style="grid-column:1/-1">
+              <div class="type-row" id="edStatutRow"><button type="button" data-v="actif">Actif</button><button type="button" data-v="inactif">Inactif</button><button type="button" data-v="suspendu">Suspendu (archiver)</button></div>
+              <span class="field-error" style="color:var(--ink-faint);">Un conducteur suspendu quitte cette liste, les collectes et les impayés : il est rangé dans « Archives ».</span>
+            </div>
+            <div class="actions">
+              <button type="submit" class="btn" id="edSave">Enregistrer les modifications</button>
+              <button type="button" class="btn ghost" id="edCancel">Annuler</button>
+              <span class="field-error" id="edError" style="flex-basis:100%;"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <div class="toast" id="toast" role="dialog" aria-modal="true" aria-labelledby="toastName">
         <div class="toast-card">
-          <span class="toast-body"><svg class="toast-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" stroke-dasharray="24" stroke-dashoffset="24" style="animation:sm-check-in .4s .15s ease forwards"/></svg><span>Conducteur ajouté : <strong id="toastName"></strong> — <span class="code" id="toastCode"></span></span></span>
+          <span class="toast-body"><svg class="toast-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" stroke-dasharray="24" stroke-dashoffset="24" style="animation:sm-check-in .4s .15s ease forwards"/></svg><span>Conducteur ajouté : <strong id="toastName"></strong> — code <span class="code" id="toastCode"></span></span></span>
           <div class="toast-actions">
             <button type="button" class="ghost" id="closeToastBtn">Fermer</button>
+            <button type="button" class="ghost" id="contratToastBtn">Télécharger le contrat</button>
             <button type="button" id="copyToastBtn">Copier le code</button>
           </div>
         </div>
@@ -418,7 +502,7 @@
 
       <table>
         <thead>
-          <tr><th>Code</th><th>Conducteur</th><th>Inscrit le</th><th>Statut</th></tr>
+          <tr><th>Code</th><th>Conducteur</th><th>Inscrit le</th><th>Statut</th><th></th></tr>
         </thead>
         <tbody id="driversBody"></tbody>
       </table>
@@ -429,6 +513,7 @@
 
 <script src="serveur-check.js"></script>
 <script src="theme.js"></script>
+<script src="contrat.js"></script>
 <script>
 (function(){
   const $ = (id) => document.getElementById(id);
@@ -450,28 +535,6 @@
     return d.getDate().toString().padStart(2,'0') + ' ' + MOIS[d.getMonth()] + ' ' + d.getFullYear();
   }
   function isRecent(iso){ return Date.now() - new Date(iso).getTime() < 7 * 24 * 3600 * 1000; }
-
-  // Le montant dû suit la fréquence choisie. Les dates sont inclusives pour le journalier.
-  // En mensuel, du 15 octobre au 14 novembre correspond à 1 mois.
-  function calculerMontantDu(debut, fin, base, frequence){
-    const montant = Number(base);
-    if(!debut || !fin || !Number.isFinite(montant) || montant < 0 || fin < debut) return '';
-    const d1 = new Date(debut + 'T12:00:00');
-    const d2 = new Date(fin + 'T12:00:00');
-    const jours = Math.floor((d2 - d1) / 86400000) + 1;
-    let periodes = jours;
-    if(frequence === 'hebdomadaire') periodes = Math.ceil(jours / 7);
-    if(frequence === 'mensuel') {
-      periodes = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
-      if(periodes < 1) periodes = 1;
-    }
-    return String(Math.round(montant * periodes));
-  }
-  function actualiserMontantDu(){
-    $('newMotoPrice').value = calculerMontantDu(
-      $('newStartDate').value, $('newEndDate').value, $('newPrice').value, $('newFrequency').value
-    );
-  }
 
   function api(url, opts){
     return fetch(url, opts).then(async function(r){
@@ -516,17 +579,23 @@
     return '<span class="badge active">Actif</span>';
   }
 
+  // « EP 1234 RB », « ep-1234-rb » et « EP1234RB » : même plaque
+  function plaqueNorm(v){ return String(v || '').toLowerCase().replace(/[\s.\-_]/g, ''); }
+
   function render(){
     const q = searchInput.value.trim().toLowerCase();
-    const list = clients.filter(c => (c.nom || '').toLowerCase().includes(q) || (c.code || '').toLowerCase().includes(q) || (c.immatriculation || '').toLowerCase().includes(q));
+    const qp = plaqueNorm(q);
+    const list = clients.filter(c => c.nom.toLowerCase().includes(q) || c.code.toLowerCase().includes(q) || (qp.length >= 2 && plaqueNorm(c.immatriculation).includes(qp)));
 
     driversBody.innerHTML = list.map(function(c){
       return '<tr>' +
-        '<td class="code-val" data-label="Code"><a class="driver-follow-link" href="vidange-redevance.html?code=' + encodeURIComponent(c.code || '') + '" title="Ouvrir Vidange et Redevance">' + esc(c.code) + ' ↗</a></td>' +
+        '<td class="code-val" data-label="Code"><a class="code-link" href="fiche-conducteur.html?code=' + encodeURIComponent(c.code) + '" title="Ouvrir la fiche : vidange et redevance">' + esc(c.code) + '</a></td>' +
         '<td data-label="Conducteur"><div class="driver-cell"><div class="avatar ' + avatarClass(c.nom) + '">' + esc(initials(c.nom)) + '</div>' +
-        '<div><div class="d-name">' + esc(c.nom) + '</div><div class="d-phone">' + esc(c.telephone || '—') + '</div></div></div></td>' +
+        '<div><div class="d-name">' + esc(c.nom) + '</div><div class="d-phone">' + esc(c.telephone || '—') + (c.immatriculation ? ' · ' + esc(c.immatriculation) : '') + '</div>' + (c.etat_moto ? '<div class="d-moto">Moto ' + (c.etat_moto === 'neuve' ? 'neuve' : 'usagée') + '</div>' : '') + '</div></div></td>' +
         '<td data-label="Inscrit le">' + formatDateFR(c.date_creation) + '</td>' +
-        '<td data-label="Statut">' + badge(c) + '</td></tr>';
+        '<td data-label="Statut">' + badge(c) + '</td>' +
+        '<td data-label="Actions"><div class="row-actions"><button type="button" data-act="edit" data-code="' + esc(c.code) + '">Modifier</button>' +
+        '<button type="button" class="danger" data-act="archive" data-code="' + esc(c.code) + '" title="Suspendre et archiver ce conducteur">Archiver</button></div></td></tr>';
     }).join('');
 
     let msg = '';
@@ -554,6 +623,40 @@
   }
   load();
   searchInput.addEventListener('input', render);
+  // Entrée : ouvre la fiche (vidange + redevance) du conducteur recherché par son code
+  searchInput.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    const q = searchInput.value.trim().toLowerCase().replace(/\s+/g, '');
+    if(!q) return;
+    const exact = clients.find(function(c){ return c.code.toLowerCase() === q || (q.length >= 3 && plaqueNorm(c.immatriculation) === plaqueNorm(q)); });
+    const liste = clients.filter(function(c){ return c.nom.toLowerCase().includes(q) || c.code.toLowerCase().includes(q) || (q.length >= 2 && plaqueNorm(c.immatriculation).includes(plaqueNorm(q))); });
+    const cible = exact || (liste.length === 1 ? liste[0] : null);
+    if(cible) window.smGo ? window.smGo('fiche-conducteur.html?code=' + encodeURIComponent(cible.code)) : (window.location.href = 'fiche-conducteur.html?code=' + encodeURIComponent(cible.code));
+  });
+
+  // ---------- Montant dû = montant de base × nombre de périodes du contrat (miroir du calcul du serveur) ----------
+  function addJ(s, n){ const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+  function diffJ(a, b){ return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000); }
+  function debutMois(debut, k){
+    const a = debut.split('-').map(Number), total = (a[1] - 1) + k;
+    const an = a[0] + Math.floor(total / 12), mo = ((total % 12) + 12) % 12, dernier = new Date(Date.UTC(an, mo + 1, 0)).getUTCDate();
+    return an + '-' + String(mo + 1).padStart(2, '0') + '-' + String(Math.min(a[2], dernier)).padStart(2, '0');
+  }
+  function montantDu(montant, freq, debut, fin){
+    if(!(montant > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(debut || '') || !/^\d{4}-\d{2}-\d{2}$/.test(fin || '') || fin < debut) return null;
+    if(freq === 'jour' || !freq) return montant * (diffJ(debut, fin) + 1);
+    let total = 0;
+    for(let k = 0; k < 1500; k++){
+      const d = freq === 'semaine' ? addJ(debut, 7 * k) : debutMois(debut, k);
+      if(d > fin) break;
+      const suivant = freq === 'semaine' ? addJ(debut, 7 * (k + 1)) : debutMois(debut, k + 1);
+      const finPleine = addJ(suivant, -1), f = fin < finPleine ? fin : finPleine;
+      const jours = diffJ(d, f) + 1, pleins = diffJ(d, finPleine) + 1;
+      total += jours < pleins ? Math.round(montant * jours / pleins) : montant;
+    }
+    return total;
+  }
+  const fmtDu = (n) => n === null ? '' : n.toLocaleString('fr-FR') + ' F';
 
   // ---------- Formulaire d'ajout (le code est saisi par l'administrateur) ----------
   const toggleFormBtn = $('toggleFormBtn');
@@ -563,7 +666,7 @@
 
   // Chaque champ requis : [input, span-erreur, message]
   const CHAMPS_REQUIS = [
-    ['newCode', 'newCodeError', 'Saisissez le code du conducteur.'],
+    ['newCode', 'newCodeError', 'Entrez le code du conducteur.'],
     ['newName', 'newNameError', 'Entrez le nom et prénoms du conducteur.'],
     ['newPhone', 'newPhoneError', 'Entrez le téléphone du conducteur.'],
     ['newAddress', 'newAddressError', "Entrez l'adresse du conducteur."],
@@ -575,19 +678,51 @@
     ['newPrice', 'newPriceError', 'Entrez le montant de base journalier.']
   ].map(function(t){ return { input: $(t[0]), err: $(t[1]), msg: t[2] }; });
 
+  // Type de contrat : un des deux boutons doit être choisi
+  // Fréquence de paiement de la redevance : par jour (défaut), par semaine ou par mois. Le montant de base est celui d'UNE période.
+  let frequence = 'jour';
+  function choisirFrequence(f){
+    frequence = f;
+    $('newFreqRow').querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.freq === f); b.setAttribute('aria-pressed', b.dataset.freq === f); });
+    const lib = { jour: 'journalier', semaine: 'hebdomadaire (par semaine)', mois: 'mensuel (par mois)' }[f];
+    $('newPriceLabel').textContent = 'Montant de base ' + lib + ' (F CFA)';
+    $('newPrice').placeholder = { jour: 'ex. 3500', semaine: 'ex. 21000', mois: 'ex. 90000' }[f];
+  }
+  $('newFreqRow').addEventListener('click', function(e){ const b = e.target.closest('button'); if(b) choisirFrequence(b.dataset.freq); });
+  function majMontantDu(){ $('newMotoPrice').value = fmtDu(montantDu(Number($('newPrice').value), frequence, $('newStartDate').value, $('newEndDate').value)); }
+  ['newPrice', 'newStartDate', 'newEndDate'].forEach(function(id){ $(id).addEventListener('input', majMontantDu); $(id).addEventListener('change', majMontantDu); });
+  $('newFreqRow').addEventListener('click', majMontantDu);
+  let etatMoto = '';
+  $('newEtatRow').addEventListener('click', function(e){
+    const b = e.target.closest('button'); if(!b) return;
+    etatMoto = b.dataset.etat; $('newEtatError').textContent = ''; $('newEtatRow').removeAttribute('data-invalid');
+    $('newEtatRow').querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+  });
+  let typeContrat = '';
+  const typeRow = $('newTypeRow');
+  function choisirType(t){
+    typeContrat = t;
+    typeRow.removeAttribute('data-invalid'); $('newTypeError').textContent = '';
+    typeRow.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.type === t); b.setAttribute('aria-pressed', b.dataset.type === t); });
+  }
+  typeRow.addEventListener('click', function(e){ const b = e.target.closest('button'); if(b) choisirType(b.dataset.type); });
+  let dernierClient = null;
+  $('contratToastBtn').addEventListener('click', function(){ if(dernierClient) smContrat.telecharger(dernierClient); });
+
   function openForm(){ addForm.classList.add('open'); toast.classList.remove('show'); $('addFormError').textContent = ''; CHAMPS_REQUIS[0].input.focus(); }
   function closeForm(){
     addForm.classList.remove('open');
     $('addFormError').textContent = '';
     CHAMPS_REQUIS.forEach(function(c){ c.input.value = ''; c.input.removeAttribute('data-invalid'); c.err.textContent = ''; });
-    $('newMotoPrice').value = ''; $('newFrequency').value = 'journalier'; $('newMotoPrice').removeAttribute('data-invalid'); $('newMotoPriceError').textContent = ''; $('newPlate').value = '';
+    $('newMotoPrice').value = ''; $('newMotoPrice').removeAttribute('data-invalid'); $('newMotoPriceError').textContent = '';
+    $('newMarque').value = 'TVS'; $('newPlate').value = ''; $('newVisiteur').value = ''; choisirType(''); choisirFrequence('jour');
+    etatMoto = ''; $('newEtatRow').querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); }); $('newEtatError').textContent = '';
   }
-  toggleFormBtn.addEventListener('click', function(){ $('newCode').scrollIntoView({behavior:'smooth', block:'center'}); $('newCode').focus(); });
+  toggleFormBtn.addEventListener('click', function(){ addForm.classList.contains('open') ? closeForm() : openForm(); });
   cancelFormBtn.addEventListener('click', closeForm);
   CHAMPS_REQUIS.forEach(function(c){
     c.input.addEventListener('input', function(){ c.input.removeAttribute('data-invalid'); c.err.textContent = ''; });
   });
-  ['newStartDate','newEndDate','newPrice','newFrequency'].forEach(function(id){ $(id).addEventListener('input', actualiserMontantDu); $(id).addEventListener('change', actualiserMontantDu); });
 
   addForm.addEventListener('submit', function(e){
     e.preventDefault();
@@ -600,6 +735,14 @@
         if(!premierInvalide) premierInvalide = c.input;
       }
     });
+    if(!typeContrat){
+      typeRow.setAttribute('data-invalid', 'true'); $('newTypeError').textContent = 'Choisissez le type de contrat.';
+      if(!premierInvalide){ typeRow.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    }
+    if(!etatMoto){
+      $('newEtatRow').setAttribute('data-invalid', 'true'); $('newEtatError').textContent = "Choisissez l'état de la moto (neuve ou usagée).";
+      if(!premierInvalide){ $('newEtatRow').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    }
     if(premierInvalide){ premierInvalide.focus(); return; }
 
     const newStartDate = $('newStartDate'), newEndDate = $('newEndDate'), newEndDateError = $('newEndDateError');
@@ -615,23 +758,27 @@
     api('/api/clients', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        code: $('newCode').value.trim().toUpperCase(),
+        code: $('newCode').value.trim(),
         nom: $('newName').value.trim(),
         telephone: $('newPhone').value.trim(),
         adresse: $('newAddress').value.trim(),
-        immatriculation: $('newPlate').value.trim(),
         temoin_nom: $('newWitnessName').value.trim(),
         temoin_telephone: $('newWitnessPhone').value.trim(),
         temoin_adresse: $('newWitnessAddress').value.trim(),
         date_debut: newStartDate.value,
         date_fin: newEndDate.value,
         montant_journalier: Number($('newPrice').value),
-        frequence_redevance: $('newFrequency').value,
-        prix_moto: $('newMotoPrice').value.trim() ? Number($('newMotoPrice').value) : undefined
+        type_contrat: typeContrat,
+        frequence: frequence,
+        etat_moto: etatMoto,
+        visiteur: $('newVisiteur').value.trim() || undefined,
+        marque: $('newMarque').value.trim() || 'TVS',
+        immatriculation: $('newPlate').value.trim() || undefined
       })
     })
       .then(function(c){
         clients.unshift(c);
+        dernierClient = c;
         $('toastName').textContent = c.nom;
         $('toastCode').textContent = c.code;
         toast.classList.remove('show'); void toast.offsetWidth; toast.classList.add('show');
@@ -642,6 +789,79 @@
         $('addFormError').textContent = smMessage(err);
       })
       .finally(function(){ submitBtn.disabled = false; });
+  });
+
+  // ---------- Modifier / archiver un conducteur ----------
+  const editModal = $('editModal');
+  let edId = null, ed = {};
+  function choisirEd(rowId, cle, valeur){
+    ed[cle] = valeur;
+    $(rowId).querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.v === valeur); b.setAttribute('aria-pressed', b.dataset.v === valeur); });
+  }
+  [['edEtatRow','etat_moto'], ['edTypeRow','type_contrat'], ['edFreqRow','frequence'], ['edStatutRow','statut']].forEach(function(t){
+    $(t[0]).addEventListener('click', function(e){ const b = e.target.closest('button'); if(b) choisirEd(t[0], t[1], b.dataset.v); });
+  });
+  function majMontantDuEd(){ const v = montantDu(Number($('edPrice').value), ed.frequence, $('edStart').value, $('edEnd').value); if(v !== null) $('edMotoPrice').value = fmtDu(v); }
+  ['edPrice', 'edStart', 'edEnd'].forEach(function(id){ $(id).addEventListener('input', majMontantDuEd); $(id).addEventListener('change', majMontantDuEd); });
+  $('edFreqRow').addEventListener('click', majMontantDuEd);
+  function ouvrirEdition(c){
+    edId = c.id; ed = {};
+    $('editSub').textContent = c.nom + ' · ' + c.code;
+    $('edCode').value = c.code || ''; $('edName').value = c.nom || ''; $('edPhone').value = c.telephone || ''; $('edAddress').value = c.adresse || '';
+    $('edVisiteur').value = c.visiteur || '';
+    $('edWName').value = c.temoin_nom || ''; $('edWPhone').value = c.temoin_telephone || ''; $('edWAddress').value = c.temoin_adresse || '';
+    $('edMarque').value = c.marque || 'TVS'; $('edPlate').value = c.immatriculation || '';
+    $('edStart').value = (c.date_debut || '').slice(0, 10); $('edEnd').value = (c.date_fin || '').slice(0, 10);
+    $('edPrice').value = c.montant_journalier || ''; $('edMotoPrice').value = c.prix_moto ? fmtDu(c.prix_moto) : '';
+    choisirEd('edEtatRow', 'etat_moto', c.etat_moto || ''); choisirEd('edTypeRow', 'type_contrat', c.type_contrat || 'journee_payee');
+    choisirEd('edFreqRow', 'frequence', c.frequence || 'jour'); choisirEd('edStatutRow', 'statut', c.statut || 'actif');
+    $('edError').textContent = '';
+    editModal.classList.add('show'); $('edName').focus();
+  }
+  function fermerEdition(){ editModal.classList.remove('show'); edId = null; }
+  $('edCancel').addEventListener('click', fermerEdition);
+  editModal.addEventListener('click', function(e){ if(e.target === editModal) fermerEdition(); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && editModal.classList.contains('show')) fermerEdition(); });
+
+  $('editForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    const nom = $('edName').value.trim(), code = $('edCode').value.trim();
+    if(nom.length < 2){ $('edError').textContent = 'Entrez le nom du conducteur.'; return; }
+    if(!code){ $('edError').textContent = 'Entrez le code du conducteur.'; return; }
+    if(!Number($('edPrice').value) || Number($('edPrice').value) < 1){ $('edError').textContent = 'Entrez le montant de base.'; return; }
+    if($('edStart').value && $('edEnd').value && $('edEnd').value < $('edStart').value){ $('edError').textContent = 'La date de fin doit être après la date de début.'; return; }
+    if(ed.statut === 'suspendu' && !window.confirm('Suspendre ' + nom + ' ? Il sera archivé : plus de collecte ni de paiement tant qu\'il n\'est pas réactivé.')) return;
+    const body = {
+      code: code, nom: nom, telephone: $('edPhone').value.trim(), adresse: $('edAddress').value.trim(), visiteur: $('edVisiteur').value.trim(),
+      temoin_nom: $('edWName').value.trim(), temoin_telephone: $('edWPhone').value.trim(), temoin_adresse: $('edWAddress').value.trim(),
+      marque: $('edMarque').value.trim() || 'TVS', immatriculation: $('edPlate').value.trim(),
+      date_debut: $('edStart').value, date_fin: $('edEnd').value,
+      montant_journalier: Number($('edPrice').value),
+      type_contrat: ed.type_contrat, frequence: ed.frequence, statut: ed.statut
+    };
+    if(ed.etat_moto) body.etat_moto = ed.etat_moto;
+    const btn = $('edSave'); btn.disabled = true; $('edError').textContent = '';
+    api('/api/clients/' + edId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function(c){
+        const i = clients.findIndex(function(x){ return x.id === c.id; });
+        if(c.statut === 'suspendu'){ if(i >= 0) clients.splice(i, 1); }
+        else if(i >= 0) clients[i] = c;
+        fermerEdition(); render();
+        if(window.smToast) smToast(c.statut === 'suspendu' ? 'Conducteur archivé.' : 'Modifications enregistrées.');
+      })
+      .catch(function(err){ $('edError').textContent = smMessage(err); })
+      .finally(function(){ btn.disabled = false; });
+  });
+
+  driversBody.addEventListener('click', function(e){
+    const b = e.target.closest('button[data-act]'); if(!b) return;
+    const c = clients.find(function(x){ return x.code === b.dataset.code; }); if(!c) return;
+    if(b.dataset.act === 'edit') return ouvrirEdition(c);
+    if(!window.confirm('Archiver ' + c.nom + ' (' + c.code + ') ?\n\nIl sera suspendu : il disparaît de cette liste, des collectes et des impayés, et reste consultable dans « Archives ». Vous pourrez le réactiver.')) return;
+    b.disabled = true;
+    api('/api/clients/' + c.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'suspendu' }) })
+      .then(function(){ clients = clients.filter(function(x){ return x.id !== c.id; }); render(); if(window.smToast) smToast('Conducteur archivé.'); })
+      .catch(function(err){ b.disabled = false; alert(smMessage(err)); });
   });
 
   $('copyToastBtn').addEventListener('click', function(){
