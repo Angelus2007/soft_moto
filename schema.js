@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS clients (
   type_contrat TEXT,
   immatriculation TEXT,
   marque TEXT,
+  frequence TEXT,
   date_debut TEXT,
   date_fin TEXT
 );
@@ -70,6 +71,17 @@ CREATE TABLE IF NOT EXISTS versements (
   cree_le TEXT NOT NULL,
   numero_momo TEXT
 );
+CREATE TABLE IF NOT EXISTS vidanges (
+  id ${pk},
+  code_client TEXT NOT NULL,
+  annee INTEGER NOT NULL,
+  periode INTEGER NOT NULL,
+  montant INTEGER NOT NULL,
+  jour_saisie TEXT NOT NULL,
+  compte_id INTEGER,
+  maj_le TEXT NOT NULL,
+  UNIQUE (code_client, annee, periode)
+);
 CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 `);
 
@@ -80,7 +92,7 @@ CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NUL
     clients: [
       ['code', 'TEXT'], ['statut', "TEXT NOT NULL DEFAULT 'actif'"], ['date_creation', 'TEXT'], ['prix_moto', 'INTEGER'],
       ['montant_journalier', 'INTEGER'], ['temoin_nom', 'TEXT'], ['temoin_telephone', 'TEXT'], ['temoin_adresse', 'TEXT'],
-      ['type_contrat', 'TEXT'], ['immatriculation', 'TEXT'], ['marque', 'TEXT'], ['date_debut', 'TEXT'], ['date_fin', 'TEXT']
+      ['type_contrat', 'TEXT'], ['immatriculation', 'TEXT'], ['marque', 'TEXT'], ['frequence', 'TEXT'], ['date_debut', 'TEXT'], ['date_fin', 'TEXT']
     ]
   };
   for (const [table, cols] of Object.entries(ajouts)) {
@@ -90,6 +102,7 @@ CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NUL
   await db.exec(`
 CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_code ON clients (code);
 CREATE INDEX IF NOT EXISTS idx_versements_jour ON versements (jour_saisie);
+CREATE INDEX IF NOT EXISTS idx_vidanges_jour ON vidanges (jour_saisie);
 CREATE INDEX IF NOT EXISTS idx_paiements_date ON paiements (date);
 CREATE INDEX IF NOT EXISTS idx_sessions_compte ON sessions (compte_id);
 `);

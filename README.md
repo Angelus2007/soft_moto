@@ -271,3 +271,29 @@ Render ne prend pas de fichier zip : il lit le code dans un dépôt GitHub. Le f
 Ce que le site fait de lui-même sur Render : cookie de session sécurisé (HTTPS), adresse IP réelle des visiteurs derrière le proxy (protection contre les essais de mot de passe), route `/healthz`, arrêt propre à chaque redéploiement, et **refus de démarrer sans `DATABASE_URL`** (un fichier SQLite y serait effacé à chaque déploiement ; `ALLOW_SQLITE=1` pour forcer si tu as un disque persistant). En ligne, si `ADMIN_PASSWORD` est absent, jamais de mot de passe `admin123` : un mot de passe aléatoire est généré.
 
 Plan gratuit du site : il s'endort après 15 minutes sans visite (premier chargement lent). Pour un usage réel, garde `plan: starter` dans `render.yaml`.
+
+## Code saisi par l'administrateur, recherche par plaque, export des impayés
+
+- **Code du conducteur** : plus de génération automatique. L'administrateur saisit le code à l'inscription (lettres, chiffres, « - » ou « _ », 2 à 20 caractères, majuscules automatiques). Un code déjà utilisé est refusé. Le numéro du contrat reste le code.
+- **Recherche par plaque** : la liste des Conducteurs, le champ de recherche de l'espace caissière et celui de la fiche acceptent le code, le nom ou la **plaque** (« EP 1234 RB », « ep-1234-rb » et « EP1234RB » sont équivalents). `GET /api/clients/:code` accepte aussi une plaque.
+- **Export Excel des impayés** (administrateur) : bouton **Exporter (Excel)** dans « Impayés cumulés » (`GET /api/impayes?min=N&format=csv`) avec code, conducteur, téléphone, adresse, plaque, jours impayés, montant dû, date de début, témoin, téléphone et adresse du témoin. L'export des collectes (page Collectes) contient maintenant aussi téléphone, adresse, plaque et coordonnées du témoin. Les numéros sont écrits pour que Excel n'affiche pas « #NOM? » devant un « + ».
+
+## Redevance par jour, par semaine ou par mois
+
+Chaque conducteur a une **fréquence de paiement** : par jour (par défaut, comme avant), par semaine ou par mois. À la création (boutons « Redevance payée »), le **montant de base** est celui d'**une période** (un jour, une semaine ou un mois). L'administrateur peut changer la fréquence plus tard dans la fiche, onglet **Contrat**. Les conducteurs existants restent « par jour ».
+
+- Les semaines et les mois **partent de la date de début du contrat** (mois : même quantième ; le 31 devient le 30 ou le 28 si besoin). La dernière période est calculée au prorata si le contrat se termine avant.
+- Un versement se rattache à la période qui contient sa date. Une période est **payée quand la somme des versements atteint le montant dû** ; elle est **impayée quand elle est terminée** sans l'avoir atteint (la période en cours est « En cours »). Le surplus n'est pas reporté d'une période à l'autre : pour une ancienne période, utiliser « Enregistrer un versement » sur sa carte.
+- Fiche conducteur → Redevance : une **carte par semaine / par mois** (barre de progression, versements, bouton « Enregistrer un versement »). La saisie d'un jour remplace le montant de ce jour (comme pour la redevance journalière).
+- Liste du jour : un conducteur payant par semaine ou par mois apparaît « Partiel » ou « Non collecté » tant que sa période n'est pas complète, puis « Payé » jusqu'à la fin de la période.
+- Impayés cumulés (admin) : les jours impayés d'une période terminée comptent tous ses jours (1 semaine impayée = 7 jours), pour que les seuils 2, 3, 4, 5 jours restent comparables ; la colonne « Paiement » de l'export Excel indique la fréquence.
+- Les contrats indiquent « par jour », « par semaine » ou « par mois ».
+
+## Vidange : 100 F par période de 14 jours, à cocher
+
+Fiche conducteur → onglet **Vidange** : 24 cases par an (14 jours chacune, à partir du 1er janvier). Chaque case a une case à cocher **« Vidange 100 F »** : on la coche quand le conducteur a payé la vidange de la période.
+
+- Vert : vidange payée. Orange : période en cours, à payer. Rouge : période terminée sans vidange payée. Gris : à venir ou hors contrat. On ne peut cocher qu'une période commencée ; décocher demande une confirmation.
+- Le total « Vidanges payées x / 24 » remplace l'ancien « Périodes réglées ». Les vidanges ne dépendent plus de la redevance.
+- Les vidanges cochées dans la journée apparaissent à part dans la liste du jour (nombre et total, sans se mélanger au total de la redevance).
+- Montant : 100 F par défaut, modifiable avec la variable `VIDANGE_MONTANT`. API : `GET /api/vidanges?code_client=…`, `POST /api/vidanges` (`code_client`, `annee`, `periode` 1 à 24, `paye`).

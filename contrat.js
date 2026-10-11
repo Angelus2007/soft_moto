@@ -58,6 +58,12 @@
     return out.join(' ');
   }
 
+  // « par jour » (défaut), « par semaine » ou « par mois » selon la fréquence de paiement du conducteur
+  function unite(c, formeOriginale) {
+    var f = c && c.frequence;
+    return f === 'semaine' ? 'par semaine' : f === 'mois' ? 'par mois' : (formeOriginale || 'par jour');
+  }
+
   function typeDe(client) {
     return client && TYPES[client.type_contrat] ? client.type_contrat : 'journee_payee';
   }
@@ -71,7 +77,7 @@
       ' immatriculé sous le numéro ' + v(c.immatriculation, '.........................') + ' pour une période de pré-contrat valable pour quatorze (14) jours.</p>' +
       '<p>Le contractant, ' + v(c.nom, '..........................') + ' Tél : ' + v(c.telephone, '............................') +
       ' ci-après désigné se doit de verser la somme de ' + (montant ? '<b class="v">' + esc(montant) + 'F</b>' : '..…..F') +
-      ' par jour pendant la période de ' + v(dateFR(c.date_debut), '...................................') +
+      ' ' + unite(c) + ' pendant la période de ' + v(dateFR(c.date_debut), '...................................') +
       ' au ' + v(dateFR(c.date_fin), '...................................') + '.</p>' +
       '<p>Ce contrat ayant été pris connaissance par ' + v(c.temoin_nom, '..............................................') +
       ', qui prend l’engagement d’être avaliseur des présentes clauses et devra verser le montant sus indiqué en cas de non respect des présentes clauses par le contractant.</p>' +
@@ -95,7 +101,7 @@
       '<p>Cette moto est attribuée à usage professionnel à titre de taxi ou d’un autre selon la convenance du conducteur.</p>' +
       '<h3>Article 3 (PAIEMENT ET PÉRIODE)</h3>' +
       '<p>Le conducteur doit verser la somme de ' + (montant ? '<b class="v">' + esc(enLettres(montant)) + ' (' + esc(montant) + 'F cfa)</b>' : 'deux mille six cent (2600F cfa)') +
-      ' par jours. La durée du contrat est de ' + v(mois, '……….') + ' mois à compter de ' + v(dateFR(c.date_debut), '……./……/26') +
+      ' ' + unite(c, 'par jours') + '. La durée du contrat est de ' + v(mois, '……….') + ' mois à compter de ' + v(dateFR(c.date_debut), '……./……/26') +
       ' au ' + v(dateFR(c.date_fin), '………./………/27') + ' à l’issue de laquelle un certificat de propriété sera délivré au conducteur en cas bonne exécution du contrat et de paiement de solde de tout compte.</p>' +
       '<h3>Article 4 (MODE DE PAIEMENT)</h3>' +
       '<p>Le paiement se fera au secrétariat sis non loin du CEG FIYEGNON suivant un carnet de suivi.</p>' +

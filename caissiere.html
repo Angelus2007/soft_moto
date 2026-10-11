@@ -276,12 +276,12 @@
 
   <div class="panel">
     <h2>Rechercher un conducteur précis</h2>
-    <p class="hint">Entrez le code conducteur (ex. SM-274819) pour ouvrir sa fiche : les 24 cases de vidange et les paiements jour par jour.</p>
+    <p class="hint">Entrez le code du conducteur (ex. SM-274819) ou sa plaque d'immatriculation pour ouvrir sa fiche : les 24 cases de vidange et les paiements jour par jour.</p>
     <div class="search-row">
-      <input type="text" id="clientCodeInput" placeholder="Code conducteur ou plaque" autocomplete="off">
+      <input type="text" id="clientCodeInput" placeholder="Code ou plaque" autocomplete="off">
       <button type="button" class="btn" id="searchBtn">Rechercher</button>
     </div>
-    <p class="search-error" id="searchError">Aucun client trouvé avec ce code.</p>
+    <p class="search-error" id="searchError">Aucun conducteur trouvé avec ce code ou cette plaque.</p>
   </div>
 
   <div class="panel" id="clientPanel">
@@ -307,12 +307,6 @@
       <p class="cal-title" id="calTitle">—</p>
       <button type="button" id="nextMonthBtn" aria-label="Mois suivant">&#8250;</button>
     </div>
-    <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin:0 0 12px;">
-      <button type="button" class="btn" id="advanceWeekBtn" style="padding:9px 13px;border:1.5px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">Redevance hebdomadaire · 7 jours</button>
-      <button type="button" class="btn" id="advanceMonthBtn" style="padding:9px 13px;border:1.5px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">Redevance mensuelle · 30 jours</button>
-      <button type="button" class="btn" id="advancePaymentBtn" style="padding:9px 13px;border:1.5px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">Autre durée</button>
-    </div>
-    <p class="panel-error" id="advancePaymentError"></p>
     <p class="panel-error" id="calError"></p>
     <div class="cal-grid" id="calGrid">
       <div class="cal-dow">Lun</div><div class="cal-dow">Mar</div><div class="cal-dow">Mer</div>
@@ -345,7 +339,7 @@
   <div class="modal-card">
     <h3 id="modalTitle">Montant remis</h3>
     <p class="modal-sub" id="modalDate">—</p>
-    <p class="modal-target">Objectif du jour : <strong id="modalCible">—</strong></p>
+    <p class="modal-target"><span id="modalCibleLabel">Objectif du jour</span> : <strong id="modalCible">—</strong></p>
     <div class="amount-row">
       <input type="number" id="amountInput" inputmode="numeric" min="0" step="100" autocomplete="off">
       <span>F CFA</span>
@@ -478,7 +472,7 @@
   }
 
   function renderCalendar(){
-    if(!currentClient) return Promise.resolve();
+    if(!currentClient) return;
     const y = viewYear, m = viewMonth;
     const now = new Date();
     const isCurrentMonth = y === now.getFullYear() && m === now.getMonth();
@@ -491,7 +485,7 @@
     calGrid.querySelectorAll('.cal-day, .cal-empty').forEach(function(el){ el.remove(); });
     calGrid.classList.add('loading');
 
-    return api('/api/paiements?code_client=' + encodeURIComponent(currentClient.code) + '&mois=' + isoMois(y, m))
+    api('/api/paiements?code_client=' + encodeURIComponent(currentClient.code) + '&mois=' + isoMois(y, m))
       .then(function(rows){
         paiementsParJour = {};
         rows.forEach(function(p){ paiementsParJour[p.date] = p; });
@@ -568,9 +562,10 @@
       sub = '<div class="t-sub">' + esc([moy, (it.numeros || []).join(', '), it.heure].filter(Boolean).join(' · ')) +
         (it.regularisations.length ? ' · a aussi réglé : ' + esc(it.regularisations.map(function(g){ return jjmm(g.date); }).join(', ')) : '') + '</div>';
     } else {
-      const partiel = it.statut === 'partiel';
-      status = '<div class="t-status ' + (partiel ? 'partial' : 'unpaid') + '">' + (partiel ? 'Partiel ' + fmtF(it.montant) + ' / ' + fmtF(it.cible) : '✗ Non collecté') + '</div>';
-      if(it.jours_impayes > 0) sub = '<div class="t-sub warn">' + it.jours_impayes + ' jour' + (it.jours_impayes > 1 ? 's' : '') + ' impayé' + (it.jours_impayes > 1 ? 's' : '') + ' avant aujourd\'hui · ' + fmtF(it.montant_du) + ' dû</div>';
+      const partiel = it.statut === 'partiel', nonJour = it.frequence && it.frequence !== 'jour';
+      status = '<div class="t-status ' + (partiel ? 'partial' : 'unpaid') + '">' + (partiel ? 'Partiel ' + fmtF(nonJour ? it.verse_periode : it.montant) + ' / ' + fmtF(it.cible) : '✗ Non collecté') + '</div>';
+      if(nonJour && it.periode_debut) sub = '<div class="t-sub">Paie par ' + (it.frequence === 'semaine' ? 'semaine' : 'mois') + ' · période du ' + jjmm(it.periode_debut) + ' au ' + jjmm(it.periode_fin) + '</div>';
+      if(it.jours_impayes > 0) sub += '<div class="t-sub warn">' + it.jours_impayes + ' jour' + (it.jours_impayes > 1 ? 's' : '') + ' impayé' + (it.jours_impayes > 1 ? 's' : '') + ' avant aujourd\'hui · ' + fmtF(it.montant_du) + ' dû</div>';
     }
     return '<div class="tournee-row' + (it.t ? '' : ' no-click') + '" data-i="' + i + '">' +
       '<div class="avatar ' + avatarClass(nom) + '">' + esc(initials(nom)) + '</div>' +
@@ -594,6 +589,7 @@
         '<div class="r-box"><p class="r-lab">Espèces</p><div class="r-val">' + fmtF(pm.especes) + '</div></div>' +
         '<div class="r-box"><p class="r-lab">MOMO</p><div class="r-val">' + fmtF(pm.momo) + '</div></div>' +
         '<div class="r-box"><p class="r-lab">MOMO régulateur</p><div class="r-val">' + fmtF(pm.momo_regulateur) + '</div></div>' +
+        (totauxDuJour.vidanges_nb ? '<div class="r-box"><p class="r-lab">Vidanges payées (' + totauxDuJour.vidanges_nb + ')</p><div class="r-val">' + fmtF(totauxDuJour.vidanges_total) + '</div></div>' : '') +
         (pm.non_precise ? '<div class="r-box"><p class="r-lab">Moyen non précisé</p><div class="r-val">' + fmtF(pm.non_precise) + '</div></div>' : '') +
         Object.keys(totauxDuJour.par_numero || {}).map(function(n){ return '<div class="r-box"><p class="r-lab">Reçu sur ' + esc(n) + '</p><div class="r-val">' + fmtF(totauxDuJour.par_numero[n]) + '</div></div>'; }).join('');
     }
@@ -642,8 +638,13 @@
     if(!t) return;
     ouvrirModalContexte({
       code: t.code, nom: t.nom, date: aujourdhuiISO(), cible: t.cible, montantExistant: t.montant || null, moyenExistant: t.moyen, numeroExistant: t.numero_momo,
+      // Paiement par semaine / mois : on affiche le montant de la période et ce qui reste à saisir pour la compléter
+      complet: t.frequence && t.frequence !== 'jour' ? t.reste : undefined,
+      libelle: t.frequence === 'semaine' ? 'Montant de la semaine' : t.frequence === 'mois' ? 'Montant du mois' : undefined,
+      info: t.frequence && t.frequence !== 'jour' ? ' · déjà versé les autres jours de la période : ' + fmtF((t.verse_periode || 0) - (t.montant || 0)) : '',
       onSaved: function(p){
         t.paye = p.paye; t.montant = p.montant; t.moyen = p.moyen; t.numero_momo = p.numero_momo;
+        if (p.periode) t.verse_periode = p.periode.verse;
         renderTournee();
         rechargerTourneeBientot(); // met à jour la liste de ce qui a été reçu
 
@@ -683,85 +684,13 @@
   const quickZeroBtn = document.getElementById('quickZeroBtn');
   let contexteEnCours = null; // { code, date, cible, onSaved(p) }
 
-  // Paiement anticipé : enregistre un paiement journalier sur chaque date future.
-  const advancePaymentBtn = document.getElementById('advancePaymentBtn');
-  const advancePaymentError = document.getElementById('advancePaymentError');
-
-  function ajouterJoursISO(iso, nombre){
-    const d = new Date(iso + 'T12:00:00');
-    d.setDate(d.getDate() + nombre);
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-  }
-
-  const advanceWeekBtn = document.getElementById('advanceWeekBtn');
-  const advanceMonthBtn = document.getElementById('advanceMonthBtn');
-  async function payerAvance(joursFixes, bouton){
-    if(!currentClient) return;
-    advancePaymentError.classList.remove('show');
-    const jours = Number.isInteger(joursFixes) ? joursFixes : Number(window.prompt('Combien de jours souhaitez-vous payer en avance ? (1 à 90 jours)', '14'));
-    if(!Number.isInteger(jours) || jours < 1 || jours > 90){
-      if(jours !== 0 && jours !== null && Number.isFinite(jours)){
-        advancePaymentError.textContent = 'Indiquez un nombre entier entre 1 et 90 jours.';
-        advancePaymentError.classList.add('show');
-      }
-      return;
-    }
-    const tarif = Number(currentClient.montant_journalier_effectif || DAILY_RATE);
-    const total = tarif * jours;
-    const debut = ajouterJoursISO(aujourdhuiISO(), 1);
-    const fin = ajouterJoursISO(debut, jours - 1);
-    const finContrat = currentClient.date_fin ? String(currentClient.date_fin).slice(0,10) : '';
-    if(finContrat && fin > finContrat){
-      advancePaymentError.textContent = 'Cette durée dépasse la fin du contrat (' + finContrat + '). Aucun paiement n’a été enregistré.';
-      advancePaymentError.classList.add('show'); return;
-    }
-    const libelle = jours===7 ? 'hebdomadaire (7 jours)' : jours===30 ? 'mensuelle (30 jours)' : jours+' jours';
-    const confirme = window.confirm('Conducteur : '+currentClient.nom+'\nType : redevance '+libelle+'\nPériode : du '+debut+' au '+fin+'\nMontant total : '+total.toLocaleString('fr-FR')+' F CFA\n\nConfirmer ?');
-    if(!confirme)return;
-    const boutons=[advancePaymentBtn,advanceWeekBtn,advanceMonthBtn];
-    boutons.forEach(b=>b.disabled=true);
-    if(bouton) bouton.textContent='Enregistrement…';
-    let enregistres=0, dejaRegles=0;
-    try{
-      // Charger tout l'historique afin de ne pas écraser un paiement déjà enregistré dans un autre mois.
-      const historique=await api('/api/paiements?code_client='+encodeURIComponent(currentClient.code));
-      const parDate={}; (historique||[]).forEach(p=>{parDate[p.date]=p});
-      for(let i=0;i<jours;i++){
-        const date=ajouterJoursISO(debut,i);
-        if(parDate[date]&&parDate[date].paye){dejaRegles++;continue;}
-      }
-      for(let i=0;i<jours;i++){
-        const date=ajouterJoursISO(debut,i);
-        if(parDate[date]&&parDate[date].paye)continue;
-        await api('/api/paiements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code_client:currentClient.code,date,montant:tarif,moyen:smMoyenGet(),numero_momo:smNumeroGet()||undefined,avance:true})});
-        enregistres++;
-      }
-      await renderCalendar();
-      advancePaymentError.textContent=enregistres
-        ? 'Paiement '+libelle+' enregistré : '+enregistres+' jour(s), soit '+(enregistres*tarif).toLocaleString('fr-FR')+' F CFA.'+(dejaRegles?' '+dejaRegles+' jour(s) déjà payé(s) ont été ignorés.':'')
-        : 'Aucun nouveau paiement : toutes les dates choisies étaient déjà réglées.';
-      advancePaymentError.classList.add('show'); rechargerTourneeBientot();
-      if(enregistres&&window.smCelebrate)window.smCelebrate(bouton||advancePaymentBtn);
-    }catch(err){
-      advancePaymentError.textContent='Enregistrement interrompu après '+enregistres+' jour(s). '+smMessage(err)+' Vérifiez les paiements avant de réessayer.';
-      advancePaymentError.classList.add('show'); renderCalendar();
-    }finally{
-      boutons.forEach(b=>b.disabled=false);
-      advancePaymentBtn.textContent='Autre durée';
-      advanceWeekBtn.textContent='Redevance hebdomadaire · 7 jours';
-      advanceMonthBtn.textContent='Redevance mensuelle · 30 jours';
-    }
-  }
-  advancePaymentBtn.addEventListener('click',()=>payerAvance(null,advancePaymentBtn));
-  advanceWeekBtn.addEventListener('click',()=>payerAvance(7,advanceWeekBtn));
-  advanceMonthBtn.addEventListener('click',()=>payerAvance(30,advanceMonthBtn));
-
   function ouvrirModalContexte(ctx){
     contexteEnCours = ctx;
     const [y, m, d] = ctx.date.split('-').map(Number);
-    modalDate.textContent = (ctx.nom ? ctx.nom + ' — ' : '') + jourLisible(y, m - 1, d);
+    modalDate.textContent = (ctx.nom ? ctx.nom + ' — ' : '') + jourLisible(y, m - 1, d) + (ctx.info || '');
+    document.getElementById('modalCibleLabel').textContent = ctx.libelle || 'Objectif du jour';
     modalCible.textContent = ctx.cible.toLocaleString('fr-FR') + ' F';
-    amountInput.value = ctx.montantExistant != null ? ctx.montantExistant : ctx.cible;
+    amountInput.value = ctx.montantExistant != null ? ctx.montantExistant : (ctx.complet != null ? ctx.complet : ctx.cible);
     smMoyenSet(ctx.moyenExistant);
     smNumeroSet(ctx.numeroExistant);
     modalError.classList.remove('show');
@@ -798,7 +727,7 @@
 
   function fermerModal(){ amountModal.classList.remove('show'); contexteEnCours = null; }
 
-  quickFullBtn.addEventListener('click', function(){ amountInput.value = contexteEnCours ? contexteEnCours.cible : 0; amountInput.focus(); });
+  quickFullBtn.addEventListener('click', function(){ amountInput.value = contexteEnCours ? (contexteEnCours.complet != null ? contexteEnCours.complet : contexteEnCours.cible) : 0; amountInput.focus(); });
   quickZeroBtn.addEventListener('click', function(){ amountInput.value = 0; amountInput.focus(); });
   modalCancelBtn.addEventListener('click', fermerModal);
   amountModal.addEventListener('click', function(e){ if(e.target === amountModal) fermerModal(); });
