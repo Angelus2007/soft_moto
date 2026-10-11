@@ -304,8 +304,11 @@ Fiche conducteur → onglet **Vidange** : plus de périodes fixes. Quand le cond
 
 - **Paiements** : l'administrateur a une entrée « Paiements » dans son menu (même écran que les caissières) et peut aussi saisir paiements et vidanges depuis la fiche d'un conducteur.
 - **Modifier un conducteur** : bouton « Modifier » dans la liste des conducteurs (code, coordonnées, témoin, visiteur, moto, contrat, dates, montants, statut). Si le code change, les paiements et vidanges suivent.
+- **Montant dû** : dans le formulaire d’ajout et de modification, la case « Prix de la moto » devient « Montant dû », calculée automatiquement (montant de base × nombre de jours, semaines ou mois du contrat, dernière période au prorata). Le serveur fait le même calcul.
 - **Ajout d'un conducteur** : nouveaux champs **État de la moto** (neuve ou usagée, obligatoire) et **Nom du visiteur** (facultatif). Le contrat « Droit d'usage » reprend l'état de la moto.
 - **Archives** : un conducteur *suspendu* (bouton « Archiver » ou statut « Suspendu » dans la fenêtre de modification) quitte la liste, les collectes, les impayés et le financement ; il est consultable et réactivable dans la page **Archives**. Aucun paiement ne peut lui être enregistré tant qu'il est suspendu.
+- **Vidanges en retard** : le tableau de bord admin a un panneau « Vidanges en retard » (14 jours écoulés depuis la dernière vidange payée), trié par retard, avec export Excel (`GET /api/vidanges/retards?format=csv`). Les conducteurs sans aucune vidange payée n’y figurent pas (pas de décompte) ; leur nombre est indiqué.
+- **Suspendre depuis les impayés** : le bouton « Suspendre » du tableau de bord archive désormais le conducteur (statut « suspendu »), comme le bouton « Archiver ».
 - **Mon point** : chaque caissière voit sur sa page ce qu'**elle** a encaissé (jour au choix : total, espèces / MOMO / MOMO régularisation, liste de ses versements, total du mois). API : `GET /api/mon-point?date=AAAA-MM-JJ` (l'admin peut ajouter `compte_id=` pour voir une caissière).
 - Le moyen de paiement « MOMO régulateur » s'appelle désormais **« MOMO régularisation »** (même code interne, aucune donnée à migrer).
 
