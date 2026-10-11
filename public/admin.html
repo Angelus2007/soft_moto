@@ -593,6 +593,7 @@
       <div class="panel-head">
         <h2>Impayés cumulés</h2>
         <span class="meta" id="impayesMeta"></span>
+        <a class="act-btn ok" id="impayesExport" href="#" style="text-decoration:none; display:inline-block;" title="Fichier Excel : code, nom, téléphone, adresse, plaque, jours impayés, montant dû et coordonnées du témoin">Exporter (Excel)</a>
       </div>
       <div class="chips" id="impayesChips" role="group" aria-label="Seuil de jours impayés">
         <button type="button" data-min="2" class="on">2 jours et +</button>
@@ -722,7 +723,8 @@
     });
     const rowsImpayes = impayes.filter(ok).map(function(c){
       const b = BADGES[c.statut];
-      const cumul = c.jours_impayes > 0 ? '<span class="sub-note warn">' + c.jours_impayes + ' jour' + (c.jours_impayes > 1 ? 's' : '') + ' impayé' + (c.jours_impayes > 1 ? 's' : '') + ' avant aujourd\'hui · ' + esc(fmtF(c.montant_du)) + ' dû</span>' : '';
+      const periodeNote = c.frequence && c.frequence !== 'jour' ? '<span class="sub-note">Paie par ' + (c.frequence === 'semaine' ? 'semaine' : 'mois') + (c.periode_debut ? ' · période du ' + jjmm(c.periode_debut) + ' au ' + jjmm(c.periode_fin) : '') + '</span>' : '';
+      const cumul = periodeNote + (c.jours_impayes > 0 ? '<span class="sub-note warn">' + c.jours_impayes + ' jour' + (c.jours_impayes > 1 ? 's' : '') + ' impayé' + (c.jours_impayes > 1 ? 's' : '') + ' avant aujourd\'hui · ' + esc(fmtF(c.montant_du)) + ' dû</span>' : '');
       return '<tr>' + cellConducteur(c.nom, c.code) +
         '<td class="amount' + (c.montant ? '' : ' zero') + '">' + (c.montant ? fmtF(c.montant) : '—') + '</td>' +
         '<td>' + esc(c.heure || '—') + '</td>' +
@@ -734,7 +736,7 @@
 
     const t = jourDuJour.totaux;
     $('collectesMeta').textContent = t
-      ? 'Reçu : ' + fmtF(t.encaisse) + ' (Espèces ' + fmtF(t.par_moyen.especes) + ' · MOMO ' + fmtF(t.par_moyen.momo) + ' · MOMO régulateur ' + fmtF(t.par_moyen.momo_regulateur) + (t.par_moyen.non_precise ? ' · non précisé ' + fmtF(t.par_moyen.non_precise) : '') + ')'
+      ? (t.vidanges_nb ? 'Vidanges payées : ' + t.vidanges_nb + ' (' + fmtF(t.vidanges_total) + ') · ' : '') + 'Reçu : ' + fmtF(t.encaisse) + ' (Espèces ' + fmtF(t.par_moyen.especes) + ' · MOMO ' + fmtF(t.par_moyen.momo) + ' · MOMO régulateur ' + fmtF(t.par_moyen.momo_regulateur) + (t.par_moyen.non_precise ? ' · non précisé ' + fmtF(t.par_moyen.non_precise) : '') + ')'
       : '';
     const vide = modeJour === 'payes' ? "Personne n'a encore payé aujourd'hui." : modeJour === 'impayes' ? "Tous les conducteurs actifs sont à jour aujourd'hui." : "Aucun conducteur actif pour l'instant.";
     const msg = !rows.length ? (q ? 'Aucun conducteur ne correspond à cette recherche.' : vide)
@@ -750,6 +752,8 @@
 
   function renderImpayes(){
     const susp = seuil === 'suspendus';
+    $('impayesExport').style.display = susp ? 'none' : '';
+    if(!susp) $('impayesExport').href = '/api/impayes?format=csv&min=' + seuil;
     $('impTh1').textContent = susp ? 'Téléphone' : 'Jours impayés';
     $('impTh2').textContent = susp ? 'Inscrit le' : 'Montant dû';
     $('impTh3').textContent = susp ? '' : 'Impayés depuis';
@@ -776,8 +780,8 @@
       const liste = impayesDonnees.listes[seuil] || [];
       n = liste.length;
       html = liste.map(function(c){
-        const tel = c.telephone ? '<span class="sub-note"><a href="tel:' + esc(c.telephone.replace(/\s+/g, '')) + '">' + esc(c.telephone) + '</a></span>' : '';
-        return '<tr>' + cellConducteur(c.nom, c.code, tel) +
+        const tel = (c.telephone ? '<span class="sub-note"><a href="tel:' + esc(c.telephone.replace(/\s+/g, '')) + '">' + esc(c.telephone) + '</a></span>' : '') + (c.frequence && c.frequence !== 'jour' ? '<span class="sub-note">Paie par ' + (c.frequence === 'semaine' ? 'semaine' : 'mois') + '</span>' : '');
+        return '<tr>' + cellConducteur(c.nom, c.code + (c.immatriculation ? ' · ' + c.immatriculation : ''), tel) +
           '<td><span class="days-pill' + (c.jours_impayes < 3 ? ' mid' : '') + '">' + c.jours_impayes + '</span></td>' +
           '<td class="amount">' + esc(fmtF(c.montant_du)) + (c.saisie_possible ? '<span class="tag-saisie" title="Article 8-II du contrat">≥ ' + esc(fmtF(impayesDonnees.seuil_saisie)) + ' : saisie possible</span>' : '') + '</td>' +
           '<td>' + esc(jourLisible(c.depuis)) + (c.consecutifs ? '<span class="sub-note">' + c.consecutifs + ' d\'affilée</span>' : '') + '</td>' +
