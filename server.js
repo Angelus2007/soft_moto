@@ -577,7 +577,9 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
   if (freq !== 'jour' && !periodeCible) return res.status(400).json({ erreur: 'Cette date est en dehors de la durée du contrat du conducteur.' });
   const jourSaisie = jourLocal(new Date());
   const ajustements = []; // jours antérieurs comblés grâce au surplus
-  let reporte = 0;        // total du surplus utilisé pour combler ces jours
+  const avances = [];     // jours À VENIR payés d'avance grâce au surplus restant
+  let reporte = 0;        // total du surplus utilisé pour combler les jours impayés
+  let avance = 0;         // total du surplus utilisé pour payer des jours d'avance
   let paiement, periodeInfo = null;
 
   // Tout se fait dans une transaction, avec un verrou sur le conducteur : deux saisies simultanées ne se mélangent pas.
@@ -644,7 +646,35 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
         jour.setUTCDate(jour.getUTCDate() + 1);
       }
       reporte = surplus - reste;
-      garde = montant - reporte;
+
+      // Plus aucun jour impayé avant : ce qui reste paie les jours SUIVANTS, d'avance (jusqu'à la fin du contrat, 120 jours au plus).
+      // Les jours déjà entièrement payés sont sautés.
+      if (reste > 0) {
+        const avantAvance = reste;
+        const plafond = addJours(date, 120);
+        const dernier = fin && fin < plafond ? fin : plafond;
+        const futurs = {};
+        (await tx.all('SELECT date, montant, moyen, numero_momo FROM paiements WHERE code_client = ? AND date > ? AND date <= ?', [code, date, dernier]))
+          .forEach((r) => { futurs[r.date] = { montant: r.montant, moyen: r.moyen, numero: r.numero_momo }; });
+        for (let k = addJours(date, 1); k <= dernier && reste > 0; k = addJours(k, 1)) {
+          if (debut && k < debut) continue;
+          const ex = futurs[k] || { montant: 0, moyen: null };
+          const manque = cible - ex.montant;
+          if (manque <= 0) continue;
+          const apport = Math.min(manque, reste);
+          const nouveau = ex.montant + apport;
+          const garder = ex.montant > 0 && ex.moyen;
+          const moyenJour = garder ? ex.moyen : moyen;
+          const numeroJour = garder ? (ex.numero || null) : numero;
+          const regleLeJour = nouveau >= cible ? date : null; // payé d'avance : on retient la date réelle du versement
+          await upsert(code, k, nouveau >= cible ? 1 : 0, nouveau, moyenJour, regleLeJour, numeroJour);
+          await journal(k, apport, moyen, numero);
+          avances.push({ date: k, montant: nouveau, paye: nouveau >= cible, cible, moyen: moyenJour, regle_le: regleLeJour, numero_momo: numeroJour });
+          reste -= apport;
+        }
+        avance = avantAvance - reste;
+      }
+      garde = montant - reporte - avance;
     }
 
     // Par jour : « payé » = le montant du jour est atteint. Par semaine / mois : « payé » = de l'argent a été versé ce jour-là ;
@@ -672,7 +702,7 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
     }
   });
 
-  res.json({ ...paiement, paye: periodeInfo ? periodeInfo.complete : !!paiement.paye, cible: periodeInfo ? periodeInfo.cible : cible, frequence: freq, periode: periodeInfo, reporte, ajustements });
+  res.json({ ...paiement, paye: periodeInfo ? periodeInfo.complete : !!paiement.paye, cible: periodeInfo ? periodeInfo.cible : cible, frequence: freq, periode: periodeInfo, reporte, avance, ajustements, avances });
 }));
 
 /* ------------------------------------------------------------------ */
@@ -694,8 +724,8 @@ app.post('/api/vidanges', exigerRole('admin', 'caissiere'), h(async (req, res) =
     return res.status(400).json({ erreur: 'Période de vidange invalide.' });
   }
   if (paye) {
-    const debutPeriode = iso10(new Date(Date.UTC(annee, 0, 1 + (periode - 1) * 14)));
-    if (debutPeriode > jourLocal(new Date())) return res.status(400).json({ erreur: "Cette période de vidange n'a pas encore commencé." });
+    // Une période à venir peut être payée d'avance, mais pas au-delà de l'année en cours.
+    if (annee > Number(jourLocal(new Date()).slice(0, 4))) return res.status(400).json({ erreur: "La vidange ne peut être payée d'avance que dans l'année en cours." });
     await db.run(`INSERT INTO vidanges (code_client, annee, periode, montant, jour_saisie, compte_id, maj_le) VALUES (?,?,?,?,?,?,?)
         ON CONFLICT (code_client, annee, periode) DO UPDATE SET montant = excluded.montant, jour_saisie = excluded.jour_saisie, compte_id = excluded.compte_id, maj_le = excluded.maj_le`,
       [code, annee, periode, MONTANT_VIDANGE, jourLocal(new Date()), req.user.id, now()]);
@@ -716,7 +746,7 @@ const heureLocale = (iso) => new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU
 const borne30jours = () => jourLocal(new Date(Date.now() - 29 * 86400000));
 async function joursPayes30j() {
   const parCode = new Map();
-  for (const r of await db.all('SELECT code_client, date FROM paiements WHERE paye = 1 AND date >= ?', [borne30jours()])) {
+  for (const r of await db.all('SELECT code_client, date FROM paiements WHERE paye = 1 AND date >= ? AND date <= ?', [borne30jours(), jourLocal(new Date())])) {
     if (!parCode.has(r.code_client)) parCode.set(r.code_client, []);
     parCode.get(r.code_client).push(r.date);
   }
@@ -794,7 +824,8 @@ async function versementsDuJour(dateStr) {
     return {
       code: r.code, nom: r.nom || 'Conducteur supprimé', montant: r.total,
       moyens: (r.moyens || '').split(',').filter(Boolean), numeros: (r.numeros || '').split(',').filter(Boolean), heure: heureLocale(r.dernier),
-      complet: !!(p && p.paye), regularisations: regs.filter((g) => g.code === r.code).map((g) => ({ date: g.date, montant: g.montant })),
+      complet: !!(p && p.paye), regularisations: regs.filter((g) => g.code === r.code && g.date < dateStr).map((g) => ({ date: g.date, montant: g.montant })),
+      avances: regs.filter((g) => g.code === r.code && g.date > dateStr).map((g) => ({ date: g.date, montant: g.montant })).sort((a, b) => (a.date > b.date ? 1 : -1)),
       _t: r.dernier
     };
   }).sort((x, y) => (y._t > x._t ? 1 : -1)).map(({ _t, ...r }) => r);
@@ -842,7 +873,7 @@ async function calculerCollectesDuJour(dateStr, defaut) {
     const b = bilans.get(c.code);
     collectes.push({
       code: c.code, nom: c.nom, statut, montant: p ? p.montant : 0, moyen: p ? p.moyen : null, numero_momo: p ? p.numero_momo : null, cible, heure: p ? heureLocale(p.maj_le) : null,
-      frequence: freq, reste, verse_periode: verse, periode_debut: per ? per.debut : null, periode_fin: per ? per.fin : null,
+      frequence: freq, reste, verse_periode: verse, periode_debut: per ? per.debut : null, periode_fin: per ? per.fin : null, regle_le: p ? p.regle_le : null,
       fiabilite: fiab.pourcentage, fiabilite_jours: fiab.jours_historique,
       jours_impayes: b.jours_impayes, montant_du: b.montant_du
     });
@@ -903,7 +934,7 @@ app.get('/api/tournee', exigerRole('admin', 'caissiere'), h(async (req, res) => 
     date: aujourdhui,
     tournee: collectes.map((c) => ({
       code: c.code, nom: c.nom, cible: c.cible, montant: c.montant, moyen: c.moyen, numero_momo: c.numero_momo,
-      frequence: c.frequence, reste: c.reste, verse_periode: c.verse_periode, periode_debut: c.periode_debut, periode_fin: c.periode_fin,
+      frequence: c.frequence, reste: c.reste, verse_periode: c.verse_periode, periode_debut: c.periode_debut, periode_fin: c.periode_fin, regle_le: c.regle_le,
       paye: c.statut === 'paye', statut: c.statut, heure: c.heure, fiabilite: c.fiabilite, fiabilite_jours: c.fiabilite_jours,
       jours_impayes: c.jours_impayes, montant_du: c.montant_du
     })),
