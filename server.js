@@ -111,6 +111,15 @@ const sommeJours = (mapJours, debut, fin) => { let t = 0; for (let k = debut; k 
 // Équivalent par jour (pour estimer la durée restante d'un financement).
 const parJour = (c, montant) => montant / ({ jour: 1, semaine: 7, mois: 30.4375 })[frequenceDe(c)];
 
+// Montant dû sur toute la durée du contrat : montant de base × nombre de périodes (jours, semaines ou mois),
+// la dernière période étant calculée au prorata si le contrat s'arrête avant sa fin. null si les dates ou le montant manquent.
+function montantDuContrat(montant, frequence, debut, fin) {
+  if (!montant || !dateValide(debut || '') || !dateValide(fin || '') || fin < debut) return null;
+  const c = { frequence, date_debut: debut, date_fin: fin };
+  if (frequenceDe(c) === 'jour') return montant * (diffJours(debut, fin) + 1);
+  return periodesDe(c, fin).reduce((t, p) => t + dueDe(p, montant), 0);
+}
+
 function cibleJourniere(client) {
   // Montant que la caissière doit collecter CHAQUE JOUR pour ce conducteur :
   // son montant de base journalier (saisi à la création, modifiable ensuite),
@@ -481,8 +490,8 @@ app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
   if (montantJournalier === false) return res.status(400).json({ erreur: 'Montant de base journalier invalide.' });
   if (montantJournalier === null) return res.status(400).json({ erreur: 'Entrez le montant de base journalier.' });
   // Prix de la moto : montant TOTAL que le conducteur doit rembourser au fil du temps — optionnel.
-  const prix = nombreOptionnel(req.body.prix_moto, 1, 100000000);
-  if (prix === false) return res.status(400).json({ erreur: 'Prix de la moto invalide.' });
+  // Montant dû : calculé d'après le montant de base, la fréquence et la période du contrat.
+  const prix = montantDuContrat(montantJournalier, frequence, dateDebut, dateFin);
 
   if (await db.get('SELECT 1 FROM clients WHERE code = ?', [code])) return res.status(409).json({ erreur: 'Ce code est déjà utilisé par un autre conducteur.' });
   const id = await db.insertId(`INSERT INTO clients
@@ -561,6 +570,15 @@ app.patch('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
     const m = nombreOptionnel(req.body.montant_journalier, 1, 1000000);
     if (m === false) return res.status(400).json({ erreur: 'Montant journalier invalide.' });
     champs.montant_journalier = m;
+  }
+  // Le montant dû suit le montant de base, la fréquence et les dates (une modification manuelle seule du montant reste possible).
+  if (['montant_journalier', 'frequence', 'date_debut', 'date_fin'].some((k) => k in champs)) {
+    const m = 'montant_journalier' in champs ? champs.montant_journalier : existant.montant_journalier;
+    const f = 'frequence' in champs ? champs.frequence : existant.frequence;
+    const d = 'date_debut' in champs ? champs.date_debut : existant.date_debut;
+    const e = 'date_fin' in champs ? champs.date_fin : existant.date_fin;
+    const du = montantDuContrat(m, f, (d || '').slice(0, 10), (e || '').slice(0, 10));
+    if (du !== null) champs.prix_moto = du;
   }
   const cles = Object.keys(champs);
   if (!cles.length) return res.status(400).json({ erreur: 'Aucune modification fournie.' });
@@ -781,6 +799,36 @@ app.post('/api/vidanges', exigerRole('admin', 'caissiere'), h(async (req, res) =
   await db.run('INSERT INTO vidange_paiements (code_client, date_paiement, montant, compte_id, maj_le) VALUES (?,?,?,?,?)',
     [code, date, MONTANT_VIDANGE, req.user.id, now()]);
   res.status(201).json(await etatVidange(code));
+}));
+
+// Admin : conducteurs actifs dont la vidange est en retard (14 jours écoulés depuis la dernière vidange payée).
+// Export Excel (CSV) : /api/vidanges/retards?format=csv
+app.get('/api/vidanges/retards', exigerRole('admin'), h(async (req, res) => {
+  const aujourdhui = jourLocal(new Date());
+  const rows = await db.all(`SELECT c.code, c.nom, c.telephone, c.adresse, c.immatriculation, c.temoin_nom, c.temoin_telephone,
+      MAX(v.date_paiement) AS derniere, COUNT(v.id) AS nb
+    FROM clients c LEFT JOIN vidange_paiements v ON v.code_client = c.code
+    WHERE c.statut = 'actif' GROUP BY c.id`);
+  const retards = [];
+  let jamais = 0;
+  for (const r of rows) {
+    if (!r.derniere) { jamais++; continue; }
+    const due = addJours(r.derniere, DELAI_VIDANGE);
+    const retard = diffJours(due, aujourdhui); // > 0 : jours de retard
+    if (retard > 0) retards.push({ code: r.code, nom: r.nom, telephone: r.telephone, adresse: r.adresse, immatriculation: r.immatriculation,
+      temoin_nom: r.temoin_nom, temoin_telephone: r.temoin_telephone, derniere: r.derniere, due, jours_retard: retard, nb_vidanges: r.nb });
+  }
+  retards.sort((a, b) => b.jours_retard - a.jours_retard || (a.nom > b.nom ? 1 : -1));
+
+  if (req.query.format === 'csv') {
+    const entetes = ['Code', 'Conducteur', 'Téléphone', 'Adresse', 'Plaque', 'Dernière vidange payée', 'Vidange due le', 'Jours de retard', 'Témoin', 'Téléphone du témoin'];
+    const lignes = retards.map((c) => [c.code, c.nom, csvTel(c.telephone), c.adresse || '', c.immatriculation || '', c.derniere, c.due, c.jours_retard,
+      c.temoin_nom || '', csvTel(c.temoin_telephone)].map(csvEchappe).join(';'));
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="vidanges_en_retard_${aujourdhui}.csv"`);
+    return res.send('\uFEFF' + [entetes.join(';'), ...lignes].join('\r\n'));
+  }
+  res.json({ date: aujourdhui, delai: DELAI_VIDANGE, sans_vidange: jamais, conducteurs: retards });
 }));
 
 // Annule une vidange saisie par erreur : le décompte repart de la vidange précédente.
