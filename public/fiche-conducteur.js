@@ -54,7 +54,7 @@
   $('menuToggle').addEventListener('click', function () { $('sidebar').classList.toggle('open'); });
 
   /* ---------- État ---------- */
-  var client = null, paiements = {}, periodes = [], periodeChoisie = -1, viewY = 0, viewM = 0;
+  var client = null, paiements = {}, vidanges = {}, MONTANT_VID = 100, periodes = [], periodeChoisie = -1, viewY = 0, viewM = 0;
 
   // Un jour compte dans le suivi entre l'inscription (ou début de contrat) et la fin du contrat, jusqu'à aujourd'hui.
   function dansSuivi(d, auj) {
@@ -64,36 +64,64 @@
     return d <= auj && (!debut || k >= debut) && (!fin || k <= fin);
   }
 
-  /* ---------- VIDANGE : 24 périodes de 14 jours ---------- */
+  /* ---------- Redevance par semaine / par mois : périodes du contrat ---------- */
+  function freq() { return (client && client.frequence) || 'jour'; }
+  function addJ(s, n) { var d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+  function diffJ(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000); }
+  function debutMois(debut, k) {
+    var a = debut.split('-').map(Number), total = (a[1] - 1) + k;
+    var an = a[0] + Math.floor(total / 12), mo = ((total % 12) + 12) % 12;
+    var dernier = new Date(Date.UTC(an, mo + 1, 0)).getUTCDate();
+    return an + '-' + pad(mo + 1) + '-' + pad(Math.min(a[2], dernier));
+  }
+  function periodesDe(jusqua) {
+    var f = freq(), debut = ((client.date_debut || client.date_creation) || '').slice(0, 10), out = [];
+    if (f === 'jour' || !debut) return out;
+    var finC = (client.date_fin || '').slice(0, 10);
+    for (var k = 0; k < 1500; k++) {
+      var d = f === 'semaine' ? addJ(debut, 7 * k) : debutMois(debut, k);
+      if (d > jusqua || (finC && d > finC)) break;
+      var suivant = f === 'semaine' ? addJ(debut, 7 * (k + 1)) : debutMois(debut, k + 1);
+      var finPleine = addJ(suivant, -1), fin = finC && finC < finPleine ? finC : finPleine;
+      out.push({ index: k, debut: d, fin: fin, jours: diffJ(d, fin) + 1, joursPleins: diffJ(d, finPleine) + 1 });
+    }
+    return out;
+  }
+  function dueDe(p) { var c = client.montant_journalier_effectif || 0; return p.jours < p.joursPleins ? Math.round(c * p.jours / p.joursPleins) : c; }
+  function sommePeriode(p) { var t = 0; for (var k = p.debut; k <= p.fin; k = addJ(k, 1)) { var r = paiements[k]; if (r) t += r.montant || 0; } return t; }
+  function jjmm(k) { var a = k.split('-'); return a[2] + '/' + a[1]; }
+  var NOM_PERIODE = { semaine: 'semaine', mois: 'mois' };
+
+  /* ---------- VIDANGE : 24 périodes de 14 jours, 100 F à cocher ---------- */
   function construirePeriodes() {
     var auj = aujourdhui(), annee = auj.getFullYear();
+    var cDebut = ((client.date_debut || client.date_creation) || '').slice(0, 10), cFin = (client.date_fin || '').slice(0, 10);
     periodes = [];
     for (var i = 0; i < 24; i++) {
       var debut = new Date(annee, 0, 1 + i * 14), fin = new Date(annee, 0, 1 + i * 14 + 13);
-      var ecoules = 0, payes = 0, montant = 0;
-      for (var j = 0; j < 14; j++) {
-        var d = new Date(annee, 0, 1 + i * 14 + j), p = paiements[iso(d)];
-        if (p) montant += p.montant;
-        if (!dansSuivi(d, auj)) continue;
-        ecoules++;
-        if (p && p.paye) payes++;
-      }
-      var etat = debut > auj ? 'future' : 'none';
-      if (ecoules > 0) etat = payes === ecoules ? 'paid' : payes === 0 ? 'unpaid' : 'part';
-      periodes.push({ i: i, debut: debut, fin: fin, ecoules: ecoules, payes: payes, montant: montant, etat: etat, actuelle: auj >= debut && auj <= fin });
+      var montant = 0;
+      for (var j = 0; j < 14; j++) { var p = paiements[iso(new Date(annee, 0, 1 + i * 14 + j))]; if (p) montant += p.montant; }
+      var contrat = (!cDebut || iso(fin) >= cDebut) && (!cFin || iso(debut) <= cFin);
+      var commencee = debut <= auj, actuelle = auj >= debut && auj <= fin;
+      var paye = !!vidanges[annee + '-' + (i + 1)];
+      // Vert : vidange cochée. Orange : période en cours, à payer. Rouge : période terminée sans vidange payée.
+      var etat = paye ? 'paid' : !contrat ? 'none' : !commencee ? 'future' : actuelle ? 'due' : 'unpaid';
+      periodes.push({ i: i, annee: annee, debut: debut, fin: fin, montant: montant, etat: etat, actuelle: actuelle, paye: paye, contrat: contrat, commencee: commencee });
     }
   }
 
   function afficherPeriodes(cascade) {
-    var libelle = { paid: 'Tout payé', part: 'Partiel', unpaid: 'Non payé', future: 'À venir', none: 'Hors contrat' };
+    var libelle = { paid: 'Vidange payée', due: 'À payer', unpaid: 'Non payée', future: 'À venir', none: 'Hors contrat' };
     $('driverPeriods').innerHTML = periodes.map(function (p) {
-      var inactif = p.ecoules === 0;
-      return '<button type="button" class="period-box st-' + p.etat + (p.actuelle ? ' current' : '') + (p.i === periodeChoisie ? ' selected' : '') + '"' +
-        ' data-i="' + p.i + '"' + (inactif ? ' disabled' : '') +
+      var cochable = p.paye || (p.contrat && p.commencee), ouvrable = p.contrat && p.commencee;
+      return '<div class="period-box st-' + p.etat + (p.actuelle ? ' current' : '') + (p.i === periodeChoisie ? ' selected' : '') + '"' +
+        ' data-i="' + p.i + '"' + (ouvrable ? ' role="button" tabindex="0"' : '') +
         ' aria-label="Période ' + (p.i + 1) + ', du ' + court(p.debut) + ' au ' + court(p.fin) + ' : ' + libelle[p.etat] + '">' +
         '<span class="p-num">N°' + (p.i + 1) + '</span>' +
         '<span class="p-range">' + court(p.debut) + ' – ' + court(p.fin) + '</span>' +
-        '<span class="p-state">' + (inactif ? '—' : p.payes + '/' + p.ecoules + ' j') + '</span></button>';
+        '<span class="p-state">' + libelle[p.etat] + '</span>' +
+        '<label class="p-check" title="Vidange ' + fcfa(MONTANT_VID) + '"><input type="checkbox" data-i="' + p.i + '"' + (p.paye ? ' checked' : '') + (cochable ? '' : ' disabled') + '>' +
+        '<span>Vidange ' + fcfa(MONTANT_VID) + '</span></label></div>';
     }).join('');
     if (cascade && window.smStagger) window.smStagger($('driverPeriods'), 24);
   }
@@ -101,8 +129,19 @@
   function afficherKpis(anime) {
     var an = String(aujourdhui().getFullYear());
     var total = Object.keys(paiements).reduce(function (t, k) { return k.slice(0, 4) === an ? t + (paiements[k].montant || 0) : t; }, 0);
-    var impayes = periodes.reduce(function (t, p) { return t + (p.ecoules - p.payes); }, 0);
-    var reglees = periodes.filter(function (p) { return p.etat === 'paid'; }).length;
+    var auj = iso(aujourdhui()), impayes = 0;
+    if (freq() === 'jour') {
+      // jours suivis (début du contrat -> aujourd'hui, borné par la fin) sans paiement complet
+      var debut = ((client.date_debut || client.date_creation) || '').slice(0, 10), fin = (client.date_fin || '').slice(0, 10);
+      var dernier = fin && fin < auj ? fin : auj;
+      for (var k = debut, n = 0; debut && k <= dernier && n < 4000; k = addJ(k, 1), n++) { var r = paiements[k]; if (!(r && r.paye)) impayes++; }
+      $('kUnpaidLabel').textContent = 'Jours impayés';
+    } else {
+      // semaines / mois terminés dont la somme versée n'atteint pas le montant dû
+      impayes = periodesDe(auj).filter(function (p) { return p.fin < auj && sommePeriode(p) < dueDe(p); }).length;
+      $('kUnpaidLabel').textContent = freq() === 'semaine' ? 'Semaines impayées' : 'Mois impayés';
+    }
+    var reglees = periodes.filter(function (p) { return p.paye; }).length; // vidanges payées
     var entier = function (n) { return String(Math.round(n)); };
     if (anime && window.smCountUp) {
       window.smCountUp($('kPaid'), total, { format: fcfa });
@@ -192,6 +231,44 @@
   $('prevMonthBtn').addEventListener('click', function () { if (!$('prevMonthBtn').disabled) changerMois(-1); });
   $('nextMonthBtn').addEventListener('click', function () { if (!$('nextMonthBtn').disabled) changerMois(1); });
 
+  /* ---------- REDEVANCE : par jour (calendrier) ou par semaine / mois (cartes) ---------- */
+  function renderRedevance() {
+    if (!client) return;
+    var nonJour = freq() !== 'jour', nom = NOM_PERIODE[freq()];
+    $('vueJour').style.display = nonJour ? 'none' : ''; $('vuePeriodes').style.display = nonJour ? '' : 'none';
+    $('rTitre').textContent = nonJour ? 'Redevance : paiements par ' + nom : 'Redevance : paiements jour par jour';
+    $('rSub').textContent = nonJour
+      ? 'Ce conducteur paie par ' + nom + ' : ' + fcfa(client.montant_journalier_effectif) + '. Enregistrez chaque versement dans la période concernée ; elle est payée quand la somme atteint ce montant.'
+      : 'Touchez un jour pour enregistrer le montant remis.';
+    if (nonJour) renderPeriodesRedevance(); else renderCalendar();
+  }
+  var MOY = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régulateur' };
+  function renderPeriodesRedevance() {
+    var auj = iso(aujourdhui()), l = periodesDe(auj).slice().reverse(), nom = freq() === 'semaine' ? 'Semaine' : 'Mois';
+    if (!l.length) { $('perList').innerHTML = '<p class="desc">Aucune période : vérifiez la date de début du contrat de ce conducteur.</p>'; return; }
+    $('perList').innerHTML = l.map(function (p) {
+      var verse = sommePeriode(p), due = dueDe(p), complete = verse >= due, terminee = p.fin < auj;
+      var etat = complete ? 'paid' : terminee ? 'unpaid' : 'due';
+      var badge = complete ? 'Payé' : terminee ? (verse > 0 ? 'Partiel · impayé' : 'Impayé') : 'En cours';
+      var lignes = [];
+      for (var k = p.debut; k <= p.fin; k = addJ(k, 1)) {
+        var r = paiements[k];
+        if (r && r.montant > 0) lignes.push('<li><span>' + jjmm(k) + '</span><strong>' + fcfa(r.montant) + '</strong><span>' + (MOY[r.moyen] || '') + '</span><button type="button" data-date="' + k + '" data-index="' + p.index + '">Modifier</button></li>');
+      }
+      return '<div class="per-card ' + etat + '"><div class="per-head"><strong>' + nom + ' ' + (p.index + 1) + '</strong>' +
+        '<span class="per-dates">du ' + jjmm(p.debut) + ' au ' + jjmm(p.fin) + '</span><span class="per-badge ' + etat + '">' + badge + '</span></div>' +
+        '<div class="per-bar"><i style="width:' + Math.min(100, Math.round(verse / Math.max(1, due) * 100)) + '%"></i></div>' +
+        '<div class="per-amt">' + fcfa(verse) + ' / ' + fcfa(due) + '</div>' +
+        (lignes.length ? '<ul class="per-lines">' + lignes.join('') + '</ul>' : '') +
+        '<button type="button" class="c-btn ghost per-add" data-index="' + p.index + '">Enregistrer un versement</button></div>';
+    }).join('');
+  }
+  $('perList').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var auj = iso(aujourdhui()), p = periodesDe(auj)[Number(b.dataset.index)]; if (!p) return;
+    ouvrirModalPeriode(p, b.dataset.date || (auj >= p.debut && auj <= p.fin ? auj : p.fin));
+  });
+
   /* ---------- Onglets ---------- */
   function placerPastille() {
     var actif = document.querySelector('.tabs button[aria-selected="true"]'), pill = $('tabPill');
@@ -204,7 +281,7 @@
     $('tabVidange').setAttribute('aria-selected', vid); $('tabRedevance').setAttribute('aria-selected', red); $('tabContrat').setAttribute('aria-selected', con);
     $('panelVidange').classList.toggle('show', vid); $('panelRedevance').classList.toggle('show', red); $('panelContrat').classList.toggle('show', con);
     placerPastille();
-    if (red) renderCalendar();
+    if (red) renderRedevance();
     if (con) renderContrat();
   }
   $('tabVidange').addEventListener('click', function () { basculer('vidange'); });
@@ -225,11 +302,24 @@
       ? (sans ? 'Aucun type n’a été enregistré pour ce conducteur : le contrat JOURNÉE PAYÉE est affiché par défaut.' : 'Contrat enregistré pour ce conducteur.')
       : 'Aperçu : ce n’est pas le type enregistré pour ce conducteur (' + smContrat.TYPES[enregistre].label + ').';
     $('contratSave').style.display = estAdmin && (t !== enregistre || sans) ? '' : 'none';
+    $('freqBloc').style.display = estAdmin ? '' : 'none';
+    document.querySelectorAll('#ficheFreqRow button').forEach(function (b) { b.classList.toggle('on', b.dataset.freq === freq()); b.setAttribute('aria-pressed', b.dataset.freq === freq()); });
     $('contratFeuille').innerHTML = smContrat.corps(client, t);
   }
   $('ficheTypeRow').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
     typeAffiche = b.dataset.type; renderContrat();
+  });
+  $('ficheFreqRow').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b || b.dataset.freq === freq()) return;
+    var nom = { jour: 'par jour', semaine: 'par semaine', mois: 'par mois' }[b.dataset.freq];
+    if (!window.confirm('Faire payer ' + client.nom + ' ' + nom + ' ?\n\nLe montant de base (' + fcfa(client.montant_journalier_effectif) + ') devient le montant d\'une période. Les paiements déjà saisis ne sont pas modifiés.')) return;
+    api('/api/clients/' + client.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frequence: b.dataset.freq }) })
+      .then(function (c) {
+        client.frequence = c.frequence; construirePeriodes(); afficherPeriodes(false); afficherKpis(false); renderContrat();
+        if (window.smToast) smToast('Paiement ' + nom + ' enregistré.');
+      })
+      .catch(function (err) { alert(window.smMessage ? smMessage(err) : 'Enregistrement impossible.'); });
   });
   $('contratDl').addEventListener('click', function () { smContrat.telecharger(client, typeAffiche || smContrat.typeDe(client)); });
   $('contratPrint').addEventListener('click', function () { smContrat.imprimer(client, typeAffiche || smContrat.typeDe(client)); });
@@ -248,14 +338,34 @@
     $('chipPeriode').classList.toggle('show', !!p);
     if (p) $('chipText').textContent = 'Période N°' + (p.i + 1) + ' : du ' + court(p.debut) + ' au ' + court(p.fin) + ' · ' + fcfa(p.montant) + ' versés';
   }
-  $('driverPeriods').addEventListener('click', function (e) {
-    var b = e.target.closest('.period-box'); if (!b || b.disabled) return;
-    periodeChoisie = Number(b.dataset.i);
-    var p = periodes[periodeChoisie];
-    var auj = aujourdhui(), fin = p.fin > auj ? auj : p.fin;
+  function ouvrirPeriodeVidange(box) {
+    var p = periodes[Number(box.dataset.i)]; if (!p || !p.contrat || !p.commencee) return;
+    periodeChoisie = p.i;
     viewY = p.debut.getFullYear(); viewM = p.debut.getMonth();
     if (new Date(viewY, viewM + 1, 0) < p.debut) { viewM += 1; }
     afficherPeriodes(false); majChip(); basculer('redevance');
+  }
+  $('driverPeriods').addEventListener('click', function (e) {
+    if (e.target.closest('.p-check')) return; // la case à cocher est gérée plus bas
+    var b = e.target.closest('.period-box'); if (b) ouvrirPeriodeVidange(b);
+  });
+  $('driverPeriods').addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('period-box')) { e.preventDefault(); ouvrirPeriodeVidange(e.target); }
+  });
+  // Cocher / décocher « Vidange payée » (100 F par période de 14 jours)
+  $('driverPeriods').addEventListener('change', function (e) {
+    var cb = e.target; if (!cb.matches || !cb.matches('.p-check input')) return;
+    var p = periodes[Number(cb.dataset.i)], coche = cb.checked;
+    if (!coche && !window.confirm('Retirer le paiement de la vidange de la période N°' + (p.i + 1) + ' ?')) { cb.checked = true; return; }
+    cb.disabled = true;
+    api('/api/vidanges', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code_client: client.code, annee: p.annee, periode: p.i + 1, paye: coche }) })
+      .then(function () {
+        if (coche) vidanges[p.annee + '-' + (p.i + 1)] = true; else delete vidanges[p.annee + '-' + (p.i + 1)];
+        construirePeriodes(); afficherPeriodes(false); afficherKpis(true);
+        if (window.smToast) smToast(coche ? 'Vidange payée : ' + fcfa(MONTANT_VID) + ' (période N°' + (p.i + 1) + ').' : 'Paiement de la vidange retiré.');
+      })
+      .catch(function (err) { cb.checked = !coche; cb.disabled = false; alert(window.smMessage ? smMessage(err) : err.message); });
   });
   $('chipClear').addEventListener('click', function () { periodeChoisie = -1; majChip(); afficherPeriodes(false); renderCalendar(); });
 
@@ -265,6 +375,7 @@
     var existant = paiements[cell.dataset.date], cible = client.montant_journalier_effectif;
     var a = cell.dataset.date.split('-').map(Number);
     ctx = { cell: cell, date: cell.dataset.date, cible: cible };
+    $('modalCibleLabel').textContent = 'Objectif du jour';
     $('modalDate').textContent = client.nom + ' — ' + a[2] + ' ' + MOIS_FR[a[1] - 1] + ' ' + a[0];
     $('modalCible').textContent = cible.toLocaleString('fr-FR') + ' F';
     $('amountInput').value = existant ? existant.montant : cible;
@@ -274,8 +385,24 @@
     modal.classList.add('show');
     setTimeout(function () { $('amountInput').focus(); $('amountInput').select(); }, 60);
   }
+  // Paiement par semaine / mois : le versement se rattache à la période qui contient la date choisie.
+  function ouvrirModalPeriode(p, dateIso) {
+    var existant = paiements[dateIso], due = dueDe(p);
+    var autres = sommePeriode(p) - (existant ? existant.montant : 0), reste = Math.max(0, due - autres);
+    var a = dateIso.split('-').map(Number);
+    ctx = { cell: null, date: dateIso, cible: due, complet: reste, periode: p };
+    $('modalDate').textContent = client.nom + ' — ' + a[2] + ' ' + MOIS_FR[a[1] - 1] + ' ' + a[0] + (autres > 0 ? ' · déjà versé les autres jours de la période : ' + fcfa(autres) : '');
+    $('modalCibleLabel').textContent = 'Montant de la ' + NOM_PERIODE[freq()];
+    $('modalCible').textContent = due.toLocaleString('fr-FR') + ' F';
+    $('amountInput').value = existant ? existant.montant : reste;
+    smMoyenSet(existant ? existant.moyen : null);
+    smNumeroSet(existant ? existant.numero_momo : null);
+    $('modalError').classList.remove('show'); $('amountInput').removeAttribute('data-invalid');
+    modal.classList.add('show');
+    setTimeout(function () { $('amountInput').focus(); $('amountInput').select(); }, 60);
+  }
   function fermerModal() { modal.classList.remove('show'); ctx = null; }
-  $('quickFullBtn').addEventListener('click', function () { $('amountInput').value = ctx ? ctx.cible : 0; $('amountInput').focus(); });
+  $('quickFullBtn').addEventListener('click', function () { $('amountInput').value = ctx ? (ctx.complet != null ? ctx.complet : ctx.cible) : 0; $('amountInput').focus(); });
   $('quickZeroBtn').addEventListener('click', function () { $('amountInput').value = 0; $('amountInput').focus(); });
   $('modalCancelBtn').addEventListener('click', fermerModal);
   modal.addEventListener('click', function (e) { if (e.target === modal) fermerModal(); });
@@ -296,12 +423,18 @@
       .then(function (p) {
         paiements[c.date] = p;
         (p.ajustements || []).forEach(function (a) { paiements[a.date] = Object.assign({}, paiements[a.date] || {}, a); });
-        majCellule(c.cell, p);
-        if (p.ajustements && p.ajustements.length) renderCalendar();
-        c.cell.classList.remove('just-toggled'); void c.cell.offsetWidth; c.cell.classList.add('just-toggled');
-        totaux(); construirePeriodes(); afficherPeriodes(false); majChip(); afficherKpis(true);
+        if (c.cell) {
+          majCellule(c.cell, p);
+          if (p.ajustements && p.ajustements.length) renderCalendar();
+          c.cell.classList.remove('just-toggled'); void c.cell.offsetWidth; c.cell.classList.add('just-toggled');
+          totaux();
+        } else {
+          renderPeriodesRedevance();
+        }
+        construirePeriodes(); afficherPeriodes(false); majChip(); afficherKpis(true);
         if (p.paye && window.smCelebrate) window.smCelebrate($('modalSaveBtn'));
         if (p.reporte && window.smToast) window.smToast(fcfa(p.reporte) + ' de surplus ont comblé ' + p.ajustements.length + (p.ajustements.length > 1 ? ' jours impayés.' : ' jour impayé.'));
+        else if (p.periode && window.smToast) window.smToast(p.periode.complete ? 'Période complète : ' + fcfa(p.periode.verse) + ' versés.' : 'Il reste ' + fcfa(p.periode.cible - p.periode.verse) + ' à payer pour cette période.');
         fermerModal();
       })
       .catch(function (err) { $('modalError').textContent = window.smMessage ? window.smMessage(err) : err.message; $('modalError').classList.add('show'); })
@@ -320,9 +453,12 @@
 
     Promise.all([configPrete, api('/api/clients/' + encodeURIComponent(norm))]).then(function (r) {
       client = r[1];
-      return api('/api/paiements?code_client=' + encodeURIComponent(client.code)); // tout l'historique, en une requête
-    }).then(function (rows) {
-      paiements = {}; rows.forEach(function (p) { paiements[p.date] = p; });
+      // tout l'historique des paiements et des vidanges, en deux requêtes
+      return Promise.all([api('/api/paiements?code_client=' + encodeURIComponent(client.code)), api('/api/vidanges?code_client=' + encodeURIComponent(client.code))]);
+    }).then(function (r) {
+      paiements = {}; r[0].forEach(function (p) { paiements[p.date] = p; });
+      vidanges = {}; r[1].lignes.forEach(function (l) { vidanges[l.annee + '-' + l.periode] = true; });
+      MONTANT_VID = r[1].montant; $('vidMontant').textContent = fcfa(MONTANT_VID);
 
       $('dAvatar').textContent = initials(client.nom); $('dAvatar').className = 'avatar ' + avatarClass(client.nom);
       $('dName').textContent = client.nom; $('dCode').textContent = client.code;
