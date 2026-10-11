@@ -113,13 +113,14 @@
   function afficherPeriodes(cascade) {
     var libelle = { paid: 'Vidange payée', due: 'À payer', unpaid: 'Non payée', future: 'À venir', none: 'Hors contrat' };
     $('driverPeriods').innerHTML = periodes.map(function (p) {
-      var cochable = p.paye || (p.contrat && p.commencee), ouvrable = p.contrat && p.commencee;
+      libelle.paid = p.paye && !p.commencee ? 'Payée d\'avance' : 'Vidange payée';
+      var cochable = p.paye || p.contrat, ouvrable = p.contrat && p.commencee; // une période à venir se paie d'avance
       return '<div class="period-box st-' + p.etat + (p.actuelle ? ' current' : '') + (p.i === periodeChoisie ? ' selected' : '') + '"' +
         ' data-i="' + p.i + '"' + (ouvrable ? ' role="button" tabindex="0"' : '') +
         ' aria-label="Période ' + (p.i + 1) + ', du ' + court(p.debut) + ' au ' + court(p.fin) + ' : ' + libelle[p.etat] + '">' +
         '<span class="p-num">N°' + (p.i + 1) + '</span>' +
         '<span class="p-range">' + court(p.debut) + ' – ' + court(p.fin) + '</span>' +
-        '<span class="p-state">' + libelle[p.etat] + '</span>' +
+        '<span class="p-state">' + (p.etat === 'paid' && !p.commencee ? 'Payée d\'avance' : libelle[p.etat]) + '</span>' +
         '<label class="p-check" title="Vidange ' + fcfa(MONTANT_VID) + '"><input type="checkbox" data-i="' + p.i + '"' + (p.paye ? ' checked' : '') + (cochable ? '' : ' disabled') + '>' +
         '<span>Vidange ' + fcfa(MONTANT_VID) + '</span></label></div>';
     }).join('');
@@ -155,18 +156,25 @@
 
   /* ---------- REDEVANCE : calendrier du mois (partie caissière) ---------- */
   var calGrid = $('calGrid');
-  function contenuJour(day, p) {
-    var paye = !!(p && p.paye);
-    return '<span class="num">' + day + '</span><span aria-hidden="true">' + (paye ? '✓' : '✗') + '</span>' +
+  function contenuJour(day, p, dateKey) {
+    var paye = !!(p && p.paye), futur = !!dateKey && dateKey > iso(aujourdhui());
+    return '<span class="num">' + day + '</span><span aria-hidden="true">' + (paye ? '✓' : futur ? '…' : '✗') + '</span>' +
       (p && p.montant > 0 ? '<span class="amt">' + p.montant.toLocaleString('fr-FR') + '</span>' : '') +
       (p && p.montant > 0 && p.moyen ? '<span class="mv" style="display:block;font-size:9.5px;font-weight:700;opacity:.9;line-height:1.1">' + ({ especes: 'ESP', momo: 'MOMO', momo_regulateur: 'RÉG' })[p.moyen] + '</span>' : '') +
-      (p && p.regle_le ? '<span class="rg" style="display:block;font-size:9px;font-weight:600;opacity:.85;line-height:1.1">réglé le ' + p.regle_le.split('-').reverse().join('/') + '</span>' : '');
+      (p && p.regle_le ? '<span class="rg" style="display:block;font-size:9px;font-weight:600;opacity:.85;line-height:1.1">' + (dateKey && p.regle_le < dateKey ? 'payé d\'avance le ' : 'réglé le ') + p.regle_le.split('-').reverse().join('/') + '</span>' : '');
   }
   function majCellule(cell, p) {
-    var day = Number(cell.dataset.date.split('-')[2]), paye = !!(p && p.paye);
-    cell.classList.toggle('paid', paye); cell.classList.toggle('unpaid', !paye);
-    cell.innerHTML = contenuJour(day, p);
-    cell.setAttribute('aria-label', day + ' ' + MOIS_FR[viewM] + ' : ' + (paye ? 'payé, ' + p.montant.toLocaleString('fr-FR') + ' F' : 'non payé'));
+    var day = Number(cell.dataset.date.split('-')[2]), paye = !!(p && p.paye), futur = cell.dataset.date > iso(aujourdhui());
+    // Jour à venir partiellement payé d'avance : ni payé ni impayé (orange)
+    cell.classList.toggle('paid', paye); cell.classList.toggle('unpaid', !paye && !futur); cell.classList.toggle('advance', !paye && futur);
+    cell.innerHTML = contenuJour(day, p, cell.dataset.date);
+    cell.setAttribute('aria-label', day + ' ' + MOIS_FR[viewM] + ' : ' + (paye ? 'payé' + (p.regle_le && p.regle_le < cell.dataset.date ? ' d\'avance' : '') + ', ' + p.montant.toLocaleString('fr-FR') + ' F' : futur ? 'avance partielle' : 'non payé'));
+  }
+  // Dernier mois à afficher : le mois en cours, ou plus tard si des jours ont été payés d'avance.
+  function moisMax() {
+    var auj = aujourdhui(), m = auj.getFullYear() * 12 + auj.getMonth();
+    Object.keys(paiements).forEach(function (k) { var a = k.split('-').map(Number), v = a[0] * 12 + (a[1] - 1); if (v > m && paiements[k].montant > 0) m = v; });
+    return m;
   }
   function minMois() {
     var s = ((client.date_debut || client.date_creation) || '').slice(0, 7);
@@ -179,7 +187,7 @@
     var y = viewY, m = viewM, auj = aujourdhui();
     var moisCourant = y === auj.getFullYear() && m === auj.getMonth();
     $('calTitle').textContent = MOIS_FR[m] + ' ' + y;
-    $('nextMonthBtn').disabled = moisCourant;
+    $('nextMonthBtn').disabled = (y * 12 + m) >= moisMax();
     $('prevMonthBtn').disabled = (y * 12 + m) <= minMois();
     calGrid.querySelectorAll('.cal-day, .cal-empty').forEach(function (el) { el.remove(); });
 
@@ -194,7 +202,7 @@
       cell.type = 'button'; cell.className = 'cal-day'; cell.dataset.date = k;
       if (d.getTime() === auj.getTime()) cell.classList.add('today');
       if (per && d >= per.debut && d <= per.fin) cell.classList.add('in-periode');
-      if (!p && !dansSuivi(d, auj)) {
+      if (!(p && p.montant > 0) && !dansSuivi(d, auj)) {
         cell.classList.add('future'); cell.disabled = true;
         cell.innerHTML = '<span class="num">' + day + '</span>';
       } else {
@@ -244,12 +252,16 @@
   }
   var MOY = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régulateur' };
   function renderPeriodesRedevance() {
-    var auj = iso(aujourdhui()), l = periodesDe(auj).slice().reverse(), nom = freq() === 'semaine' ? 'Semaine' : 'Mois';
+    var auj = iso(aujourdhui()), nom = freq() === 'semaine' ? 'Semaine' : 'Mois';
+    // les 2 prochaines périodes du contrat peuvent être payées d'avance
+    var avenir = periodesDe(addJ(auj, 400)).filter(function (p) { return p.debut > auj; }).slice(0, 2);
+    var l = periodesDe(auj).concat(avenir).reverse();
     if (!l.length) { $('perList').innerHTML = '<p class="desc">Aucune période : vérifiez la date de début du contrat de ce conducteur.</p>'; return; }
     $('perList').innerHTML = l.map(function (p) {
       var verse = sommePeriode(p), due = dueDe(p), complete = verse >= due, terminee = p.fin < auj;
-      var etat = complete ? 'paid' : terminee ? 'unpaid' : 'due';
-      var badge = complete ? 'Payé' : terminee ? (verse > 0 ? 'Partiel · impayé' : 'Impayé') : 'En cours';
+      var futur = p.debut > auj;
+      var etat = complete ? 'paid' : terminee ? 'unpaid' : futur ? 'future' : 'due';
+      var badge = complete ? (futur ? 'Payé d\'avance' : 'Payé') : terminee ? (verse > 0 ? 'Partiel · impayé' : 'Impayé') : futur ? (verse > 0 ? 'Avance partielle' : 'À venir') : 'En cours';
       var lignes = [];
       for (var k = p.debut; k <= p.fin; k = addJ(k, 1)) {
         var r = paiements[k];
@@ -260,13 +272,13 @@
         '<div class="per-bar"><i style="width:' + Math.min(100, Math.round(verse / Math.max(1, due) * 100)) + '%"></i></div>' +
         '<div class="per-amt">' + fcfa(verse) + ' / ' + fcfa(due) + '</div>' +
         (lignes.length ? '<ul class="per-lines">' + lignes.join('') + '</ul>' : '') +
-        '<button type="button" class="c-btn ghost per-add" data-index="' + p.index + '">Enregistrer un versement</button></div>';
+        '<button type="button" class="c-btn ghost per-add" data-index="' + p.index + '">' + (futur ? 'Payer d\'avance' : 'Enregistrer un versement') + '</button></div>';
     }).join('');
   }
   $('perList').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
-    var auj = iso(aujourdhui()), p = periodesDe(auj)[Number(b.dataset.index)]; if (!p) return;
-    ouvrirModalPeriode(p, b.dataset.date || (auj >= p.debut && auj <= p.fin ? auj : p.fin));
+    var auj = iso(aujourdhui()), p = periodesDe(addJ(auj, 400))[Number(b.dataset.index)]; if (!p) return;
+    ouvrirModalPeriode(p, b.dataset.date || (p.debut > auj ? p.debut : (auj >= p.debut && auj <= p.fin ? auj : p.fin)));
   });
 
   /* ---------- Onglets ---------- */
@@ -363,7 +375,7 @@
       .then(function () {
         if (coche) vidanges[p.annee + '-' + (p.i + 1)] = true; else delete vidanges[p.annee + '-' + (p.i + 1)];
         construirePeriodes(); afficherPeriodes(false); afficherKpis(true);
-        if (window.smToast) smToast(coche ? 'Vidange payée : ' + fcfa(MONTANT_VID) + ' (période N°' + (p.i + 1) + ').' : 'Paiement de la vidange retiré.');
+        if (window.smToast) smToast(coche ? (p.commencee ? 'Vidange payée : ' : 'Vidange payée d\'avance : ') + fcfa(MONTANT_VID) + ' (période N°' + (p.i + 1) + ').' : 'Paiement de la vidange retiré.');
       })
       .catch(function (err) { cb.checked = !coche; cb.disabled = false; alert(window.smMessage ? smMessage(err) : err.message); });
   });
@@ -371,6 +383,14 @@
 
   /* ---------- Modale : montant remis ---------- */
   var modal = $('amountModal'), ctx = null;
+  // Ce qui manque sur les jours du contrat AVANT la date donnée (le surplus sert d'abord à les régler)
+  function arrieresAvant(dateIso) {
+    var debut = ((client.date_debut || client.date_creation) || '').slice(0, 10), fin = (client.date_fin || '').slice(0, 10), cible = client.montant_journalier_effectif, t = 0;
+    for (var k = debut, n = 0; debut && k < dateIso && (!fin || k <= fin) && n < 4000; k = addJ(k, 1), n++) {
+      var r = paiements[k]; if (!(r && r.paye)) t += Math.max(0, cible - (r ? Math.min(r.montant, cible) : 0));
+    }
+    return t;
+  }
   function ouvrirModal(cell) {
     var existant = paiements[cell.dataset.date], cible = client.montant_journalier_effectif;
     var a = cell.dataset.date.split('-').map(Number);
@@ -381,6 +401,8 @@
     $('amountInput').value = existant ? existant.montant : cible;
     smMoyenSet(existant ? existant.moyen : null);
     smNumeroSet(existant ? existant.numero_momo : null);
+    smAvanceContexte({ actif: true, arrieres: arrieresAvant(cell.dataset.date), date: cell.dataset.date,
+      note: existant && existant.regle_le && existant.regle_le < cell.dataset.date ? 'Ce jour est déjà payé d\'avance (versé le ' + jjmm(existant.regle_le) + ').' : '' });
     $('modalError').classList.remove('show'); $('amountInput').removeAttribute('data-invalid');
     modal.classList.add('show');
     setTimeout(function () { $('amountInput').focus(); $('amountInput').select(); }, 60);
@@ -397,6 +419,7 @@
     $('amountInput').value = existant ? existant.montant : reste;
     smMoyenSet(existant ? existant.moyen : null);
     smNumeroSet(existant ? existant.numero_momo : null);
+    smAvanceContexte({ actif: false, note: dateIso > iso(aujourdhui()) ? 'Paiement d\'avance : cette période n\'a pas encore commencé.' : '' });
     $('modalError').classList.remove('show'); $('amountInput').removeAttribute('data-invalid');
     modal.classList.add('show');
     setTimeout(function () { $('amountInput').focus(); $('amountInput').select(); }, 60);
@@ -422,10 +445,10 @@
     api('/api/paiements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code_client: client.code, date: c.date, montant: montant, moyen: smMoyenGet(), numero_momo: smNumeroGet() || undefined }) })
       .then(function (p) {
         paiements[c.date] = p;
-        (p.ajustements || []).forEach(function (a) { paiements[a.date] = Object.assign({}, paiements[a.date] || {}, a); });
+        (p.ajustements || []).concat(p.avances || []).forEach(function (a) { paiements[a.date] = Object.assign({}, paiements[a.date] || {}, a); });
         if (c.cell) {
           majCellule(c.cell, p);
-          if (p.ajustements && p.ajustements.length) renderCalendar();
+          if ((p.ajustements && p.ajustements.length) || (p.avances && p.avances.length)) renderCalendar();
           c.cell.classList.remove('just-toggled'); void c.cell.offsetWidth; c.cell.classList.add('just-toggled');
           totaux();
         } else {
@@ -433,7 +456,7 @@
         }
         construirePeriodes(); afficherPeriodes(false); majChip(); afficherKpis(true);
         if (p.paye && window.smCelebrate) window.smCelebrate($('modalSaveBtn'));
-        if (p.reporte && window.smToast) window.smToast(fcfa(p.reporte) + ' de surplus ont comblé ' + p.ajustements.length + (p.ajustements.length > 1 ? ' jours impayés.' : ' jour impayé.'));
+        if ((p.reporte || (p.avances && p.avances.length)) && window.smToast) window.smToast(smReportMessage(p));
         else if (p.periode && window.smToast) window.smToast(p.periode.complete ? 'Période complète : ' + fcfa(p.periode.verse) + ' versés.' : 'Il reste ' + fcfa(p.periode.cible - p.periode.verse) + ' à payer pour cette période.');
         fermerModal();
       })
