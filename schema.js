@@ -45,7 +45,10 @@ CREATE TABLE IF NOT EXISTS clients (
   marque TEXT,
   frequence TEXT,
   date_debut TEXT,
-  date_fin TEXT
+  date_fin TEXT,
+  etat_moto TEXT,
+  visiteur TEXT,
+  date_archivage TEXT
 );
 CREATE TABLE IF NOT EXISTS paiements (
   id ${pk},
@@ -82,6 +85,15 @@ CREATE TABLE IF NOT EXISTS vidanges (
   maj_le TEXT NOT NULL,
   UNIQUE (code_client, annee, periode)
 );
+CREATE TABLE IF NOT EXISTS vidange_paiements (
+  id ${pk},
+  code_client TEXT NOT NULL,
+  date_paiement TEXT NOT NULL,
+  montant INTEGER NOT NULL,
+  compte_id INTEGER,
+  maj_le TEXT NOT NULL,
+  UNIQUE (code_client, date_paiement)
+);
 CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 `);
 
@@ -92,7 +104,8 @@ CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NUL
     clients: [
       ['code', 'TEXT'], ['statut', "TEXT NOT NULL DEFAULT 'actif'"], ['date_creation', 'TEXT'], ['prix_moto', 'INTEGER'],
       ['montant_journalier', 'INTEGER'], ['temoin_nom', 'TEXT'], ['temoin_telephone', 'TEXT'], ['temoin_adresse', 'TEXT'],
-      ['type_contrat', 'TEXT'], ['immatriculation', 'TEXT'], ['marque', 'TEXT'], ['frequence', 'TEXT'], ['date_debut', 'TEXT'], ['date_fin', 'TEXT']
+      ['type_contrat', 'TEXT'], ['immatriculation', 'TEXT'], ['marque', 'TEXT'], ['frequence', 'TEXT'], ['date_debut', 'TEXT'], ['date_fin', 'TEXT'],
+      ['etat_moto', 'TEXT'], ['visiteur', 'TEXT'], ['date_archivage', 'TEXT']
     ]
   };
   for (const [table, cols] of Object.entries(ajouts)) {
@@ -105,5 +118,14 @@ CREATE INDEX IF NOT EXISTS idx_versements_jour ON versements (jour_saisie);
 CREATE INDEX IF NOT EXISTS idx_vidanges_jour ON vidanges (jour_saisie);
 CREATE INDEX IF NOT EXISTS idx_paiements_date ON paiements (date);
 CREATE INDEX IF NOT EXISTS idx_sessions_compte ON sessions (compte_id);
+CREATE INDEX IF NOT EXISTS idx_vidange_paiements_date ON vidange_paiements (date_paiement);
 `);
+
+  // Anciennes vidanges (périodes fixes de 14 jours) : reprises une seule fois, à la date où elles ont été cochées.
+  // (L'ancienne table « vidanges » n'est pas supprimée : elle reste comme sauvegarde.)
+  const dejaRepris = (await db.get('SELECT COUNT(*) AS n FROM vidange_paiements')).n;
+  if (!dejaRepris) {
+    await db.exec(`INSERT INTO vidange_paiements (code_client, date_paiement, montant, compte_id, maj_le)
+      SELECT code_client, MAX(jour_saisie), MAX(montant), MAX(compte_id), MAX(maj_le) FROM vidanges GROUP BY code_client, jour_saisie`);
+  }
 };
