@@ -200,6 +200,16 @@
   .badge.active{ background:var(--accent-soft); color:var(--accent-dark); }
   .badge.inactive{ background:#E6EAF1; color:var(--ink-faint); }
   .badge.new{ background:var(--amber-soft); color:var(--amber); }
+  .row-actions{ display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+  .row-actions button{ border:1.5px solid var(--border); background:var(--panel); color:var(--ink); border-radius:8px; padding:6px 11px; font:600 12px var(--sans); cursor:pointer; }
+  .row-actions button:hover{ border-color:var(--accent); color:var(--accent-dark); }
+  .row-actions button.danger:hover{ border-color:var(--error); color:var(--error); }
+  .modal-edit{ display:none; position:fixed; inset:0; z-index:200; background:rgba(11,27,51,.55); align-items:flex-start; justify-content:center; padding:24px 14px; overflow-y:auto; }
+  .modal-edit.show{ display:flex; }
+  .modal-edit .card{ background:var(--panel); border-radius:14px; width:100%; max-width:820px; padding:22px 20px; box-shadow:0 24px 60px -12px rgba(11,27,51,.45); }
+  .modal-edit h2{ font-family:var(--serif); font-size:21px; margin:0 0 4px; }
+  .modal-edit .sub{ margin:0 0 14px; color:var(--ink-soft); font-size:13px; }
+  .d-moto{ color:var(--ink-faint); font-size:12px; }
 
   @media (max-width: 780px){
     .app{ grid-template-columns:1fr; }
@@ -257,6 +267,10 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         Collectes journalières
       </a>
+      <a href="caissiere.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>
+        Paiements
+      </a>
       <a href="motos.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h9V8H6zM15 8h3l3 4v5h-1"/></svg>
         Motos &amp; financement
@@ -264,6 +278,10 @@
       <a href="employes.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
         Employés
+      </a>
+      <a href="archives.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        Archives
       </a>
       <a href="parametres.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -359,6 +377,12 @@
           <span class="field-error" id="newWitnessAddressError"></span>
         </div>
 
+        <p class="section-title">Visite</p>
+        <div class="field">
+          <label for="newVisiteur">Nom du visiteur <span style="font-weight:400; color:var(--ink-faint);">— optionnel</span></label>
+          <input type="text" id="newVisiteur" placeholder="ex. Koffi Mensah" autocomplete="off">
+        </div>
+
         <p class="section-title">Contrat</p>
         <div class="field" style="grid-column:1/-1">
           <p class="type-label">TYPE DE CONTRAT :</p>
@@ -375,6 +399,14 @@
             <button type="button" data-freq="semaine">Par semaine</button>
             <button type="button" data-freq="mois">Par mois</button>
           </div>
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <p class="type-label">ÉTAT DE LA MOTO :</p>
+          <div class="type-row" id="newEtatRow" role="group" aria-label="État de la moto">
+            <button type="button" data-etat="neuve">Moto NEUVE</button>
+            <button type="button" data-etat="usagee">Moto USAGÉE</button>
+          </div>
+          <span class="field-error" id="newEtatError"></span>
         </div>
         <div class="field">
           <label for="newMarque">Marque de la moto</label>
@@ -412,6 +444,51 @@
         </div>
       </form>
 
+      <div class="modal-edit" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitre">
+        <div class="card">
+          <h2 id="editTitre">Modifier le conducteur</h2>
+          <p class="sub" id="editSub"></p>
+          <form class="add-form open" id="editForm" novalidate>
+            <p class="section-title">Conducteur</p>
+            <div class="field"><label for="edCode">Code</label><input type="text" id="edCode" maxlength="20" autocomplete="off" style="text-transform:uppercase;"></div>
+            <div class="field"><label for="edName">Nom et prénoms</label><input type="text" id="edName" autocomplete="off"></div>
+            <div class="field"><label for="edPhone">Téléphone</label><input type="tel" id="edPhone" autocomplete="off"></div>
+            <div class="field"><label for="edAddress">Adresse</label><input type="text" id="edAddress" autocomplete="off"></div>
+            <div class="field"><label for="edVisiteur">Nom du visiteur</label><input type="text" id="edVisiteur" autocomplete="off"></div>
+
+            <p class="section-title">Témoin</p>
+            <div class="field"><label for="edWName">Nom et prénoms</label><input type="text" id="edWName" autocomplete="off"></div>
+            <div class="field"><label for="edWPhone">Téléphone</label><input type="tel" id="edWPhone" autocomplete="off"></div>
+            <div class="field"><label for="edWAddress">Adresse</label><input type="text" id="edWAddress" autocomplete="off"></div>
+
+            <p class="section-title">Moto et contrat</p>
+            <div class="field" style="grid-column:1/-1"><p class="type-label">ÉTAT DE LA MOTO :</p>
+              <div class="type-row" id="edEtatRow"><button type="button" data-v="neuve">Moto NEUVE</button><button type="button" data-v="usagee">Moto USAGÉE</button></div></div>
+            <div class="field" style="grid-column:1/-1"><p class="type-label">TYPE DE CONTRAT :</p>
+              <div class="type-row" id="edTypeRow"><button type="button" data-v="journee_payee">Contrat JOURNÉE PAYÉE</button><button type="button" data-v="droit_usage">Contrat DROIT D’USAGE</button></div></div>
+            <div class="field" style="grid-column:1/-1"><p class="type-label">REDEVANCE PAYÉE :</p>
+              <div class="type-row" id="edFreqRow"><button type="button" data-v="jour">Par jour</button><button type="button" data-v="semaine">Par semaine</button><button type="button" data-v="mois">Par mois</button></div></div>
+            <div class="field"><label for="edMarque">Marque de la moto</label><input type="text" id="edMarque" autocomplete="off"></div>
+            <div class="field"><label for="edPlate">Immatriculation (plaque)</label><input type="text" id="edPlate" autocomplete="off"></div>
+            <div class="field"><label for="edStart">Date de début</label><input type="date" id="edStart"></div>
+            <div class="field"><label for="edEnd">Date de fin</label><input type="date" id="edEnd"></div>
+            <div class="field"><label for="edPrice">Montant de base (F CFA, par période)</label><input type="number" id="edPrice" min="0" step="100"></div>
+            <div class="field"><label for="edMotoPrice">Prix de la moto (F CFA)</label><input type="number" id="edMotoPrice" min="0" step="1000"></div>
+
+            <p class="section-title">Statut</p>
+            <div class="field" style="grid-column:1/-1">
+              <div class="type-row" id="edStatutRow"><button type="button" data-v="actif">Actif</button><button type="button" data-v="inactif">Inactif</button><button type="button" data-v="suspendu">Suspendu (archiver)</button></div>
+              <span class="field-error" style="color:var(--ink-faint);">Un conducteur suspendu quitte cette liste, les collectes et les impayés : il est rangé dans « Archives ».</span>
+            </div>
+            <div class="actions">
+              <button type="submit" class="btn" id="edSave">Enregistrer les modifications</button>
+              <button type="button" class="btn ghost" id="edCancel">Annuler</button>
+              <span class="field-error" id="edError" style="flex-basis:100%;"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <div class="toast" id="toast" role="dialog" aria-modal="true" aria-labelledby="toastName">
         <div class="toast-card">
           <span class="toast-body"><svg class="toast-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" stroke-dasharray="24" stroke-dashoffset="24" style="animation:sm-check-in .4s .15s ease forwards"/></svg><span>Conducteur ajouté : <strong id="toastName"></strong> — code <span class="code" id="toastCode"></span></span></span>
@@ -425,7 +502,7 @@
 
       <table>
         <thead>
-          <tr><th>Code</th><th>Conducteur</th><th>Inscrit le</th><th>Statut</th></tr>
+          <tr><th>Code</th><th>Conducteur</th><th>Inscrit le</th><th>Statut</th><th></th></tr>
         </thead>
         <tbody id="driversBody"></tbody>
       </table>
@@ -514,9 +591,11 @@
       return '<tr>' +
         '<td class="code-val" data-label="Code"><a class="code-link" href="fiche-conducteur.html?code=' + encodeURIComponent(c.code) + '" title="Ouvrir la fiche : vidange et redevance">' + esc(c.code) + '</a></td>' +
         '<td data-label="Conducteur"><div class="driver-cell"><div class="avatar ' + avatarClass(c.nom) + '">' + esc(initials(c.nom)) + '</div>' +
-        '<div><div class="d-name">' + esc(c.nom) + '</div><div class="d-phone">' + esc(c.telephone || '—') + (c.immatriculation ? ' · ' + esc(c.immatriculation) : '') + '</div></div></div></td>' +
+        '<div><div class="d-name">' + esc(c.nom) + '</div><div class="d-phone">' + esc(c.telephone || '—') + (c.immatriculation ? ' · ' + esc(c.immatriculation) : '') + '</div>' + (c.etat_moto ? '<div class="d-moto">Moto ' + (c.etat_moto === 'neuve' ? 'neuve' : 'usagée') + '</div>' : '') + '</div></div></td>' +
         '<td data-label="Inscrit le">' + formatDateFR(c.date_creation) + '</td>' +
-        '<td data-label="Statut">' + badge(c) + '</td></tr>';
+        '<td data-label="Statut">' + badge(c) + '</td>' +
+        '<td data-label="Actions"><div class="row-actions"><button type="button" data-act="edit" data-code="' + esc(c.code) + '">Modifier</button>' +
+        '<button type="button" class="danger" data-act="archive" data-code="' + esc(c.code) + '" title="Suspendre et archiver ce conducteur">Archiver</button></div></td></tr>';
     }).join('');
 
     let msg = '';
@@ -586,6 +665,12 @@
     $('newPrice').placeholder = { jour: 'ex. 3500', semaine: 'ex. 21000', mois: 'ex. 90000' }[f];
   }
   $('newFreqRow').addEventListener('click', function(e){ const b = e.target.closest('button'); if(b) choisirFrequence(b.dataset.freq); });
+  let etatMoto = '';
+  $('newEtatRow').addEventListener('click', function(e){
+    const b = e.target.closest('button'); if(!b) return;
+    etatMoto = b.dataset.etat; $('newEtatError').textContent = ''; $('newEtatRow').removeAttribute('data-invalid');
+    $('newEtatRow').querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+  });
   let typeContrat = '';
   const typeRow = $('newTypeRow');
   function choisirType(t){
@@ -603,7 +688,8 @@
     $('addFormError').textContent = '';
     CHAMPS_REQUIS.forEach(function(c){ c.input.value = ''; c.input.removeAttribute('data-invalid'); c.err.textContent = ''; });
     $('newMotoPrice').value = ''; $('newMotoPrice').removeAttribute('data-invalid'); $('newMotoPriceError').textContent = '';
-    $('newMarque').value = 'TVS'; $('newPlate').value = ''; choisirType(''); choisirFrequence('jour');
+    $('newMarque').value = 'TVS'; $('newPlate').value = ''; $('newVisiteur').value = ''; choisirType(''); choisirFrequence('jour');
+    etatMoto = ''; $('newEtatRow').querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); }); $('newEtatError').textContent = '';
   }
   toggleFormBtn.addEventListener('click', function(){ addForm.classList.contains('open') ? closeForm() : openForm(); });
   cancelFormBtn.addEventListener('click', closeForm);
@@ -625,6 +711,10 @@
     if(!typeContrat){
       typeRow.setAttribute('data-invalid', 'true'); $('newTypeError').textContent = 'Choisissez le type de contrat.';
       if(!premierInvalide){ typeRow.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    }
+    if(!etatMoto){
+      $('newEtatRow').setAttribute('data-invalid', 'true'); $('newEtatError').textContent = "Choisissez l'état de la moto (neuve ou usagée).";
+      if(!premierInvalide){ $('newEtatRow').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
     }
     if(premierInvalide){ premierInvalide.focus(); return; }
 
@@ -654,6 +744,8 @@
         prix_moto: $('newMotoPrice').value.trim() ? Number($('newMotoPrice').value) : undefined,
         type_contrat: typeContrat,
         frequence: frequence,
+        etat_moto: etatMoto,
+        visiteur: $('newVisiteur').value.trim() || undefined,
         marque: $('newMarque').value.trim() || 'TVS',
         immatriculation: $('newPlate').value.trim() || undefined
       })
@@ -671,6 +763,76 @@
         $('addFormError').textContent = smMessage(err);
       })
       .finally(function(){ submitBtn.disabled = false; });
+  });
+
+  // ---------- Modifier / archiver un conducteur ----------
+  const editModal = $('editModal');
+  let edId = null, ed = {};
+  function choisirEd(rowId, cle, valeur){
+    ed[cle] = valeur;
+    $(rowId).querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.v === valeur); b.setAttribute('aria-pressed', b.dataset.v === valeur); });
+  }
+  [['edEtatRow','etat_moto'], ['edTypeRow','type_contrat'], ['edFreqRow','frequence'], ['edStatutRow','statut']].forEach(function(t){
+    $(t[0]).addEventListener('click', function(e){ const b = e.target.closest('button'); if(b) choisirEd(t[0], t[1], b.dataset.v); });
+  });
+  function ouvrirEdition(c){
+    edId = c.id; ed = {};
+    $('editSub').textContent = c.nom + ' · ' + c.code;
+    $('edCode').value = c.code || ''; $('edName').value = c.nom || ''; $('edPhone').value = c.telephone || ''; $('edAddress').value = c.adresse || '';
+    $('edVisiteur').value = c.visiteur || '';
+    $('edWName').value = c.temoin_nom || ''; $('edWPhone').value = c.temoin_telephone || ''; $('edWAddress').value = c.temoin_adresse || '';
+    $('edMarque').value = c.marque || 'TVS'; $('edPlate').value = c.immatriculation || '';
+    $('edStart').value = (c.date_debut || '').slice(0, 10); $('edEnd').value = (c.date_fin || '').slice(0, 10);
+    $('edPrice').value = c.montant_journalier || ''; $('edMotoPrice').value = c.prix_moto || '';
+    choisirEd('edEtatRow', 'etat_moto', c.etat_moto || ''); choisirEd('edTypeRow', 'type_contrat', c.type_contrat || 'journee_payee');
+    choisirEd('edFreqRow', 'frequence', c.frequence || 'jour'); choisirEd('edStatutRow', 'statut', c.statut || 'actif');
+    $('edError').textContent = '';
+    editModal.classList.add('show'); $('edName').focus();
+  }
+  function fermerEdition(){ editModal.classList.remove('show'); edId = null; }
+  $('edCancel').addEventListener('click', fermerEdition);
+  editModal.addEventListener('click', function(e){ if(e.target === editModal) fermerEdition(); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && editModal.classList.contains('show')) fermerEdition(); });
+
+  $('editForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    const nom = $('edName').value.trim(), code = $('edCode').value.trim();
+    if(nom.length < 2){ $('edError').textContent = 'Entrez le nom du conducteur.'; return; }
+    if(!code){ $('edError').textContent = 'Entrez le code du conducteur.'; return; }
+    if(!Number($('edPrice').value) || Number($('edPrice').value) < 1){ $('edError').textContent = 'Entrez le montant de base.'; return; }
+    if($('edStart').value && $('edEnd').value && $('edEnd').value < $('edStart').value){ $('edError').textContent = 'La date de fin doit être après la date de début.'; return; }
+    if(ed.statut === 'suspendu' && !window.confirm('Suspendre ' + nom + ' ? Il sera archivé : plus de collecte ni de paiement tant qu\'il n\'est pas réactivé.')) return;
+    const body = {
+      code: code, nom: nom, telephone: $('edPhone').value.trim(), adresse: $('edAddress').value.trim(), visiteur: $('edVisiteur').value.trim(),
+      temoin_nom: $('edWName').value.trim(), temoin_telephone: $('edWPhone').value.trim(), temoin_adresse: $('edWAddress').value.trim(),
+      marque: $('edMarque').value.trim() || 'TVS', immatriculation: $('edPlate').value.trim(),
+      date_debut: $('edStart').value, date_fin: $('edEnd').value,
+      montant_journalier: Number($('edPrice').value), prix_moto: $('edMotoPrice').value.trim() ? Number($('edMotoPrice').value) : '',
+      type_contrat: ed.type_contrat, frequence: ed.frequence, statut: ed.statut
+    };
+    if(ed.etat_moto) body.etat_moto = ed.etat_moto;
+    const btn = $('edSave'); btn.disabled = true; $('edError').textContent = '';
+    api('/api/clients/' + edId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function(c){
+        const i = clients.findIndex(function(x){ return x.id === c.id; });
+        if(c.statut === 'suspendu'){ if(i >= 0) clients.splice(i, 1); }
+        else if(i >= 0) clients[i] = c;
+        fermerEdition(); render();
+        if(window.smToast) smToast(c.statut === 'suspendu' ? 'Conducteur archivé.' : 'Modifications enregistrées.');
+      })
+      .catch(function(err){ $('edError').textContent = smMessage(err); })
+      .finally(function(){ btn.disabled = false; });
+  });
+
+  driversBody.addEventListener('click', function(e){
+    const b = e.target.closest('button[data-act]'); if(!b) return;
+    const c = clients.find(function(x){ return x.code === b.dataset.code; }); if(!c) return;
+    if(b.dataset.act === 'edit') return ouvrirEdition(c);
+    if(!window.confirm('Archiver ' + c.nom + ' (' + c.code + ') ?\n\nIl sera suspendu : il disparaît de cette liste, des collectes et des impayés, et reste consultable dans « Archives ». Vous pourrez le réactiver.')) return;
+    b.disabled = true;
+    api('/api/clients/' + c.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'suspendu' }) })
+      .then(function(){ clients = clients.filter(function(x){ return x.id !== c.id; }); render(); if(window.smToast) smToast('Conducteur archivé.'); })
+      .catch(function(err){ b.disabled = false; alert(smMessage(err)); });
   });
 
   $('copyToastBtn').addEventListener('click', function(){
