@@ -94,7 +94,7 @@
     return '' +
       '<h1>CONTRAT D’ATTRIBUTION DE DROIT D’USAGE No ' + v(c.code, '…………') + '</h1>' +
       '<h3>Article 1 (OBJET)</h3>' +
-      '<p>Il est procédé à la remise de la moto neuve de marque ' + v(c.marque || 'TVS', 'TVS') + ' portant la plaque ' + v(c.immatriculation, '………………….') +
+      '<p>Il est procédé à la remise de la moto ' + (c.etat_moto === 'usagee' ? 'usagée' : 'neuve') + ' de marque ' + v(c.marque || 'TVS', 'TVS') + ' portant la plaque ' + v(c.immatriculation, '………………….') +
       ' par ' + PROPRIETAIRE.nomInverse + ' (Propriétaire), Godomey Gare, Tél : ' + PROPRIETAIRE.telCourt + ' à ' + v(c.nom, '……………………………………………….') +
       ' (Conducteur) Téléphone ' + v(c.telephone, '……………………………………') + '</p>' +
       '<h3>Article 2 (USAGE)</h3>' +
