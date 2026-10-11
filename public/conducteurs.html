@@ -290,12 +290,12 @@
     <div class="topbar">
       <div>
         <h1>Conducteurs</h1>
-        <p class="sub">Chaque conducteur reçoit un code unique généré automatiquement à l'inscription.</p>
+        <p class="sub">Le code de chaque conducteur est saisi par l'administrateur à l'inscription et doit être unique.</p>
       </div>
       <div class="top-actions">
         <div class="search">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="searchInput" placeholder="Code ou nom, puis Entrée pour ouvrir la fiche…">
+          <input type="text" id="searchInput" placeholder="Code, nom ou plaque, puis Entrée pour ouvrir la fiche…">
         </div>
         <div class="profile-chip">
           <div class="avatar">AD</div>
@@ -321,6 +321,11 @@
 
       <form class="add-form" id="addForm">
         <p class="section-title">Conducteur</p>
+        <div class="field">
+          <label for="newCode">Code du conducteur</label>
+          <input type="text" id="newCode" placeholder="ex. SM-274819" autocomplete="off" maxlength="20" style="text-transform:uppercase;">
+          <span class="field-error" id="newCodeError"></span>
+        </div>
         <div class="field">
           <label for="newName">Nom et prénoms</label>
           <input type="text" id="newName" placeholder="ex. Espoir Kaki" autocomplete="off">
@@ -363,6 +368,14 @@
           </div>
           <span class="field-error" id="newTypeError"></span>
         </div>
+        <div class="field" style="grid-column:1/-1">
+          <p class="type-label">REDEVANCE PAYÉE :</p>
+          <div class="type-row" id="newFreqRow" role="group" aria-label="Fréquence de paiement de la redevance">
+            <button type="button" data-freq="jour" class="on">Par jour</button>
+            <button type="button" data-freq="semaine">Par semaine</button>
+            <button type="button" data-freq="mois">Par mois</button>
+          </div>
+        </div>
         <div class="field">
           <label for="newMarque">Marque de la moto</label>
           <input type="text" id="newMarque" value="TVS" autocomplete="off">
@@ -382,7 +395,7 @@
           <span class="field-error" id="newEndDateError"></span>
         </div>
         <div class="field">
-          <label for="newPrice">Montant de base journalier (F CFA)</label>
+          <label for="newPrice" id="newPriceLabel">Montant de base journalier (F CFA)</label>
           <input type="number" id="newPrice" min="0" step="100" placeholder="ex. 3500" autocomplete="off">
           <span class="field-error" id="newPriceError"></span>
         </div>
@@ -393,7 +406,7 @@
         </div>
 
         <div class="actions">
-          <button type="submit" class="btn">Générer le code et ajouter</button>
+          <button type="submit" class="btn">Ajouter le conducteur</button>
           <button type="button" class="btn ghost" id="cancelFormBtn">Annuler</button>
           <span class="field-error" id="addFormError" style="flex-basis:100%;"></span>
         </div>
@@ -401,7 +414,7 @@
 
       <div class="toast" id="toast" role="dialog" aria-modal="true" aria-labelledby="toastName">
         <div class="toast-card">
-          <span class="toast-body"><svg class="toast-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" stroke-dasharray="24" stroke-dashoffset="24" style="animation:sm-check-in .4s .15s ease forwards"/></svg><span>Code généré pour <strong id="toastName"></strong> — <span class="code" id="toastCode"></span></span></span>
+          <span class="toast-body"><svg class="toast-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" stroke-dasharray="24" stroke-dashoffset="24" style="animation:sm-check-in .4s .15s ease forwards"/></svg><span>Conducteur ajouté : <strong id="toastName"></strong> — code <span class="code" id="toastCode"></span></span></span>
           <div class="toast-actions">
             <button type="button" class="ghost" id="closeToastBtn">Fermer</button>
             <button type="button" class="ghost" id="contratToastBtn">Télécharger le contrat</button>
@@ -489,15 +502,19 @@
     return '<span class="badge active">Actif</span>';
   }
 
+  // « EP 1234 RB », « ep-1234-rb » et « EP1234RB » : même plaque
+  function plaqueNorm(v){ return String(v || '').toLowerCase().replace(/[\s.\-_]/g, ''); }
+
   function render(){
     const q = searchInput.value.trim().toLowerCase();
-    const list = clients.filter(c => c.nom.toLowerCase().includes(q) || c.code.toLowerCase().includes(q));
+    const qp = plaqueNorm(q);
+    const list = clients.filter(c => c.nom.toLowerCase().includes(q) || c.code.toLowerCase().includes(q) || (qp.length >= 2 && plaqueNorm(c.immatriculation).includes(qp)));
 
     driversBody.innerHTML = list.map(function(c){
       return '<tr>' +
         '<td class="code-val" data-label="Code"><a class="code-link" href="fiche-conducteur.html?code=' + encodeURIComponent(c.code) + '" title="Ouvrir la fiche : vidange et redevance">' + esc(c.code) + '</a></td>' +
         '<td data-label="Conducteur"><div class="driver-cell"><div class="avatar ' + avatarClass(c.nom) + '">' + esc(initials(c.nom)) + '</div>' +
-        '<div><div class="d-name">' + esc(c.nom) + '</div><div class="d-phone">' + esc(c.telephone || '—') + '</div></div></div></td>' +
+        '<div><div class="d-name">' + esc(c.nom) + '</div><div class="d-phone">' + esc(c.telephone || '—') + (c.immatriculation ? ' · ' + esc(c.immatriculation) : '') + '</div></div></div></td>' +
         '<td data-label="Inscrit le">' + formatDateFR(c.date_creation) + '</td>' +
         '<td data-label="Statut">' + badge(c) + '</td></tr>';
     }).join('');
@@ -532,13 +549,13 @@
     if(e.key !== 'Enter') return;
     const q = searchInput.value.trim().toLowerCase().replace(/\s+/g, '');
     if(!q) return;
-    const exact = clients.find(function(c){ return c.code.toLowerCase() === q; });
-    const liste = clients.filter(function(c){ return c.nom.toLowerCase().includes(q) || c.code.toLowerCase().includes(q); });
+    const exact = clients.find(function(c){ return c.code.toLowerCase() === q || (q.length >= 3 && plaqueNorm(c.immatriculation) === plaqueNorm(q)); });
+    const liste = clients.filter(function(c){ return c.nom.toLowerCase().includes(q) || c.code.toLowerCase().includes(q) || (q.length >= 2 && plaqueNorm(c.immatriculation).includes(plaqueNorm(q))); });
     const cible = exact || (liste.length === 1 ? liste[0] : null);
     if(cible) window.smGo ? window.smGo('fiche-conducteur.html?code=' + encodeURIComponent(cible.code)) : (window.location.href = 'fiche-conducteur.html?code=' + encodeURIComponent(cible.code));
   });
 
-  // ---------- Formulaire d'ajout (le code est généré par le serveur) ----------
+  // ---------- Formulaire d'ajout (le code est saisi par l'administrateur) ----------
   const toggleFormBtn = $('toggleFormBtn');
   const cancelFormBtn = $('cancelFormBtn');
   const addForm = $('addForm');
@@ -546,6 +563,7 @@
 
   // Chaque champ requis : [input, span-erreur, message]
   const CHAMPS_REQUIS = [
+    ['newCode', 'newCodeError', 'Entrez le code du conducteur.'],
     ['newName', 'newNameError', 'Entrez le nom et prénoms du conducteur.'],
     ['newPhone', 'newPhoneError', 'Entrez le téléphone du conducteur.'],
     ['newAddress', 'newAddressError', "Entrez l'adresse du conducteur."],
@@ -558,6 +576,16 @@
   ].map(function(t){ return { input: $(t[0]), err: $(t[1]), msg: t[2] }; });
 
   // Type de contrat : un des deux boutons doit être choisi
+  // Fréquence de paiement de la redevance : par jour (défaut), par semaine ou par mois. Le montant de base est celui d'UNE période.
+  let frequence = 'jour';
+  function choisirFrequence(f){
+    frequence = f;
+    $('newFreqRow').querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.freq === f); b.setAttribute('aria-pressed', b.dataset.freq === f); });
+    const lib = { jour: 'journalier', semaine: 'hebdomadaire (par semaine)', mois: 'mensuel (par mois)' }[f];
+    $('newPriceLabel').textContent = 'Montant de base ' + lib + ' (F CFA)';
+    $('newPrice').placeholder = { jour: 'ex. 3500', semaine: 'ex. 21000', mois: 'ex. 90000' }[f];
+  }
+  $('newFreqRow').addEventListener('click', function(e){ const b = e.target.closest('button'); if(b) choisirFrequence(b.dataset.freq); });
   let typeContrat = '';
   const typeRow = $('newTypeRow');
   function choisirType(t){
@@ -575,7 +603,7 @@
     $('addFormError').textContent = '';
     CHAMPS_REQUIS.forEach(function(c){ c.input.value = ''; c.input.removeAttribute('data-invalid'); c.err.textContent = ''; });
     $('newMotoPrice').value = ''; $('newMotoPrice').removeAttribute('data-invalid'); $('newMotoPriceError').textContent = '';
-    $('newMarque').value = 'TVS'; $('newPlate').value = ''; choisirType('');
+    $('newMarque').value = 'TVS'; $('newPlate').value = ''; choisirType(''); choisirFrequence('jour');
   }
   toggleFormBtn.addEventListener('click', function(){ addForm.classList.contains('open') ? closeForm() : openForm(); });
   cancelFormBtn.addEventListener('click', closeForm);
@@ -613,6 +641,7 @@
     api('/api/clients', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        code: $('newCode').value.trim(),
         nom: $('newName').value.trim(),
         telephone: $('newPhone').value.trim(),
         adresse: $('newAddress').value.trim(),
@@ -624,6 +653,7 @@
         montant_journalier: Number($('newPrice').value),
         prix_moto: $('newMotoPrice').value.trim() ? Number($('newMotoPrice').value) : undefined,
         type_contrat: typeContrat,
+        frequence: frequence,
         marque: $('newMarque').value.trim() || 'TVS',
         immatriculation: $('newPlate').value.trim() || undefined
       })
