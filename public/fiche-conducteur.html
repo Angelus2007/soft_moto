@@ -145,7 +145,28 @@
   .box-card h2{ font-family:var(--serif); font-size:20px; margin:0 0 6px; }
   .box-card .desc{ margin:0 0 18px; color:var(--ink-soft); font-size:13.5px; line-height:1.55; }
 
-  /* VIDANGE : 24 cases */
+  /* VIDANGE : décompte de 14 jours */
+  .vid-card{ border:1.5px solid var(--border); border-radius:14px; padding:18px 20px; background:var(--bg-light); }
+  .vid-card .v-big{ font-family:var(--serif); font-size:26px; line-height:1.2; margin:0 0 4px; }
+  .vid-card .v-sub{ margin:0; color:var(--ink-soft); font-size:13.5px; }
+  .vid-card.ok{ background:var(--paye-soft); border-color:var(--paye); } .vid-card.ok .v-big{ color:var(--paye-dark); }
+  .vid-card.aujourdhui{ background:var(--amber-soft); border-color:var(--amber); } .vid-card.aujourdhui .v-big{ color:var(--amber); }
+  .vid-card.retard{ background:var(--impaye-soft); border-color:var(--impaye); } .vid-card.retard .v-big{ color:var(--impaye-dark); }
+  .vid-bar{ height:8px; border-radius:99px; background:rgba(15,23,42,.08); margin-top:12px; overflow:hidden; }
+  .vid-bar i{ display:block; height:100%; background:var(--paye); border-radius:99px; }
+  .vid-card.aujourdhui .vid-bar i{ background:var(--amber); } .vid-card.retard .vid-bar i{ background:var(--impaye); }
+  .vid-form{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:16px 0 4px; }
+  .vid-form label{ font-size:13px; font-weight:600; color:var(--ink-soft); }
+  .vid-form input[type=date]{ font:inherit; padding:8px 10px; border:1.5px solid var(--border); border-radius:9px; background:var(--panel); color:var(--ink); }
+  .vid-error{ color:var(--impaye-dark); font-size:13px; font-weight:600; min-height:0; margin:6px 0 0; }
+  .vid-error:empty{ display:none; }
+  .vid-h3{ font-size:14px; margin:20px 0 6px; color:var(--ink-soft); }
+  .vid-hist{ list-style:none; margin:0; padding:0; }
+  .vid-hist li{ display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); font-size:13.5px; flex-wrap:wrap; }
+  .vid-hist li:last-child{ border-bottom:0; }
+  .vid-hist .vh-next{ color:var(--ink-faint); font-size:12.5px; }
+  .vid-hist button{ margin-left:auto; border:0; background:none; color:var(--impaye-dark); font:600 12px var(--sans); text-decoration:underline; cursor:pointer; }
+  /* (ancien affichage : 24 cases, plus utilisé) */
   .periods-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
   .period-box{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-height:68px; padding:12px 6px; text-align:center; font:inherit; color:var(--ink); cursor:pointer; background:var(--bg-light); border:1.5px solid var(--border); border-radius:11px; position:relative; }
   .period-box.st-none, .period-box.st-future{ cursor:default; }
@@ -287,6 +308,10 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         Collectes journalières
       </a>
+      <a href="caissiere.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>
+        Paiements
+      </a>
       <a href="motos.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h9V8H6zM15 8h3l3 4v5h-1"/></svg>
         Motos &amp; financement
@@ -294,6 +319,10 @@
       <a href="employes.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
         Employés
+      </a>
+      <a href="archives.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        Archives
       </a>
       <a href="parametres.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -327,7 +356,7 @@
     <div class="topbar">
       <div>
         <h1>Vidange &amp; Redevance</h1>
-        <p class="sub">Les 24 périodes de vidange du conducteur et ses paiements jour par jour.</p>
+        <p class="sub">La vidange du conducteur (décompte de 14 jours) et ses paiements.</p>
       </div>
       <form class="rech" id="rechForm" autocomplete="off">
         <input type="text" id="codeInput" placeholder="Code ou plaque" aria-label="Code ou plaque du conducteur">
@@ -347,7 +376,7 @@
       <div class="kpis">
         <div class="kpi ok"><p class="k-label">Total versé cette année</p><div class="k-val" id="kPaid">0 F</div></div>
         <div class="kpi ko"><p class="k-label" id="kUnpaidLabel">Jours impayés</p><div class="k-val" id="kUnpaid">0</div></div>
-        <div class="kpi"><p class="k-label">Vidanges payées</p><div class="k-val" id="kDone">0 / 24</div><div class="sm-bar"><i id="kBar"></i></div></div>
+        <div class="kpi"><p class="k-label">Prochaine vidange</p><div class="k-val" id="kDone" style="font-size:20px">—</div></div>
       </div>
 
       <div class="tabs" role="tablist">
@@ -359,15 +388,17 @@
 
       <div class="tab-panel show" id="panelVidange" role="tabpanel">
         <div class="box-card">
-          <h2>Vidange : les 24 périodes de l'année</h2>
-          <p class="desc">Chaque case couvre 14 jours. La vidange coûte <strong id="vidMontant">100 F</strong> par période : <strong>cochez « Vidange payée »</strong> quand le conducteur l'a réglée. Une période à venir peut être payée <strong>d'avance</strong>. Touchez le reste de la case pour voir ses paiements dans Redevance.</p>
-          <div class="periods-grid" id="driverPeriods"></div>
-          <div class="legende">
-            <span><i class="l-paid"></i> Vidange payée</span>
-            <span><i class="l-part"></i> À payer (période en cours)</span>
-            <span><i class="l-unpaid"></i> Non payée (période terminée)</span>
-            <span><i class="l-future"></i> À venir (cochez pour payer d'avance) ou hors contrat</span>
+          <h2>Vidange : décompte de 14 jours</h2>
+          <p class="desc">La vidange coûte <strong id="vidMontant">100 F</strong>. Le décompte de 14 jours <strong>commence le jour où le conducteur paie</strong> : la prochaine vidange est due 14 jours plus tard. Enregistrez le paiement dès que le conducteur l'a réglé.</p>
+          <div class="vid-card" id="vidStatus"></div>
+          <div class="vid-form" id="vidForm">
+            <label for="vidDate">Payée le</label>
+            <input type="date" id="vidDate">
+            <button type="button" class="c-btn" id="vidPayBtn">Enregistrer la vidange payée</button>
           </div>
+          <p class="vid-error" id="vidError" role="alert"></p>
+          <h3 class="vid-h3">Historique des vidanges payées</h3>
+          <ul class="vid-hist" id="vidHist"></ul>
         </div>
       </div>
 
@@ -379,7 +410,6 @@
             <div class="per-list" id="perList"></div>
           </div>
           <div id="vueJour">
-          <div class="chip-periode" id="chipPeriode"><span id="chipText">—</span><button type="button" id="chipClear">Retirer</button></div>
           <div class="cal-nav">
             <button type="button" id="prevMonthBtn" aria-label="Mois précédent">&#8249;</button>
             <p class="cal-title" id="calTitle">—</p>
@@ -458,7 +488,7 @@
     <div class="moyen-row" role="group" aria-label="Moyen de paiement">
       <button type="button" data-moyen="especes" class="on">Espèces</button>
       <button type="button" data-moyen="momo">MOMO</button>
-      <button type="button" data-moyen="momo_regulateur">MOMO régulateur</button>
+      <button type="button" data-moyen="momo_regulateur">MOMO régularisation</button>
     </div>
         <div class="numero-box" id="numeroBox" style="display:none">
       <p class="moyen-label">Numéro qui a reçu le transfert</p>
