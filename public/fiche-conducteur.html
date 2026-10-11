@@ -170,6 +170,7 @@
   /* REDEVANCE par semaine / par mois : une carte par période */
   .per-list{ display:flex; flex-direction:column; gap:12px; max-height:640px; overflow:auto; padding-right:2px; }
   .per-card{ border:1.5px solid var(--border); border-radius:13px; padding:14px 16px; background:var(--panel); }
+  .per-card.future{ border-style:dashed; } .per-badge.future{ background:var(--bg-light); color:var(--ink-soft); border:1.5px solid var(--border); }
   .per-card.paid{ border-color:var(--paye); } .per-card.unpaid{ border-color:var(--impaye); } .per-card.due{ border-color:var(--amber); }
   .per-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .per-head strong{ font-size:15px; } .per-head .per-dates{ color:var(--ink-soft); font-size:12.5px; }
@@ -207,6 +208,7 @@
   .cal-day .num{ font-weight:700; font-size:13px; }
   .cal-day .amt{ font:600 9.5px var(--mono); opacity:.95; }
   .cal-day.future{ cursor:default; color:var(--ink-faint); background:var(--bg-light); }
+  .cal-day.advance{ background:var(--amber-soft); border-color:var(--amber); color:var(--amber); }
   .cal-day.in-periode:not(.paid):not(.unpaid){ border-color:var(--accent); }
   .cal-day.in-periode{ outline:2.5px solid var(--accent); outline-offset:1px; }
   .totals{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:20px; }
@@ -358,13 +360,13 @@
       <div class="tab-panel show" id="panelVidange" role="tabpanel">
         <div class="box-card">
           <h2>Vidange : les 24 périodes de l'année</h2>
-          <p class="desc">Chaque case couvre 14 jours. La vidange coûte <strong id="vidMontant">100 F</strong> par période : <strong>cochez « Vidange payée »</strong> quand le conducteur l'a réglée. Touchez le reste de la case pour voir ses paiements dans Redevance.</p>
+          <p class="desc">Chaque case couvre 14 jours. La vidange coûte <strong id="vidMontant">100 F</strong> par période : <strong>cochez « Vidange payée »</strong> quand le conducteur l'a réglée. Une période à venir peut être payée <strong>d'avance</strong>. Touchez le reste de la case pour voir ses paiements dans Redevance.</p>
           <div class="periods-grid" id="driverPeriods"></div>
           <div class="legende">
             <span><i class="l-paid"></i> Vidange payée</span>
             <span><i class="l-part"></i> À payer (période en cours)</span>
             <span><i class="l-unpaid"></i> Non payée (période terminée)</span>
-            <span><i class="l-future"></i> À venir ou hors contrat</span>
+            <span><i class="l-future"></i> À venir (cochez pour payer d'avance) ou hors contrat</span>
           </div>
         </div>
       </div>
@@ -442,7 +444,17 @@
       <button type="button" id="quickFullBtn">Montant complet</button>
       <button type="button" id="quickZeroBtn">Rien remis</button>
     </div>
-        <p class="moyen-label">Moyen de paiement</p>
+        <div class="avance-box" id="avanceBox">
+      <p class="moyen-label">Payer des jours en avance</p>
+      <div class="avance-row" role="group" aria-label="Payer des jours en avance">
+        <button type="button" data-jours="1">+ 1 jour</button>
+        <button type="button" data-jours="7">+ 1 semaine</button>
+        <button type="button" data-jours="14">+ 2 semaines</button>
+        <button type="button" data-jours="30">+ 1 mois</button>
+      </div>
+      <p class="step-hint" id="avanceInfo"></p>
+    </div>
+    <p class="moyen-label">Moyen de paiement</p>
     <div class="moyen-row" role="group" aria-label="Moyen de paiement">
       <button type="button" data-moyen="especes" class="on">Espèces</button>
       <button type="button" data-moyen="momo">MOMO</button>
