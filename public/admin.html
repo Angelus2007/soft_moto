@@ -715,7 +715,8 @@
 
     const rowsPayes = payes.filter(ok).map(function(p){
       const moy = p.moyens.map(function(m){ return MOYENS_LIB[m]; }).filter(Boolean);
-      const reg = p.regularisations.length ? '<span class="sub-note">a aussi réglé : ' + esc(p.regularisations.map(function(g){ return jjmm(g.date); }).join(', ')) + '</span>' : '';
+      const reg = (p.regularisations.length ? '<span class="sub-note">a aussi réglé : ' + esc(p.regularisations.map(function(g){ return jjmm(g.date); }).join(', ')) + '</span>' : '') +
+        ((p.avances || []).length ? '<span class="sub-note">payé d\'avance : ' + (p.avances.length > 1 ? 'du ' + jjmm(p.avances[0].date) + ' au ' + jjmm(p.avances[p.avances.length - 1].date) + ' (' + p.avances.length + ' jours)' : jjmm(p.avances[0].date)) + '</span>' : '');
       return '<tr>' + cellConducteur(p.nom, p.code) +
         '<td class="amount">' + fmtF(p.montant) + (moy.length ? '<br><span class="moyen-tag">' + esc(moy.join(' + ')) + '</span>' : '') + (p.numeros && p.numeros.length ? '<span class="sub-note">' + esc(p.numeros.join(', ')) + '</span>' : '') + '</td>' +
         '<td>' + esc(p.heure || '—') + '</td>' +
