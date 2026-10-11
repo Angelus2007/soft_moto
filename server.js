@@ -41,7 +41,9 @@ const now = () => new Date().toISOString();
 
 const SEUIL_SAISIE = 15000; // article 8-II du contrat : retard >= 15 000 F => saisie possible
 const TYPES_CONTRAT = ['journee_payee', 'droit_usage'];
-const MOYENS = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régulateur' };
+const ETATS_MOTO = ['neuve', 'usagee']; // état de la moto à la remise
+const STATUTS_CLIENT = ['actif', 'inactif', 'suspendu']; // « suspendu » = archivé (page Archives)
+const MOYENS = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régularisation' };
 
 /* --- Réglages modifiables depuis la page Paramètres (clé/valeur) --- */
 // Le montant journalier par défaut est gardé en mémoire (cibleJourniere() est appelée partout) et relu toutes les 30 s.
@@ -66,7 +68,8 @@ const setNumerosMomo = (liste) => setParametre('numeros_momo', JSON.stringify(li
  * hebdomadaires et mensuelles partent de la date de début du contrat. */
 const FREQUENCES = ['jour', 'semaine', 'mois'];
 const frequenceDe = (c) => (c && FREQUENCES.includes(c.frequence) ? c.frequence : 'jour');
-const MONTANT_VIDANGE = Number(process.env.VIDANGE_MONTANT) || 100; // F CFA par période de 14 jours
+const MONTANT_VIDANGE = Number(process.env.VIDANGE_MONTANT) || 100; // F CFA par vidange
+const DELAI_VIDANGE = 14; // jours : le décompte part du jour où le conducteur a payé sa vidange
 const iso10 = (d) => d.toISOString().slice(0, 10);
 const addJours = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return iso10(d); };
 const diffJours = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
@@ -420,11 +423,13 @@ app.delete('/api/comptes/:id', exigerRole('admin'), h(async (req, res) => {
 /* Clients (conducteurs)                                               */
 /* ------------------------------------------------------------------ */
 const COLS_CLIENT = 'id, code, nom, telephone, adresse, temoin_nom, temoin_telephone, temoin_adresse, ' +
-  'date_debut, date_fin, statut, date_creation, prix_moto, montant_journalier, type_contrat, immatriculation, marque, frequence';
+  'date_debut, date_fin, statut, date_creation, prix_moto, montant_journalier, type_contrat, immatriculation, marque, frequence, etat_moto, visiteur, date_archivage';
 const avecCible = (c) => c && { ...c, frequence: frequenceDe(c), montant_journalier_effectif: cibleJourniere(c) };
 
 app.get('/api/clients', exigerRole('admin', 'caissiere'), h(async (req, res) => {
-  res.json((await db.all(`SELECT ${COLS_CLIENT} FROM clients ORDER BY date_creation DESC, id DESC`)).map(avecCible));
+  const archives = req.query.archives === '1';
+  if (archives && req.user.role !== 'admin') return res.status(403).json({ erreur: 'Accès refusé.' });
+  res.json((await db.all(`SELECT ${COLS_CLIENT} FROM clients WHERE statut ${archives ? '=' : '<>'} 'suspendu' ORDER BY date_creation DESC, id DESC`)).map(avecCible));
 }));
 
 app.get('/api/clients/:code', exigerRole('admin', 'caissiere'), h(async (req, res) => {
@@ -453,7 +458,10 @@ app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
   const immatriculation = texte(req.body.immatriculation, 30) || null;
   const marque = texte(req.body.marque, 40) || 'TVS';
   const frequence = texte(req.body.frequence, 10) || 'jour';
+  const etatMoto = texte(req.body.etat_moto, 10);
+  const visiteur = texte(req.body.visiteur, 100) || null;
 
+  if (!ETATS_MOTO.includes(etatMoto)) return res.status(400).json({ erreur: "Choisissez l'état de la moto (neuve ou usagée)." });
   if (!FREQUENCES.includes(frequence)) return res.status(400).json({ erreur: 'Fréquence de paiement invalide (jour, semaine ou mois).' });
   if (!TYPES_CONTRAT.includes(typeContrat)) return res.status(400).json({ erreur: 'Type de contrat invalide.' });
   if (!code) return res.status(400).json({ erreur: 'Entrez le code du conducteur.' });
@@ -479,10 +487,10 @@ app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
   if (await db.get('SELECT 1 FROM clients WHERE code = ?', [code])) return res.status(409).json({ erreur: 'Ce code est déjà utilisé par un autre conducteur.' });
   const id = await db.insertId(`INSERT INTO clients
       (code, nom, telephone, adresse, temoin_nom, temoin_telephone, temoin_adresse, date_debut, date_fin,
-       statut, date_creation, prix_moto, montant_journalier, type_contrat, immatriculation, marque, frequence)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       statut, date_creation, prix_moto, montant_journalier, type_contrat, immatriculation, marque, frequence, etat_moto, visiteur)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [code, nom, telephone, adresse, temoinNom, temoinTelephone, temoinAdresse, dateDebut, dateFin,
-      'actif', now(), prix, montantJournalier, typeContrat, immatriculation, marque, frequence]);
+      'actif', now(), prix, montantJournalier, typeContrat, immatriculation, marque, frequence, etatMoto, visiteur]);
   res.status(201).json(avecCible(await db.get(`SELECT ${COLS_CLIENT} FROM clients WHERE id = ?`, [id])));
 }));
 
@@ -491,6 +499,15 @@ app.patch('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
   if (!existant) return res.status(404).json({ erreur: 'Conducteur introuvable.' });
 
   const champs = {};
+  if (req.body.code !== undefined) {
+    // L'admin peut corriger le code ; les paiements et vidanges déjà saisis suivent le nouveau code.
+    const code = texte(req.body.code, 20).toUpperCase().replace(/\s+/g, '');
+    if (!/^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(code)) return res.status(400).json({ erreur: 'Le code ne peut contenir que des lettres, des chiffres, « - » ou « _ » (2 à 20 caractères).' });
+    if (code !== existant.code) {
+      if (await db.get('SELECT 1 FROM clients WHERE code = ? AND id <> ?', [code, existant.id])) return res.status(409).json({ erreur: 'Ce code est déjà utilisé par un autre conducteur.' });
+      champs.code = code;
+    }
+  }
   if (req.body.nom !== undefined) {
     const nom = texte(req.body.nom, 100);
     if (nom.length < 2) return res.status(400).json({ erreur: 'Entrez le nom du conducteur.' });
@@ -523,9 +540,17 @@ app.patch('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
     if (!FREQUENCES.includes(f)) return res.status(400).json({ erreur: 'Fréquence de paiement invalide (jour, semaine ou mois).' });
     champs.frequence = f;
   }
+  if (req.body.etat_moto !== undefined) {
+    const e = texte(req.body.etat_moto, 10);
+    if (!ETATS_MOTO.includes(e)) return res.status(400).json({ erreur: "État de la moto invalide (neuve ou usagée)." });
+    champs.etat_moto = e;
+  }
+  if (req.body.visiteur !== undefined) champs.visiteur = texte(req.body.visiteur, 100) || null;
   if (req.body.statut !== undefined) {
-    if (!['actif', 'inactif'].includes(req.body.statut)) return res.status(400).json({ erreur: 'Statut invalide.' });
+    if (!STATUTS_CLIENT.includes(req.body.statut)) return res.status(400).json({ erreur: 'Statut invalide.' });
     champs.statut = req.body.statut;
+    // Suspendu = archivé : on garde la date ; en réactivant, le conducteur quitte les archives.
+    champs.date_archivage = req.body.statut === 'suspendu' ? (existant.date_archivage || now()) : null;
   }
   if (req.body.prix_moto !== undefined) {
     const prix = nombreOptionnel(req.body.prix_moto, 1, 100000000);
@@ -540,9 +565,21 @@ app.patch('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
   const cles = Object.keys(champs);
   if (!cles.length) return res.status(400).json({ erreur: 'Aucune modification fournie.' });
 
-  await db.run(`UPDATE clients SET ${cles.map((c) => c + ' = ?').join(', ')} WHERE id = ?`,
-    [...cles.map((c) => champs[c]), existant.id]);
+  await db.tx(async (tx) => {
+    await tx.run(`UPDATE clients SET ${cles.map((c) => c + ' = ?').join(', ')} WHERE id = ?`, [...cles.map((c) => champs[c]), existant.id]);
+    if (champs.code) {
+      for (const t of ['paiements', 'versements', 'vidange_paiements', 'vidanges']) await tx.run(`UPDATE ${t} SET code_client = ? WHERE code_client = ?`, [champs.code, existant.code]);
+    }
+  });
   res.json(avecCible(await db.get(`SELECT ${COLS_CLIENT} FROM clients WHERE id = ?`, [existant.id])));
+}));
+
+// Archives : conducteurs suspendus, avec ce qu'ils ont versé.
+app.get('/api/archives', exigerRole('admin'), h(async (req, res) => {
+  res.json(await db.all(`SELECT c.id, c.code, c.nom, c.telephone, c.adresse, c.immatriculation, c.marque, c.etat_moto, c.date_creation, c.date_archivage,
+      c.prix_moto, c.montant_journalier, c.frequence, COALESCE(SUM(p.montant), 0) AS verse
+    FROM clients c LEFT JOIN paiements p ON p.code_client = c.code
+    WHERE c.statut = 'suspendu' GROUP BY c.id ORDER BY c.date_archivage DESC, c.id DESC`));
 }));
 
 /* ------------------------------------------------------------------ */
@@ -565,8 +602,9 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
   const date = texte(req.body.date, 10);
   const montant = Math.round(Number(req.body.montant));
 
-  const client = await db.get('SELECT montant_journalier, date_debut, date_fin, date_creation, frequence FROM clients WHERE code = ?', [code]);
+  const client = await db.get('SELECT montant_journalier, date_debut, date_fin, date_creation, frequence, statut FROM clients WHERE code = ?', [code]);
   if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  if (client.statut === 'suspendu') return res.status(409).json({ erreur: 'Ce conducteur est suspendu (archivé) : réactivez-le avant d\'enregistrer un paiement.' });
   if (!dateValide(date)) return res.status(400).json({ erreur: 'date doit être au format AAAA-MM-JJ.' });
   if (!Number.isFinite(montant) || montant < 0 || montant > 10000000) return res.status(400).json({ erreur: 'Montant invalide.' });
 
@@ -589,8 +627,8 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
     const ancien = await tx.get('SELECT moyen, montant, numero_momo FROM paiements WHERE code_client = ? AND date = ?', [code, date]);
     let moyen = texte(req.body.moyen, 20);
     if (!moyen) moyen = (ancien && ancien.moyen) || 'especes'; // champ absent : on garde l'existant
-    if (!MOYENS[moyen]) throw new ErreurHttp(400, 'Moyen de paiement invalide (especes, momo ou momo_regulateur).');
-    // Numéro MOMO ayant reçu le transfert : seulement pour MOMO / MOMO régulateur ; champ absent => on garde l'existant.
+    if (!MOYENS[moyen]) throw new ErreurHttp(400, 'Moyen de paiement invalide (especes, momo ou momo_regulateur — « MOMO régularisation »).');
+    // Numéro MOMO ayant reçu le transfert : seulement pour MOMO / MOMO régularisation ; champ absent => on garde l'existant.
     let numero = null;
     if (moyen !== 'especes') {
       numero = texte(req.body.numero_momo, 30) || null;
@@ -706,33 +744,51 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
 }));
 
 /* ------------------------------------------------------------------ */
-/* Vidange : 24 périodes de 14 jours par an (à partir du 1er janvier), 100 F par période, case à cocher */
+/* Vidange : 100 F par vidange. Le décompte de 14 jours commence le jour où le conducteur a payé. */
 /* ------------------------------------------------------------------ */
+async function etatVidange(code) {
+  const lignes = await db.all('SELECT id, date_paiement, montant, maj_le FROM vidange_paiements WHERE code_client = ? ORDER BY date_paiement DESC, id DESC', [code]);
+  const aujourdhui = jourLocal(new Date());
+  const derniere = lignes.length ? lignes[0].date_paiement : null;
+  const prochaine = derniere ? addJours(derniere, DELAI_VIDANGE) : null;
+  // jours_restants > 0 : à venir ; 0 : à faire aujourd'hui ; < 0 : en retard
+  const joursRestants = prochaine ? diffJours(aujourdhui, prochaine) : null;
+  return {
+    montant: MONTANT_VIDANGE, delai: DELAI_VIDANGE, aujourdhui,
+    derniere, prochaine, jours_restants: joursRestants,
+    statut: !derniere ? 'jamais' : joursRestants < 0 ? 'retard' : joursRestants === 0 ? 'aujourdhui' : 'ok',
+    lignes: lignes.map((l) => ({ ...l, prochaine: addJours(l.date_paiement, DELAI_VIDANGE) }))
+  };
+}
+
 app.get('/api/vidanges', exigerRole('admin', 'caissiere'), h(async (req, res) => {
-  const code = texte(req.query.code_client, 20).toUpperCase();
-  res.json({
-    montant: MONTANT_VIDANGE,
-    lignes: await db.all('SELECT annee, periode, montant, jour_saisie, maj_le FROM vidanges WHERE code_client = ? ORDER BY annee, periode', [code])
-  });
+  res.json(await etatVidange(texte(req.query.code_client, 20).toUpperCase()));
 }));
 
+// Enregistre une vidange payée (par défaut aujourd'hui) : le décompte de 14 jours repart de cette date.
 app.post('/api/vidanges', exigerRole('admin', 'caissiere'), h(async (req, res) => {
   const code = texte(req.body.code_client, 20).toUpperCase();
-  const annee = Number(req.body.annee), periode = Number(req.body.periode), paye = !!req.body.paye;
-  if (!(await db.get('SELECT 1 FROM clients WHERE code = ?', [code]))) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
-  if (!Number.isInteger(annee) || annee < 2000 || annee > 2100 || !Number.isInteger(periode) || periode < 1 || periode > 24) {
-    return res.status(400).json({ erreur: 'Période de vidange invalide.' });
+  const aujourdhui = jourLocal(new Date());
+  const date = req.body.date ? texte(req.body.date, 10) : aujourdhui;
+  const client = await db.get('SELECT statut FROM clients WHERE code = ?', [code]);
+  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  if (client.statut === 'suspendu') return res.status(409).json({ erreur: 'Ce conducteur est suspendu (archivé).' });
+  if (!dateValide(date)) return res.status(400).json({ erreur: 'Date de vidange invalide.' });
+  if (date > aujourdhui) return res.status(400).json({ erreur: 'La date de la vidange ne peut pas être dans le futur.' });
+  if (await db.get('SELECT 1 FROM vidange_paiements WHERE code_client = ? AND date_paiement = ?', [code, date])) {
+    return res.status(409).json({ erreur: 'Une vidange est déjà enregistrée pour ce conducteur à cette date.' });
   }
-  if (paye) {
-    // Une période à venir peut être payée d'avance, mais pas au-delà de l'année en cours.
-    if (annee > Number(jourLocal(new Date()).slice(0, 4))) return res.status(400).json({ erreur: "La vidange ne peut être payée d'avance que dans l'année en cours." });
-    await db.run(`INSERT INTO vidanges (code_client, annee, periode, montant, jour_saisie, compte_id, maj_le) VALUES (?,?,?,?,?,?,?)
-        ON CONFLICT (code_client, annee, periode) DO UPDATE SET montant = excluded.montant, jour_saisie = excluded.jour_saisie, compte_id = excluded.compte_id, maj_le = excluded.maj_le`,
-      [code, annee, periode, MONTANT_VIDANGE, jourLocal(new Date()), req.user.id, now()]);
-  } else {
-    await db.run('DELETE FROM vidanges WHERE code_client = ? AND annee = ? AND periode = ?', [code, annee, periode]);
-  }
-  res.json({ code_client: code, annee, periode, paye, montant: paye ? MONTANT_VIDANGE : 0 });
+  await db.run('INSERT INTO vidange_paiements (code_client, date_paiement, montant, compte_id, maj_le) VALUES (?,?,?,?,?)',
+    [code, date, MONTANT_VIDANGE, req.user.id, now()]);
+  res.status(201).json(await etatVidange(code));
+}));
+
+// Annule une vidange saisie par erreur : le décompte repart de la vidange précédente.
+app.delete('/api/vidanges/:id', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const v = await db.get('SELECT id, code_client FROM vidange_paiements WHERE id = ?', [idParam(req.params.id)]);
+  if (!v) return res.status(404).json({ erreur: 'Vidange introuvable.' });
+  await db.run('DELETE FROM vidange_paiements WHERE id = ?', [v.id]);
+  res.json(await etatVidange(v.code_client));
 }));
 
 /* ------------------------------------------------------------------ */
@@ -839,8 +895,8 @@ async function versementsDuJour(dateStr) {
   (await db.all('SELECT numero_momo AS n, SUM(montant) AS t FROM versements WHERE jour_saisie = ? AND numero_momo IS NOT NULL GROUP BY numero_momo', [dateStr]))
     .forEach((r) => { if (r.t > 0) parNumero[r.n] = r.t; });
   anciens.forEach((r) => { if (r.numeros) parNumero[r.numeros] = (parNumero[r.numeros] || 0) + r.total; });
-  // Vidanges (100 F par période de 14 jours) cochées ce jour-là : comptées à part de la redevance.
-  const vid = await db.get('SELECT COUNT(*) AS n, COALESCE(SUM(montant), 0) AS t FROM vidanges WHERE jour_saisie = ?', [dateStr]);
+  // Vidanges payées ce jour-là : comptées à part de la redevance.
+  const vid = await db.get('SELECT COUNT(*) AS n, COALESCE(SUM(montant), 0) AS t FROM vidange_paiements WHERE date_paiement = ?', [dateStr]);
   return { payes, totaux: { encaisse: payes.reduce((t, r) => t + r.montant, 0), nb_payeurs: payes.length, par_moyen: parMoyen, par_numero: parNumero,
     vidanges_nb: vid.n, vidanges_total: vid.t } };
 }
@@ -943,6 +999,42 @@ app.get('/api/tournee', exigerRole('admin', 'caissiere'), h(async (req, res) => 
   });
 }));
 
+/* Point personnel : ce que CETTE caissière a encaissé (le journal des versements retient qui a saisi quoi).
+ * L'admin peut consulter celui d'une caissière avec ?compte_id=… */
+app.get('/api/mon-point', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  let compteId = req.user.id, nom = req.user.nom;
+  if (req.user.role === 'admin' && req.query.compte_id) {
+    const c = await db.get("SELECT id, nom FROM comptes WHERE id = ? AND role = 'caissiere'", [idParam(req.query.compte_id)]);
+    if (!c) return res.status(404).json({ erreur: 'Caissière introuvable.' });
+    compteId = c.id; nom = c.nom;
+  }
+  const aujourdhui = jourLocal(new Date());
+  const jour = dateValide(String(req.query.date || '')) ? String(req.query.date) : aujourdhui;
+  const mois = jour.slice(0, 7);
+
+  const parMoyen = { especes: 0, momo: 0, momo_regulateur: 0, non_precise: 0 };
+  (await db.all('SELECT moyen, SUM(montant) AS t FROM versements WHERE compte_id = ? AND jour_saisie = ? GROUP BY moyen', [compteId, jour]))
+    .forEach((r) => { parMoyen[MOYENS[r.moyen] ? r.moyen : 'non_precise'] += r.t; });
+  const lignes = await db.all(`SELECT v.code_client AS code, c.nom AS nom, SUM(v.montant) AS montant, MAX(v.cree_le) AS dernier,
+        ${db.groupConcat('v.moyen')} AS moyens
+      FROM versements v LEFT JOIN clients c ON c.code = v.code_client
+      WHERE v.compte_id = ? AND v.jour_saisie = ? GROUP BY v.code_client, c.nom HAVING SUM(v.montant) <> 0`, [compteId, jour]);
+  const vid = await db.get('SELECT COUNT(*) AS n, COALESCE(SUM(montant), 0) AS t FROM vidange_paiements WHERE compte_id = ? AND date_paiement = ?', [compteId, jour]);
+  const moisTot = await db.get('SELECT COALESCE(SUM(montant), 0) AS t, COUNT(DISTINCT code_client) AS n FROM versements WHERE compte_id = ? AND jour_saisie LIKE ?', [compteId, mois + '-%']);
+  const parJour = await db.all(`SELECT jour_saisie AS date, SUM(montant) AS total FROM versements
+      WHERE compte_id = ? AND jour_saisie LIKE ? GROUP BY jour_saisie ORDER BY jour_saisie DESC`, [compteId, mois + '-%']);
+  const total = Object.values(parMoyen).reduce((a, b) => a + b, 0);
+  res.json({
+    caissiere: nom, date: jour, aujourdhui,
+    jour: {
+      encaisse: total, par_moyen: parMoyen, nb_conducteurs: lignes.length, vidanges_nb: vid.n, vidanges_total: vid.t,
+      lignes: lignes.map((l) => ({ code: l.code, nom: l.nom || 'Conducteur supprimé', montant: l.montant, moyens: (l.moyens || '').split(',').filter(Boolean), heure: heureLocale(l.dernier) }))
+        .sort((a, b) => (a.heure < b.heure ? 1 : -1))
+    },
+    mois: { mois, encaisse: moisTot.t, nb_conducteurs: moisTot.n, jours: parJour.map((r) => ({ date: r.date, total: r.total })) }
+  });
+}));
+
 // Admin : conducteurs actifs avec au moins N jours impayés cumulés (avant aujourd'hui).
 app.get('/api/impayes', exigerRole('admin'), h(async (req, res) => {
   const min = Math.min(Math.max(parseInt(req.query.min, 10) || 2, 1), 60);
@@ -983,6 +1075,7 @@ app.get('/api/financements', exigerRole('admin'), h(async (req, res) => {
     SELECT c.id, c.code, c.nom, c.statut, c.date_creation, c.prix_moto, c.montant_journalier, c.frequence,
            COALESCE(SUM(CASE WHEN p.paye = 1 THEN p.montant END), 0) AS verse
     FROM clients c LEFT JOIN paiements p ON p.code_client = c.code
+    WHERE c.statut <> 'suspendu'
     GROUP BY c.id ORDER BY c.nom`);
   const payes30 = await joursPayes30j();
 
