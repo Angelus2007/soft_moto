@@ -1,4 +1,4 @@
-/* Soft Moto — fiche conducteur : VIDANGE (24 cases de 14 jours) + REDEVANCE (paiements jour par jour). */
+/* Soft Moto — fiche conducteur : VIDANGE (décompte de 14 jours depuis le jour du paiement) + REDEVANCE (paiements). */
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
@@ -54,7 +54,7 @@
   $('menuToggle').addEventListener('click', function () { $('sidebar').classList.toggle('open'); });
 
   /* ---------- État ---------- */
-  var client = null, paiements = {}, vidanges = {}, MONTANT_VID = 100, periodes = [], periodeChoisie = -1, viewY = 0, viewM = 0;
+  var client = null, paiements = {}, vid = null, MONTANT_VID = 100, periodes = [], periodeChoisie = -1, viewY = 0, viewM = 0;
 
   // Un jour compte dans le suivi entre l'inscription (ou début de contrat) et la fin du contrat, jusqu'à aujourd'hui.
   function dansSuivi(d, auj) {
@@ -92,40 +92,36 @@
   function jjmm(k) { var a = k.split('-'); return a[2] + '/' + a[1]; }
   var NOM_PERIODE = { semaine: 'semaine', mois: 'mois' };
 
-  /* ---------- VIDANGE : 24 périodes de 14 jours, 100 F à cocher ---------- */
-  function construirePeriodes() {
-    var auj = aujourdhui(), annee = auj.getFullYear();
-    var cDebut = ((client.date_debut || client.date_creation) || '').slice(0, 10), cFin = (client.date_fin || '').slice(0, 10);
-    periodes = [];
-    for (var i = 0; i < 24; i++) {
-      var debut = new Date(annee, 0, 1 + i * 14), fin = new Date(annee, 0, 1 + i * 14 + 13);
-      var montant = 0;
-      for (var j = 0; j < 14; j++) { var p = paiements[iso(new Date(annee, 0, 1 + i * 14 + j))]; if (p) montant += p.montant; }
-      var contrat = (!cDebut || iso(fin) >= cDebut) && (!cFin || iso(debut) <= cFin);
-      var commencee = debut <= auj, actuelle = auj >= debut && auj <= fin;
-      var paye = !!vidanges[annee + '-' + (i + 1)];
-      // Vert : vidange cochée. Orange : période en cours, à payer. Rouge : période terminée sans vidange payée.
-      var etat = paye ? 'paid' : !contrat ? 'none' : !commencee ? 'future' : actuelle ? 'due' : 'unpaid';
-      periodes.push({ i: i, annee: annee, debut: debut, fin: fin, montant: montant, etat: etat, actuelle: actuelle, paye: paye, contrat: contrat, commencee: commencee });
-    }
+  /* ---------- VIDANGE : décompte de 14 jours à partir du jour où le conducteur a payé ---------- */
+  function dFR(s) { var a = String(s || '').split('-'); return a.length === 3 ? a[2] + '/' + a[1] + '/' + a[0] : ''; }
+  function jours(n) { n = Math.abs(n); return n + ' jour' + (n > 1 ? 's' : ''); }
+  function libelleVidange() {
+    if (!vid || vid.statut === 'jamais') return '—';
+    if (vid.statut === 'retard') return 'En retard de ' + jours(vid.jours_restants);
+    if (vid.statut === 'aujourdhui') return 'Aujourd\'hui';
+    return 'Dans ' + jours(vid.jours_restants);
   }
-
-  function afficherPeriodes(cascade) {
-    var libelle = { paid: 'Vidange payée', due: 'À payer', unpaid: 'Non payée', future: 'À venir', none: 'Hors contrat' };
-    $('driverPeriods').innerHTML = periodes.map(function (p) {
-      libelle.paid = p.paye && !p.commencee ? 'Payée d\'avance' : 'Vidange payée';
-      var cochable = p.paye || p.contrat, ouvrable = p.contrat && p.commencee; // une période à venir se paie d'avance
-      return '<div class="period-box st-' + p.etat + (p.actuelle ? ' current' : '') + (p.i === periodeChoisie ? ' selected' : '') + '"' +
-        ' data-i="' + p.i + '"' + (ouvrable ? ' role="button" tabindex="0"' : '') +
-        ' aria-label="Période ' + (p.i + 1) + ', du ' + court(p.debut) + ' au ' + court(p.fin) + ' : ' + libelle[p.etat] + '">' +
-        '<span class="p-num">N°' + (p.i + 1) + '</span>' +
-        '<span class="p-range">' + court(p.debut) + ' – ' + court(p.fin) + '</span>' +
-        '<span class="p-state">' + (p.etat === 'paid' && !p.commencee ? 'Payée d\'avance' : libelle[p.etat]) + '</span>' +
-        '<label class="p-check" title="Vidange ' + fcfa(MONTANT_VID) + '"><input type="checkbox" data-i="' + p.i + '"' + (p.paye ? ' checked' : '') + (cochable ? '' : ' disabled') + '>' +
-        '<span>Vidange ' + fcfa(MONTANT_VID) + '</span></label></div>';
-    }).join('');
-    if (cascade && window.smStagger) window.smStagger($('driverPeriods'), 24);
+  function afficherVidange() {
+    if (!vid) return;
+    var s = vid.statut, delai = vid.delai || 14, ecoule = s === 'jamais' ? 0 : Math.min(delai, Math.max(0, delai - vid.jours_restants));
+    var titre, sous;
+    if (s === 'jamais') { titre = 'Aucune vidange payée'; sous = 'Le décompte de ' + delai + ' jours démarrera le jour où le conducteur paiera sa première vidange.'; }
+    else if (s === 'retard') { titre = 'Vidange en retard de ' + jours(vid.jours_restants); sous = 'Elle était due le ' + dFR(vid.prochaine) + ' (dernière payée le ' + dFR(vid.derniere) + ').'; }
+    else if (s === 'aujourdhui') { titre = 'Vidange à faire aujourd\'hui'; sous = 'Dernière payée le ' + dFR(vid.derniere) + ' : les ' + delai + ' jours sont écoulés.'; }
+    else { titre = 'Prochaine vidange dans ' + jours(vid.jours_restants); sous = 'Due le ' + dFR(vid.prochaine) + ' (dernière payée le ' + dFR(vid.derniere) + ').'; }
+    $('vidStatus').className = 'vid-card ' + (s === 'jamais' ? '' : s);
+    $('vidStatus').innerHTML = '<p class="v-big">' + titre + '</p><p class="v-sub">' + sous + '</p>' +
+      (s === 'jamais' ? '' : '<div class="vid-bar"><i style="width:' + Math.round(ecoule / delai * 100) + '%"></i></div>');
+    $('vidHist').innerHTML = vid.lignes.length ? vid.lignes.map(function (l) {
+      return '<li><strong>' + dFR(l.date_paiement) + '</strong><span>' + fcfa(l.montant) + '</span><span class="vh-next">prochaine : ' + dFR(l.prochaine) + '</span>' +
+        '<button type="button" data-id="' + l.id + '" data-date="' + l.date_paiement + '">Annuler</button></li>';
+    }).join('') : '<li><span class="vh-next">Aucune vidange enregistrée pour le moment.</span></li>';
+    var archive = client && client.statut === 'suspendu';
+    $('vidForm').style.display = archive ? 'none' : '';
+    if (archive) $('vidError').textContent = 'Ce conducteur est suspendu (archivé) : les paiements sont désactivés.';
   }
+  function construirePeriodes() { /* ancien découpage en 24 périodes supprimé */ }
+  function afficherPeriodes() { afficherVidange(); }
 
   function afficherKpis(anime) {
     var an = String(aujourdhui().getFullYear());
@@ -142,16 +138,14 @@
       impayes = periodesDe(auj).filter(function (p) { return p.fin < auj && sommePeriode(p) < dueDe(p); }).length;
       $('kUnpaidLabel').textContent = freq() === 'semaine' ? 'Semaines impayées' : 'Mois impayés';
     }
-    var reglees = periodes.filter(function (p) { return p.paye; }).length; // vidanges payées
     var entier = function (n) { return String(Math.round(n)); };
     if (anime && window.smCountUp) {
       window.smCountUp($('kPaid'), total, { format: fcfa });
       window.smCountUp($('kUnpaid'), impayes, { format: entier });
-      window.smCountUp($('kDone'), reglees, { format: function (n) { return Math.round(n) + ' / 24'; } });
+      $('kDone').textContent = libelleVidange();
     } else {
-      $('kPaid').textContent = fcfa(total); $('kUnpaid').textContent = impayes; $('kDone').textContent = reglees + ' / 24';
+      $('kPaid').textContent = fcfa(total); $('kUnpaid').textContent = impayes; $('kDone').textContent = libelleVidange();
     }
-    requestAnimationFrame(function () { $('kBar').style.setProperty('--p', reglees / 24); });
   }
 
   /* ---------- REDEVANCE : calendrier du mois (partie caissière) ---------- */
@@ -194,7 +188,7 @@
     var decalage = (new Date(y, m, 1).getDay() + 6) % 7; // 0 = lundi
     for (var e = 0; e < decalage; e++) { var vide = document.createElement('div'); vide.className = 'cal-empty'; calGrid.appendChild(vide); }
     var dernier = new Date(y, m + 1, 0).getDate();
-    var per = periodeChoisie >= 0 ? periodes[periodeChoisie] : null;
+    var per = null;
 
     for (var day = 1; day <= dernier; day++) {
       var d = new Date(y, m, day), k = iso(d), p = paiements[k];
@@ -250,7 +244,7 @@
       : 'Touchez un jour pour enregistrer le montant remis.';
     if (nonJour) renderPeriodesRedevance(); else renderCalendar();
   }
-  var MOY = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régulateur' };
+  var MOY = { especes: 'Espèces', momo: 'MOMO', momo_regulateur: 'MOMO régularisation' };
   function renderPeriodesRedevance() {
     var auj = iso(aujourdhui()), nom = freq() === 'semaine' ? 'Semaine' : 'Mois';
     // les 2 prochaines périodes du contrat peuvent être payées d'avance
@@ -328,7 +322,7 @@
     if (!window.confirm('Faire payer ' + client.nom + ' ' + nom + ' ?\n\nLe montant de base (' + fcfa(client.montant_journalier_effectif) + ') devient le montant d\'une période. Les paiements déjà saisis ne sont pas modifiés.')) return;
     api('/api/clients/' + client.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frequence: b.dataset.freq }) })
       .then(function (c) {
-        client.frequence = c.frequence; construirePeriodes(); afficherPeriodes(false); afficherKpis(false); renderContrat();
+        client.frequence = c.frequence; afficherKpis(false); renderContrat();
         if (window.smToast) smToast('Paiement ' + nom + ' enregistré.');
       })
       .catch(function (err) { alert(window.smMessage ? smMessage(err) : 'Enregistrement impossible.'); });
@@ -344,42 +338,26 @@
   });
   window.addEventListener('resize', placerPastille);
 
-  // Un clic sur une case de vidange ouvre la redevance sur cette période
-  function majChip() {
-    var p = periodeChoisie >= 0 ? periodes[periodeChoisie] : null;
-    $('chipPeriode').classList.toggle('show', !!p);
-    if (p) $('chipText').textContent = 'Période N°' + (p.i + 1) + ' : du ' + court(p.debut) + ' au ' + court(p.fin) + ' · ' + fcfa(p.montant) + ' versés';
+  // Vidange : enregistrer le paiement (le décompte de 14 jours repart de cette date) ou l'annuler
+  function majVidange(d, message) {
+    vid = d; MONTANT_VID = d.montant; $('vidMontant').textContent = fcfa(MONTANT_VID);
+    afficherVidange(); afficherKpis(false);
+    if (message && window.smToast) smToast(message);
   }
-  function ouvrirPeriodeVidange(box) {
-    var p = periodes[Number(box.dataset.i)]; if (!p || !p.contrat || !p.commencee) return;
-    periodeChoisie = p.i;
-    viewY = p.debut.getFullYear(); viewM = p.debut.getMonth();
-    if (new Date(viewY, viewM + 1, 0) < p.debut) { viewM += 1; }
-    afficherPeriodes(false); majChip(); basculer('redevance');
-  }
-  $('driverPeriods').addEventListener('click', function (e) {
-    if (e.target.closest('.p-check')) return; // la case à cocher est gérée plus bas
-    var b = e.target.closest('.period-box'); if (b) ouvrirPeriodeVidange(b);
+  $('vidPayBtn').addEventListener('click', function () {
+    var btn = this, date = $('vidDate').value; $('vidError').textContent = ''; btn.disabled = true;
+    api('/api/vidanges', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code_client: client.code, date: date || undefined }) })
+      .then(function (d) { majVidange(d, 'Vidange payée : ' + fcfa(d.montant) + '. Prochaine vidange le ' + dFR(d.prochaine) + '.'); })
+      .catch(function (err) { $('vidError').textContent = window.smMessage ? smMessage(err) : err.message; })
+      .finally(function () { btn.disabled = false; });
   });
-  $('driverPeriods').addEventListener('keydown', function (e) {
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('period-box')) { e.preventDefault(); ouvrirPeriodeVidange(e.target); }
+  $('vidHist').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (!window.confirm('Annuler la vidange payée le ' + dFR(b.dataset.date) + ' ? Le décompte repartira de la vidange précédente.')) return;
+    api('/api/vidanges/' + encodeURIComponent(b.dataset.id), { method: 'DELETE' })
+      .then(function (d) { majVidange(d, 'Vidange annulée.'); })
+      .catch(function (err) { alert(window.smMessage ? smMessage(err) : err.message); });
   });
-  // Cocher / décocher « Vidange payée » (100 F par période de 14 jours)
-  $('driverPeriods').addEventListener('change', function (e) {
-    var cb = e.target; if (!cb.matches || !cb.matches('.p-check input')) return;
-    var p = periodes[Number(cb.dataset.i)], coche = cb.checked;
-    if (!coche && !window.confirm('Retirer le paiement de la vidange de la période N°' + (p.i + 1) + ' ?')) { cb.checked = true; return; }
-    cb.disabled = true;
-    api('/api/vidanges', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code_client: client.code, annee: p.annee, periode: p.i + 1, paye: coche }) })
-      .then(function () {
-        if (coche) vidanges[p.annee + '-' + (p.i + 1)] = true; else delete vidanges[p.annee + '-' + (p.i + 1)];
-        construirePeriodes(); afficherPeriodes(false); afficherKpis(true);
-        if (window.smToast) smToast(coche ? (p.commencee ? 'Vidange payée : ' : 'Vidange payée d\'avance : ') + fcfa(MONTANT_VID) + ' (période N°' + (p.i + 1) + ').' : 'Paiement de la vidange retiré.');
-      })
-      .catch(function (err) { cb.checked = !coche; cb.disabled = false; alert(window.smMessage ? smMessage(err) : err.message); });
-  });
-  $('chipClear').addEventListener('click', function () { periodeChoisie = -1; majChip(); afficherPeriodes(false); renderCalendar(); });
 
   /* ---------- Modale : montant remis ---------- */
   var modal = $('amountModal'), ctx = null;
@@ -454,7 +432,7 @@
         } else {
           renderPeriodesRedevance();
         }
-        construirePeriodes(); afficherPeriodes(false); majChip(); afficherKpis(true);
+        afficherKpis(true);
         if (p.paye && window.smCelebrate) window.smCelebrate($('modalSaveBtn'));
         if ((p.reporte || (p.avances && p.avances.length)) && window.smToast) window.smToast(smReportMessage(p));
         else if (p.periode && window.smToast) window.smToast(p.periode.complete ? 'Période complète : ' + fcfa(p.periode.verse) + ' versés.' : 'Il reste ' + fcfa(p.periode.cible - p.periode.verse) + ' à payer pour cette période.');
@@ -480,19 +458,18 @@
       return Promise.all([api('/api/paiements?code_client=' + encodeURIComponent(client.code)), api('/api/vidanges?code_client=' + encodeURIComponent(client.code))]);
     }).then(function (r) {
       paiements = {}; r[0].forEach(function (p) { paiements[p.date] = p; });
-      vidanges = {}; r[1].lignes.forEach(function (l) { vidanges[l.annee + '-' + l.periode] = true; });
-      MONTANT_VID = r[1].montant; $('vidMontant').textContent = fcfa(MONTANT_VID);
+      vid = r[1]; MONTANT_VID = vid.montant; $('vidMontant').textContent = fcfa(MONTANT_VID);
+      $('vidDate').value = vid.aujourdhui; $('vidDate').max = vid.aujourdhui; $('vidError').textContent = '';
 
       $('dAvatar').textContent = initials(client.nom); $('dAvatar').className = 'avatar ' + avatarClass(client.nom);
       $('dName').textContent = client.nom; $('dCode').textContent = client.code;
 
-      var auj = aujourdhui(); viewY = auj.getFullYear(); viewM = auj.getMonth(); periodeChoisie = -1; majChip();
-      construirePeriodes();
+      var auj = aujourdhui(); viewY = auj.getFullYear(); viewM = auj.getMonth();
       $('vide').style.display = 'none';
       var vue = $('ficheView'); vue.style.display = 'block';
       vue.classList.remove('sm-view-in'); void vue.offsetWidth; vue.classList.add('sm-view-in');
       typeAffiche = null;
-      basculer('vidange'); afficherPeriodes(true); afficherKpis(true);
+      basculer('vidange'); afficherVidange(); afficherKpis(true);
       $('codeInput').value = client.code;
       history.replaceState(null, '', '?code=' + encodeURIComponent(client.code));
       document.title = client.nom + ' – Vidange & Redevance – Soft Moto';
