@@ -348,7 +348,17 @@
       <button type="button" id="quickFullBtn">Montant complet</button>
       <button type="button" id="quickZeroBtn">Rien remis</button>
     </div>
-        <p class="moyen-label">Moyen de paiement</p>
+        <div class="avance-box" id="avanceBox">
+      <p class="moyen-label">Payer des jours en avance</p>
+      <div class="avance-row" role="group" aria-label="Payer des jours en avance">
+        <button type="button" data-jours="1">+ 1 jour</button>
+        <button type="button" data-jours="7">+ 1 semaine</button>
+        <button type="button" data-jours="14">+ 2 semaines</button>
+        <button type="button" data-jours="30">+ 1 mois</button>
+      </div>
+      <p class="step-hint" id="avanceInfo"></p>
+    </div>
+    <p class="moyen-label">Moyen de paiement</p>
     <div class="moyen-row" role="group" aria-label="Moyen de paiement">
       <button type="button" data-moyen="especes" class="on">Espèces</button>
       <button type="button" data-moyen="momo">MOMO</button>
@@ -560,7 +570,8 @@
       const moy = it.moyens.map(function(m){ return MOYEN_COURT[m] || ''; }).filter(Boolean).join(' + ');
       status = '<div class="t-status ' + (it.complet ? 'paid' : 'partial') + '">' + (it.complet ? '✓ ' : 'Partiel ') + fmtF(it.montant) + '</div>';
       sub = '<div class="t-sub">' + esc([moy, (it.numeros || []).join(', '), it.heure].filter(Boolean).join(' · ')) +
-        (it.regularisations.length ? ' · a aussi réglé : ' + esc(it.regularisations.map(function(g){ return jjmm(g.date); }).join(', ')) : '') + '</div>';
+        (it.regularisations.length ? ' · a aussi réglé : ' + esc(it.regularisations.map(function(g){ return jjmm(g.date); }).join(', ')) : '') +
+        ((it.avances || []).length ? ' · payé d\'avance : ' + (it.avances.length > 1 ? 'du ' + jjmm(it.avances[0].date) + ' au ' + jjmm(it.avances[it.avances.length - 1].date) + ' (' + it.avances.length + ' jours)' : jjmm(it.avances[0].date)) : '') + '</div>';
     } else {
       const partiel = it.statut === 'partiel', nonJour = it.frequence && it.frequence !== 'jour';
       status = '<div class="t-status ' + (partiel ? 'partial' : 'unpaid') + '">' + (partiel ? 'Partiel ' + fmtF(nonJour ? it.verse_periode : it.montant) + ' / ' + fmtF(it.cible) : '✗ Non collecté') + '</div>';
@@ -642,6 +653,8 @@
       complet: t.frequence && t.frequence !== 'jour' ? t.reste : undefined,
       libelle: t.frequence === 'semaine' ? 'Montant de la semaine' : t.frequence === 'mois' ? 'Montant du mois' : undefined,
       info: t.frequence && t.frequence !== 'jour' ? ' · déjà versé les autres jours de la période : ' + fmtF((t.verse_periode || 0) - (t.montant || 0)) : '',
+      avance: !(t.frequence && t.frequence !== 'jour'), arrieres: t.montant_du || 0,
+      noteAvance: t.regle_le && t.regle_le < aujourdhuiISO() ? 'Ce jour est déjà payé d\'avance (versé le ' + jjmm(t.regle_le) + ').' : '',
       onSaved: function(p){
         t.paye = p.paye; t.montant = p.montant; t.moyen = p.moyen; t.numero_momo = p.numero_momo;
         if (p.periode) t.verse_periode = p.periode.verse;
@@ -693,6 +706,7 @@
     amountInput.value = ctx.montantExistant != null ? ctx.montantExistant : (ctx.complet != null ? ctx.complet : ctx.cible);
     smMoyenSet(ctx.moyenExistant);
     smNumeroSet(ctx.numeroExistant);
+    smAvanceContexte({ actif: ctx.avance !== false, arrieres: ctx.arrieres || 0, date: ctx.date, note: ctx.noteAvance || '' });
     modalError.classList.remove('show');
     amountInput.removeAttribute('data-invalid');
 
@@ -756,8 +770,8 @@
         ctx.onSaved(p);
         // Si le même conducteur/jour est visible ailleurs (tournée + calendrier), on le met à jour aussi.
         synchroniserApresPaiement(ctx.code, ctx.date, p);
-        (p.ajustements || []).forEach(function(a){ synchroniserApresPaiement(ctx.code, a.date, a); });
-        if(p.reporte && window.smToast) window.smToast(p.reporte.toLocaleString('fr-FR') + ' F de surplus ont comblé ' + p.ajustements.length + (p.ajustements.length > 1 ? ' jours impayés.' : ' jour impayé.'));
+        (p.ajustements || []).concat(p.avances || []).forEach(function(a){ synchroniserApresPaiement(ctx.code, a.date, a); });
+        if((p.reporte || (p.avances && p.avances.length)) && window.smToast) window.smToast(smReportMessage(p));
         if(p.paye) window.smCelebrate(modalSaveBtn);
         fermerModal();
       })
