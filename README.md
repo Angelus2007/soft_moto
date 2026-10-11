@@ -86,7 +86,8 @@ public/          seul dossier accessible depuis le navigateur
   admin.html            tableau de bord (collecte du jour, 7 jours, aperçu financement)
   collectes.html        journal des versements sur une période, correction, export CSV
   motos.html            liste complète du financement, édition prix / cible / statut
-  fiche-conducteur.html  fiche d'un conducteur : VIDANGE (24 cases) + REDEVANCE (paiements jour par jour)
+  fiche-conducteur.html  fiche d'un conducteur : VIDANGE (décompte de 14 jours) + REDEVANCE (paiements)
+  archives.html          conducteurs suspendus (archivés), réactivables
   fiche-conducteur.js    logique de la fiche
   employes.html         validation des comptes, suspension, ajout direct
   parametres.html       compte, mot de passe, montant journalier par défaut
@@ -102,7 +103,7 @@ La recherche d'un code conducteur mène à `fiche-conducteur.html?code=SM-xxxxxx
 - depuis `caissiere.html` : la recherche par code ouvre la même fiche.
 
 La fiche a deux onglets :
-- **Vidange** : les 24 cases de 14 jours de l'année. Vert pur = tout payé, rouge pur = non payé, ambre = partiel, gris = à venir ou hors contrat.
+- **Vidange** : le décompte de 14 jours commence le jour où le conducteur a payé sa vidange (100 F). Un bandeau indique « prochaine vidange dans N jours », « à faire aujourd'hui » ou « en retard de N jours », avec l'historique des vidanges payées (annulables).
 - **Redevance** (partie caissière) : calendrier du mois, jour par jour (vert pur ✓ payé, rouge pur ✗ non payé). Un clic sur un jour ouvre la saisie du montant remis. Un clic sur une case de la Vidange ouvre la Redevance sur cette période.
 
 Seuls les jours entre l'inscription (ou `date_debut`) et `date_fin` comptent dans le suivi. « Aujourd'hui » suit le fuseau du serveur (`FUSEAU`). Une caissière voit la fiche sans menu d'administration, avec un retour vers sa tournée.
@@ -205,7 +206,7 @@ reporté automatiquement sur les jours impayés ou partiels **précédents**, du
 
 ## Moyen de paiement
 
-Chaque versement enregistre aussi son moyen : **Espèces**, **MOMO** ou **MOMO régulateur** (choix dans la fenêtre de saisie du montant, espèces par défaut).
+Chaque versement enregistre aussi son moyen : **Espèces**, **MOMO** ou **MOMO régularisation** (choix dans la fenêtre de saisie du montant, espèces par défaut).
 
 - stocké dans la colonne `paiements.moyen` (ajoutée automatiquement au démarrage, les anciens versements restent sans moyen) ;
 - affiché dans le calendrier de la fiche conducteur (ESP / MOMO / RÉG), dans le tableau des collectes et dans l'export CSV ;
@@ -237,7 +238,7 @@ Deux modèles de contrat sont intégrés (`public/contrat.js`). Les pointillés 
 
 ## Liste du jour et impayés cumulés
 
-**Liste du jour** (espace caissière « Liste du jour » et tableau de bord admin) : tout ce qui a été reçu aujourd'hui, avec le moyen (Espèces / MOMO / MOMO régulateur), l'heure, le total reçu et sa répartition par moyen. Pastilles **Payés / Impayés / Tous**. Les impayés du jour montrent aussi les jours impayés cumulés et le montant dû. La caissière peut toujours cliquer une ligne pour enregistrer ou corriger un versement.
+**Liste du jour** (espace caissière « Liste du jour » et tableau de bord admin) : tout ce qui a été reçu aujourd'hui, avec le moyen (Espèces / MOMO / MOMO régularisation), l'heure, le total reçu et sa répartition par moyen. Pastilles **Payés / Impayés / Tous**. Les impayés du jour montrent aussi les jours impayés cumulés et le montant dû. La caissière peut toujours cliquer une ligne pour enregistrer ou corriger un versement.
 
 - Un **journal des versements** (table `versements`, créée automatiquement) enregistre l'argent réellement reçu chaque jour, surplus compris : 6 000 F remis pour une redevance de 2 000 F s'affichent « 6 000 F » avec les anciens jours régularisés. Les paiements saisis avant ce journal du jour même sont repris tels quels.
 - `GET /api/tournee` (admin + caissière) renvoie `payes`, `totaux` et la tournée avec `jours_impayes` / `montant_du`.
@@ -250,7 +251,7 @@ Deux modèles de contrat sont intégrés (`public/contrat.js`). Les pointillés 
 ## Flèches du montant et numéro Mobile Money
 
 - **Flèches du montant remis** : ▲ double le montant (× 2), ▼ le divise par 2. En partant de 0, ▲ donne le montant de base du jour. Les touches ↑ / ↓ du clavier font la même chose. (Fenêtre de saisie de l'espace caissière, de la fiche conducteur et de Collectes.)
-- **Numéro MOMO** : quand le moyen est MOMO ou MOMO régulateur, trois numéros sont proposés ; la caissière coche celui qui a reçu le transfert (obligatoire si un montant est remis). Le numéro est enregistré avec le versement (`paiements.numero_momo`, `versements.numero_momo`), affiché dans la liste du jour (avec le total reçu par numéro) et ajouté à l'export CSV des collectes.
+- **Numéro MOMO** : quand le moyen est MOMO ou MOMO régularisation, trois numéros sont proposés ; la caissière coche celui qui a reçu le transfert (obligatoire si un montant est remis). Le numéro est enregistré avec le versement (`paiements.numero_momo`, `versements.numero_momo`), affiché dans la liste du jour (avec le total reçu par numéro) et ajouté à l'export CSV des collectes.
 - Les trois numéros sont **fictifs au départ** : l'administrateur les remplace dans **Paramètres → Numéros Mobile Money** (`PATCH /api/config` avec `numeros_momo`).
 - Si on change le moyen d'un versement déjà saisi, le journal déplace le montant d'un moyen à l'autre.
 
@@ -289,11 +290,32 @@ Chaque conducteur a une **fréquence de paiement** : par jour (par défaut, comm
 - Impayés cumulés (admin) : les jours impayés d'une période terminée comptent tous ses jours (1 semaine impayée = 7 jours), pour que les seuils 2, 3, 4, 5 jours restent comparables ; la colonne « Paiement » de l'export Excel indique la fréquence.
 - Les contrats indiquent « par jour », « par semaine » ou « par mois ».
 
-## Vidange : 100 F par période de 14 jours, à cocher
+## Vidange : 100 F, décompte de 14 jours depuis le jour du paiement
 
-Fiche conducteur → onglet **Vidange** : 24 cases par an (14 jours chacune, à partir du 1er janvier). Chaque case a une case à cocher **« Vidange 100 F »** : on la coche quand le conducteur a payé la vidange de la période.
+Fiche conducteur → onglet **Vidange** : plus de périodes fixes. Quand le conducteur paie sa vidange, la caissière (ou l'admin) clique sur **« Enregistrer la vidange payée »** (date du jour par défaut, modifiable si le paiement date d'un jour passé). Le décompte de **14 jours** part de cette date : la prochaine vidange est due 14 jours plus tard.
 
-- Vert : vidange payée. Orange : période en cours, à payer. Rouge : période terminée sans vidange payée. Gris : à venir ou hors contrat. On ne peut cocher qu'une période commencée ; décocher demande une confirmation.
-- Le total « Vidanges payées x / 24 » remplace l'ancien « Périodes réglées ». Les vidanges ne dépendent plus de la redevance.
-- Les vidanges cochées dans la journée apparaissent à part dans la liste du jour (nombre et total, sans se mélanger au total de la redevance).
-- Montant : 100 F par défaut, modifiable avec la variable `VIDANGE_MONTANT`. API : `GET /api/vidanges?code_client=…`, `POST /api/vidanges` (`code_client`, `annee`, `periode` 1 à 24, `paye`).
+- Avant le premier paiement, aucun décompte ne tourne.
+- Une vidange saisie par erreur peut être annulée (le décompte repart de la vidange précédente).
+- Les vidanges payées dans la journée apparaissent à part dans la liste du jour et dans « Mon point ».
+- Les anciennes cases cochées (24 périodes) sont reprises automatiquement au démarrage : chacune devient une vidange datée du jour où elle avait été cochée (l'ancienne table `vidanges` est conservée comme sauvegarde).
+- Montant : 100 F par défaut, modifiable avec `VIDANGE_MONTANT`. API : `GET /api/vidanges?code_client=…` (état et historique), `POST /api/vidanges` (`code_client`, `date` facultative), `DELETE /api/vidanges/:id`.
+
+## Paiements par l'administrateur, modification, archives et point personnel
+
+- **Paiements** : l'administrateur a une entrée « Paiements » dans son menu (même écran que les caissières) et peut aussi saisir paiements et vidanges depuis la fiche d'un conducteur.
+- **Modifier un conducteur** : bouton « Modifier » dans la liste des conducteurs (code, coordonnées, témoin, visiteur, moto, contrat, dates, montants, statut). Si le code change, les paiements et vidanges suivent.
+- **Ajout d'un conducteur** : nouveaux champs **État de la moto** (neuve ou usagée, obligatoire) et **Nom du visiteur** (facultatif). Le contrat « Droit d'usage » reprend l'état de la moto.
+- **Archives** : un conducteur *suspendu* (bouton « Archiver » ou statut « Suspendu » dans la fenêtre de modification) quitte la liste, les collectes, les impayés et le financement ; il est consultable et réactivable dans la page **Archives**. Aucun paiement ne peut lui être enregistré tant qu'il est suspendu.
+- **Mon point** : chaque caissière voit sur sa page ce qu'**elle** a encaissé (jour au choix : total, espèces / MOMO / MOMO régularisation, liste de ses versements, total du mois). API : `GET /api/mon-point?date=AAAA-MM-JJ` (l'admin peut ajouter `compte_id=` pour voir une caissière).
+- Le moyen de paiement « MOMO régulateur » s'appelle désormais **« MOMO régularisation »** (même code interne, aucune donnée à migrer).
+
+## Paiement en avance
+
+Un conducteur à jour peut payer des jours, des semaines, des mois ou des vidanges **d'avance**.
+
+- **Redevance par jour** : dans la fenêtre de saisie du montant, les boutons **+ 1 jour, + 1 semaine, + 2 semaines, + 1 mois** ajoutent ce nombre de jours au montant (ex. 2 000 F + 14 × 2 000 F = 30 000 F). Le **surplus** sert d'abord à régler les **jours impayés** (du plus ancien au plus récent), puis paie les **jours suivants**, jusqu'à la fin du contrat (120 jours au maximum) ; les jours déjà payés sont sautés. Si le reste ne suffit pas pour un jour entier, ce jour reçoit une avance partielle (orange). Ce qui ne peut être placé reste sur le jour saisi.
+- Le calendrier affiche les jours payés d'avance en vert avec « payé d'avance le jj/mm/aaaa » ; le bouton « mois suivant » apparaît quand des jours payés d'avance débordent sur le mois suivant. Un message confirme « N jours payés d'avance, jusqu'au jj/mm ».
+- **Redevance par semaine / par mois** : les 2 prochaines périodes du contrat apparaissent en cartes « À venir » avec le bouton **Payer d'avance**.
+- **Vidange** : le décompte de 14 jours part du jour du paiement ; il n'y a plus de périodes à venir.
+- **Caisse** : l'argent est compté le jour où il est reçu. La liste du jour indique « payé d'avance : du jj/mm au jj/mm (N jours) ». Les jours payés d'avance ne comptent pas comme impayés et ne gonflent pas le pourcentage de fiabilité.
+- API : `POST /api/paiements` renvoie en plus `avance` (montant utilisé) et `avances` (jours à venir payés) ;
