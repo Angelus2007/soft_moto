@@ -210,6 +210,11 @@
   .modal-edit h2{ font-family:var(--serif); font-size:21px; margin:0 0 4px; }
   .modal-edit .sub{ margin:0 0 14px; color:var(--ink-soft); font-size:13px; }
   .d-moto{ color:var(--ink-faint); font-size:12px; }
+  .sig-box{ border:1.5px dashed var(--border); border-radius:10px; height:110px; display:flex; align-items:center; justify-content:center; background:#fff; overflow:hidden; }
+  .sig-box img{ max-width:100%; max-height:100%; object-fit:contain; }
+  .sig-empty{ color:var(--ink-faint); font-size:13px; }
+  .sig-btns{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .sig-pick{ cursor:pointer; display:inline-block; }
 
   @media (max-width: 780px){
     .app{ grid-template-columns:1fr; }
@@ -383,6 +388,26 @@
           <input type="text" id="newVisiteur" placeholder="ex. Koffi Mensah" autocomplete="off">
         </div>
 
+        <p class="section-title">Signatures <span style="font-weight:400; color:var(--ink-faint); text-transform:none; letter-spacing:0;">— images, optionnel</span></p>
+        <div class="field sig-block" id="sigCond" style="grid-column:1/-1">
+          <p class="type-label">SIGNATURE DU CONDUCTEUR</p>
+          <div class="sig-box"><img alt="" style="display:none"><span class="sig-empty">Aucune image</span></div>
+          <div class="sig-btns">
+            <label class="btn ghost sig-pick">Choisir une image<input type="file" accept="image/*" hidden></label>
+            <button type="button" class="btn ghost sig-clear" style="display:none">Retirer</button>
+          </div>
+          <span class="field-error sig-err"></span>
+        </div>
+        <div class="field sig-block" id="sigTem" style="grid-column:1/-1">
+          <p class="type-label">SIGNATURE DU TÉMOIN</p>
+          <div class="sig-box"><img alt="" style="display:none"><span class="sig-empty">Aucune image</span></div>
+          <div class="sig-btns">
+            <label class="btn ghost sig-pick">Choisir une image<input type="file" accept="image/*" hidden></label>
+            <button type="button" class="btn ghost sig-clear" style="display:none">Retirer</button>
+          </div>
+          <span class="field-error sig-err"></span>
+        </div>
+
         <p class="section-title">Contrat</p>
         <div class="field" style="grid-column:1/-1">
           <p class="type-label">TYPE DE CONTRAT :</p>
@@ -474,6 +499,26 @@
             <div class="field"><label for="edEnd">Date de fin</label><input type="date" id="edEnd"></div>
             <div class="field"><label for="edPrice">Montant de base (F CFA, par période)</label><input type="number" id="edPrice" min="0" step="100"></div>
             <div class="field"><label for="edMotoPrice">Montant dû (F CFA) — calculé automatiquement</label><input type="text" id="edMotoPrice" readonly style="background:var(--bg-light); font-weight:600;"></div>
+
+            <p class="section-title">Signatures</p>
+            <div class="field sig-block" id="edSigCond" style="grid-column:1/-1">
+          <p class="type-label">SIGNATURE DU CONDUCTEUR</p>
+          <div class="sig-box"><img alt="" style="display:none"><span class="sig-empty">Aucune image</span></div>
+          <div class="sig-btns">
+            <label class="btn ghost sig-pick">Choisir une image<input type="file" accept="image/*" hidden></label>
+            <button type="button" class="btn ghost sig-clear" style="display:none">Retirer</button>
+          </div>
+          <span class="field-error sig-err"></span>
+        </div>
+            <div class="field sig-block" id="edSigTem" style="grid-column:1/-1">
+          <p class="type-label">SIGNATURE DU TÉMOIN</p>
+          <div class="sig-box"><img alt="" style="display:none"><span class="sig-empty">Aucune image</span></div>
+          <div class="sig-btns">
+            <label class="btn ghost sig-pick">Choisir une image<input type="file" accept="image/*" hidden></label>
+            <button type="button" class="btn ghost sig-clear" style="display:none">Retirer</button>
+          </div>
+          <span class="field-error sig-err"></span>
+        </div>
 
             <p class="section-title">Statut</p>
             <div class="field" style="grid-column:1/-1">
@@ -634,6 +679,49 @@
     if(cible) window.smGo ? window.smGo('fiche-conducteur.html?code=' + encodeURIComponent(cible.code)) : (window.location.href = 'fiche-conducteur.html?code=' + encodeURIComponent(cible.code));
   });
 
+  // ---------- Signatures : image choisie, réduite dans le navigateur puis envoyée avec le conducteur ----------
+  function lireImage(file){
+    return new Promise(function(ok, ko){
+      if(!/^image\//.test(file.type)) return ko(new Error('Choisissez un fichier image (png, jpeg…).'));
+      const fr = new FileReader();
+      fr.onerror = function(){ ko(new Error('Lecture du fichier impossible.')); };
+      fr.onload = function(){
+        const im = new Image();
+        im.onerror = function(){ ko(new Error('Image illisible : essayez un fichier png ou jpeg.')); };
+        im.onload = function(){
+          const k = Math.min(1, 800 / Math.max(im.width, im.height));
+          const cv = document.createElement('canvas'); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
+          const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(im, 0, 0, cv.width, cv.height);
+          let q = 0.85, d = cv.toDataURL('image/jpeg', q);
+          while(d.length > 380000 && q > 0.4){ q -= 0.1; d = cv.toDataURL('image/jpeg', q); }
+          d.length > 380000 ? ko(new Error('Image trop lourde.')) : ok(d);
+        };
+        im.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+  function selecteurSignature(id){
+    const racine = $(id), img = racine.querySelector('img'), vide = racine.querySelector('.sig-empty'),
+          input = racine.querySelector('input[type=file]'), effacer = racine.querySelector('.sig-clear'), err = racine.querySelector('.sig-err');
+    const etat = { valeur: null, change: false };
+    function afficher(){
+      img.style.display = etat.valeur ? '' : 'none'; if(etat.valeur) img.src = etat.valeur; else img.removeAttribute('src');
+      vide.style.display = etat.valeur ? 'none' : ''; effacer.style.display = etat.valeur ? '' : 'none';
+    }
+    input.addEventListener('change', function(){
+      const f = input.files[0]; input.value = ''; err.textContent = ''; if(!f) return;
+      lireImage(f).then(function(d){ etat.valeur = d; etat.change = true; afficher(); }).catch(function(e){ err.textContent = e.message; });
+    });
+    effacer.addEventListener('click', function(){ etat.valeur = null; etat.change = true; err.textContent = ''; afficher(); });
+    return {
+      get: function(){ return etat.valeur; }, changed: function(){ return etat.change; },
+      set: function(v){ etat.valeur = v || null; etat.change = false; err.textContent = ''; afficher(); }
+    };
+  }
+  const sigCond = selecteurSignature('sigCond'), sigTem = selecteurSignature('sigTem');
+  const edSigCond = selecteurSignature('edSigCond'), edSigTem = selecteurSignature('edSigTem');
+
   // ---------- Montant dû = montant de base × nombre de périodes du contrat (miroir du calcul du serveur) ----------
   function addJ(s, n){ const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
   function diffJ(a, b){ return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000); }
@@ -715,7 +803,7 @@
     $('addFormError').textContent = '';
     CHAMPS_REQUIS.forEach(function(c){ c.input.value = ''; c.input.removeAttribute('data-invalid'); c.err.textContent = ''; });
     $('newMotoPrice').value = ''; $('newMotoPrice').removeAttribute('data-invalid'); $('newMotoPriceError').textContent = '';
-    $('newMarque').value = 'TVS'; $('newPlate').value = ''; $('newVisiteur').value = ''; choisirType(''); choisirFrequence('jour');
+    $('newMarque').value = 'TVS'; $('newPlate').value = ''; $('newVisiteur').value = ''; sigCond.set(null); sigTem.set(null); choisirType(''); choisirFrequence('jour');
     etatMoto = ''; $('newEtatRow').querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); }); $('newEtatError').textContent = '';
   }
   toggleFormBtn.addEventListener('click', function(){ addForm.classList.contains('open') ? closeForm() : openForm(); });
@@ -771,6 +859,8 @@
         type_contrat: typeContrat,
         frequence: frequence,
         etat_moto: etatMoto,
+        signature_conducteur: sigCond.get() || undefined,
+        signature_temoin: sigTem.get() || undefined,
         visiteur: $('newVisiteur').value.trim() || undefined,
         marque: $('newMarque').value.trim() || 'TVS',
         immatriculation: $('newPlate').value.trim() || undefined
@@ -816,6 +906,12 @@
     choisirEd('edEtatRow', 'etat_moto', c.etat_moto || ''); choisirEd('edTypeRow', 'type_contrat', c.type_contrat || 'journee_payee');
     choisirEd('edFreqRow', 'frequence', c.frequence || 'jour'); choisirEd('edStatutRow', 'statut', c.statut || 'actif');
     $('edError').textContent = '';
+    edSigCond.set(null); edSigTem.set(null);
+    api('/api/clients/' + encodeURIComponent(c.code) + '/signatures').then(function(s){
+      if(edId !== c.id) return;
+      if(!edSigCond.changed()) edSigCond.set(s.signature_conducteur);
+      if(!edSigTem.changed()) edSigTem.set(s.signature_temoin);
+    }).catch(function(){});
     editModal.classList.add('show'); $('edName').focus();
   }
   function fermerEdition(){ editModal.classList.remove('show'); edId = null; }
@@ -840,6 +936,8 @@
       type_contrat: ed.type_contrat, frequence: ed.frequence, statut: ed.statut
     };
     if(ed.etat_moto) body.etat_moto = ed.etat_moto;
+    if(edSigCond.changed()) body.signature_conducteur = edSigCond.get() || '';
+    if(edSigTem.changed()) body.signature_temoin = edSigTem.get() || '';
     const btn = $('edSave'); btn.disabled = true; $('edError').textContent = '';
     api('/api/clients/' + edId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function(c){
