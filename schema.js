@@ -48,7 +48,9 @@ CREATE TABLE IF NOT EXISTS clients (
   date_fin TEXT,
   etat_moto TEXT,
   visiteur TEXT,
-  date_archivage TEXT
+  date_archivage TEXT,
+  signature_conducteur TEXT,
+  signature_temoin TEXT
 );
 CREATE TABLE IF NOT EXISTS paiements (
   id ${pk},
@@ -113,7 +115,7 @@ CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NUL
       ['code', 'TEXT'], ['statut', "TEXT NOT NULL DEFAULT 'actif'"], ['date_creation', 'TEXT'], ['prix_moto', 'INTEGER'],
       ['montant_journalier', 'INTEGER'], ['temoin_nom', 'TEXT'], ['temoin_telephone', 'TEXT'], ['temoin_adresse', 'TEXT'],
       ['type_contrat', 'TEXT'], ['immatriculation', 'TEXT'], ['marque', 'TEXT'], ['frequence', 'TEXT'], ['date_debut', 'TEXT'], ['date_fin', 'TEXT'],
-      ['etat_moto', 'TEXT'], ['visiteur', 'TEXT'], ['date_archivage', 'TEXT']
+      ['etat_moto', 'TEXT'], ['visiteur', 'TEXT'], ['date_archivage', 'TEXT'], ['signature_conducteur', 'TEXT'], ['signature_temoin', 'TEXT']
     ]
   };
   for (const [table, cols] of Object.entries(ajouts)) {
