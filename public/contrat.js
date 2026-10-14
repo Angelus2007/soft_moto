@@ -19,6 +19,10 @@
     var t = valeur === null || valeur === undefined ? '' : String(valeur).trim();
     return t ? '<b class="v">' + esc(t) + '</b>' : (pointilles || POINTILLES);
   }
+  // Image de signature (data URL) : seules les images png/jpeg/webp en base64 sont acceptées.
+  function sig(src) {
+    return /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/.test(src || '') ? '<img class="sig" alt="Signature" src="' + src + '">' : '';
+  }
   function dateFR(iso) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
     return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
@@ -83,7 +87,7 @@
       ', qui prend l’engagement d’être avaliseur des présentes clauses et devra verser le montant sus indiqué en cas de non respect des présentes clauses par le contractant.</p>' +
       '<p class="fait">Fait à Cotonou, le ' + v(dateFR(c.date_debut), '......................................') + '</p>' +
       '<table class="sign"><tr><td>Le propriétaire</td><td>Le contractant</td></tr>' +
-      '<tr><td class="espace"></td><td class="espace"></td></tr>' +
+      '<tr><td class="espace"></td><td class="espace">' + sig(c.signature_conducteur) + '</td></tr>' +
       '<tr><td>' + PROPRIETAIRE.nom + '</td><td>...............................................</td></tr></table>';
   }
 
@@ -130,7 +134,7 @@
       '<p class="fait">Cotonou le ' + v(dateFR(c.date_debut), '………/………/26') + '</p>' +
       '<table class="sign"><tr><td>Conducteur</td><td>Nom et signature (Avaliseur)</td></tr>' +
       '<tr><td>Tél ' + v(c.telephone, '………………………..') + '</td><td>' + v(c.temoin_nom, '') + (c.temoin_telephone ? ' — Tél ' + v(c.temoin_telephone) : '') + '</td></tr>' +
-      '<tr><td class="espace"></td><td class="espace"></td></tr>' +
+      '<tr><td class="espace">' + sig(c.signature_conducteur) + '</td><td class="espace">' + sig(c.signature_temoin) + '</td></tr>' +
       '<tr><td>' + v(c.nom, '') + '</td><td></td></tr></table>' +
       '<table class="sign"><tr><td></td><td>' + PROPRIETAIRE.nomInverse + '<br>Propriétaire</td></tr></table>';
   }
@@ -145,7 +149,8 @@
     '.sm-contrat table.sign{width:100%;border-collapse:collapse;margin-top:6pt}' +
     '.sm-contrat table.sign td{width:50%;padding:2pt 0;vertical-align:top;text-align:left}' +
     '.sm-contrat table.sign td+td{text-align:right}' +
-    '.sm-contrat table.sign td.espace{height:46pt}';
+    '.sm-contrat table.sign td.espace{height:46pt}' +
+    '.sm-contrat img.sig{max-height:42pt;max-width:150pt;object-fit:contain}';
 
   function corps(client, type) {
     var t = TYPES[type] ? type : typeDe(client);
