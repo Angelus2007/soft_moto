@@ -21,7 +21,9 @@ app.use((req, res, next) => {
 // Sur Render (ou si TRUST_PROXY est défini), le site est derrière un proxy : on lit la vraie adresse IP du visiteur
 // (utilisée par la protection contre les essais de mot de passe).
 if (process.env.RENDER || process.env.TRUST_PROXY) app.set('trust proxy', 1);
-app.use(express.json({ limit: '10kb' }));
+// 10 ko partout, sauf à l'enregistrement d'un conducteur (les images de signature sont envoyées en texte base64).
+const jsonPetit = express.json({ limit: '10kb' }), jsonGrand = express.json({ limit: '1mb' });
+app.use((req, res, next) => (/^\/api\/clients(\/|$)/.test(req.path) && (req.method === 'POST' || req.method === 'PATCH') ? jsonGrand : jsonPetit)(req, res, next));
 
 // Erreur « attendue » à renvoyer au navigateur (ex. depuis une transaction).
 class ErreurHttp extends Error { constructor(statut, message) { super(message); this.statut = statut; } }
@@ -431,14 +433,29 @@ app.delete('/api/comptes/:id', exigerRole('admin'), h(async (req, res) => {
 /* ------------------------------------------------------------------ */
 /* Clients (conducteurs)                                               */
 /* ------------------------------------------------------------------ */
+// Signature : image (data URL png/jpeg/webp, 400 000 caractères au maximum) ; chaîne vide ou null = pas de signature.
+const SIGNATURE_MAX = 400000;
+function signatureValide(v) {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v !== 'string' || v.length > SIGNATURE_MAX || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v)) return false;
+  return v;
+}
 const COLS_CLIENT = 'id, code, nom, telephone, adresse, temoin_nom, temoin_telephone, temoin_adresse, ' +
-  'date_debut, date_fin, statut, date_creation, prix_moto, montant_journalier, type_contrat, immatriculation, marque, frequence, etat_moto, visiteur, date_archivage';
+  'date_debut, date_fin, statut, date_creation, prix_moto, montant_journalier, type_contrat, immatriculation, marque, frequence, etat_moto, visiteur, date_archivage, ' +
+  '(CASE WHEN signature_conducteur IS NULL THEN 0 ELSE 1 END) AS a_signature_conducteur, (CASE WHEN signature_temoin IS NULL THEN 0 ELSE 1 END) AS a_signature_temoin';
 const avecCible = (c) => c && { ...c, frequence: frequenceDe(c), montant_journalier_effectif: cibleJourniere(c) };
 
 app.get('/api/clients', exigerRole('admin', 'caissiere'), h(async (req, res) => {
   const archives = req.query.archives === '1';
   if (archives && req.user.role !== 'admin') return res.status(403).json({ erreur: 'Accès refusé.' });
   res.json((await db.all(`SELECT ${COLS_CLIENT} FROM clients WHERE statut ${archives ? '=' : '<>'} 'suspendu' ORDER BY date_creation DESC, id DESC`)).map(avecCible));
+}));
+
+// Images de signature d'un conducteur (séparées de la fiche : elles sont lourdes).
+app.get('/api/clients/:code/signatures', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const c = await db.get('SELECT signature_conducteur, signature_temoin FROM clients WHERE code = ?', [req.params.code.trim().toUpperCase()]);
+  if (!c) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  res.json({ signature_conducteur: c.signature_conducteur || null, signature_temoin: c.signature_temoin || null });
 }));
 
 app.get('/api/clients/:code', exigerRole('admin', 'caissiere'), h(async (req, res) => {
@@ -469,6 +486,8 @@ app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
   const frequence = texte(req.body.frequence, 10) || 'jour';
   const etatMoto = texte(req.body.etat_moto, 10);
   const visiteur = texte(req.body.visiteur, 100) || null;
+  const sigConducteur = signatureValide(req.body.signature_conducteur), sigTemoin = signatureValide(req.body.signature_temoin);
+  if (sigConducteur === false || sigTemoin === false) return res.status(400).json({ erreur: 'Image de signature invalide (png, jpeg ou webp, 300 ko environ au maximum).' });
 
   if (!ETATS_MOTO.includes(etatMoto)) return res.status(400).json({ erreur: "Choisissez l'état de la moto (neuve ou usagée)." });
   if (!FREQUENCES.includes(frequence)) return res.status(400).json({ erreur: 'Fréquence de paiement invalide (jour, semaine ou mois).' });
@@ -496,10 +515,10 @@ app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
   if (await db.get('SELECT 1 FROM clients WHERE code = ?', [code])) return res.status(409).json({ erreur: 'Ce code est déjà utilisé par un autre conducteur.' });
   const id = await db.insertId(`INSERT INTO clients
       (code, nom, telephone, adresse, temoin_nom, temoin_telephone, temoin_adresse, date_debut, date_fin,
-       statut, date_creation, prix_moto, montant_journalier, type_contrat, immatriculation, marque, frequence, etat_moto, visiteur)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       statut, date_creation, prix_moto, montant_journalier, type_contrat, immatriculation, marque, frequence, etat_moto, visiteur, signature_conducteur, signature_temoin)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [code, nom, telephone, adresse, temoinNom, temoinTelephone, temoinAdresse, dateDebut, dateFin,
-      'actif', now(), prix, montantJournalier, typeContrat, immatriculation, marque, frequence, etatMoto, visiteur]);
+      'actif', now(), prix, montantJournalier, typeContrat, immatriculation, marque, frequence, etatMoto, visiteur, sigConducteur, sigTemoin]);
   res.status(201).json(avecCible(await db.get(`SELECT ${COLS_CLIENT} FROM clients WHERE id = ?`, [id])));
 }));
 
@@ -555,6 +574,12 @@ app.patch('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
     champs.etat_moto = e;
   }
   if (req.body.visiteur !== undefined) champs.visiteur = texte(req.body.visiteur, 100) || null;
+  for (const k of ['signature_conducteur', 'signature_temoin']) {
+    if (req.body[k] === undefined) continue;
+    const sg = signatureValide(req.body[k]);
+    if (sg === false) return res.status(400).json({ erreur: 'Image de signature invalide (png, jpeg ou webp, 300 ko environ au maximum).' });
+    champs[k] = sg; // null = signature retirée
+  }
   if (req.body.statut !== undefined) {
     if (!STATUTS_CLIENT.includes(req.body.statut)) return res.status(400).json({ erreur: 'Statut invalide.' });
     champs.statut = req.body.statut;
