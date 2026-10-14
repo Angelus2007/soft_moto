@@ -94,6 +94,14 @@ CREATE TABLE IF NOT EXISTS vidange_paiements (
   maj_le TEXT NOT NULL,
   UNIQUE (code_client, date_paiement)
 );
+CREATE TABLE IF NOT EXISTS observations (
+  id ${pk},
+  code_client TEXT NOT NULL,
+  texte TEXT NOT NULL,
+  compte_id INTEGER,
+  auteur TEXT,
+  cree_le TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 `);
 
@@ -118,6 +126,7 @@ CREATE INDEX IF NOT EXISTS idx_versements_jour ON versements (jour_saisie);
 CREATE INDEX IF NOT EXISTS idx_vidanges_jour ON vidanges (jour_saisie);
 CREATE INDEX IF NOT EXISTS idx_paiements_date ON paiements (date);
 CREATE INDEX IF NOT EXISTS idx_sessions_compte ON sessions (compte_id);
+CREATE INDEX IF NOT EXISTS idx_observations_client ON observations (code_client);
 CREATE INDEX IF NOT EXISTS idx_vidange_paiements_date ON vidange_paiements (date_paiement);
 `);
 
