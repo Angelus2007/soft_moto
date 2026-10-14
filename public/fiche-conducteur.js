@@ -34,7 +34,7 @@
   }
 
   api('/api/moi').then(function (moi) {
-    var admin = moi.role === 'admin'; estAdmin = admin;
+    var admin = moi.role === 'admin'; estAdmin = admin; monId = moi.id; if (obs) afficherObs();
     document.querySelectorAll('.sidebar-profile').forEach(function (bloc) {
       var av = bloc.querySelector('.avatar'); if (av) { av.textContent = initials(moi.nom); av.className = 'avatar ' + avatarClass(moi.nom); }
       var nm = bloc.querySelector('.name'); if (nm) nm.textContent = moi.nom;
@@ -283,9 +283,9 @@
     pill.style.transform = 'translateX(' + (actif.offsetLeft - 4) + 'px)';
   }
   function basculer(nom) {
-    var vid = nom === 'vidange', red = nom === 'redevance', con = nom === 'contrat';
-    $('tabVidange').setAttribute('aria-selected', vid); $('tabRedevance').setAttribute('aria-selected', red); $('tabContrat').setAttribute('aria-selected', con);
-    $('panelVidange').classList.toggle('show', vid); $('panelRedevance').classList.toggle('show', red); $('panelContrat').classList.toggle('show', con);
+    var vid = nom === 'vidange', red = nom === 'redevance', con = nom === 'contrat', ob = nom === 'obs';
+    $('tabVidange').setAttribute('aria-selected', vid); $('tabRedevance').setAttribute('aria-selected', red); $('tabContrat').setAttribute('aria-selected', con); $('tabObs').setAttribute('aria-selected', ob);
+    $('panelVidange').classList.toggle('show', vid); $('panelRedevance').classList.toggle('show', red); $('panelContrat').classList.toggle('show', con); $('panelObs').classList.toggle('show', ob);
     placerPastille();
     if (red) renderRedevance();
     if (con) renderContrat();
@@ -293,6 +293,44 @@
   $('tabVidange').addEventListener('click', function () { basculer('vidange'); });
   $('tabRedevance').addEventListener('click', function () { basculer('redevance'); });
   $('tabContrat').addEventListener('click', function () { basculer('contrat'); });
+  $('tabObs').addEventListener('click', function () { basculer('obs'); });
+
+  /* ---------- Observations (commentaires sur le conducteur) ---------- */
+  var obs = null, monId = null;
+  function dateHeure(isoStr) {
+    try { return new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(isoStr)); }
+    catch (e) { return isoStr; }
+  }
+  function echapper(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function afficherObs() {
+    if (!obs) return;
+    $('tabObs').textContent = 'Observations' + (obs.length ? ' (' + obs.length + ')' : ''); placerPastille();
+    $('obsList').innerHTML = obs.length ? obs.map(function (o) {
+      var peut = estAdmin || o.compte_id === monId;
+      return '<li><div class="o-meta"><strong>' + echapper(o.auteur || 'Inconnu') + '</strong><span>' + dateHeure(o.cree_le) + '</span>' +
+        (peut ? '<button type="button" data-id="' + o.id + '">Supprimer</button>' : '') + '</div><p class="o-txt">' + echapper(o.texte) + '</p></li>';
+    }).join('') : '<li><span class="o-meta">Aucune observation pour le moment.</span></li>';
+  }
+  function chargerObs() {
+    if (!client) return;
+    api('/api/observations?code_client=' + encodeURIComponent(client.code)).then(function (l) { obs = l; afficherObs(); }).catch(function () {});
+  }
+  $('obsAdd').addEventListener('click', function () {
+    var btn = this, t = $('obsTexte').value.trim(); $('obsError').textContent = '';
+    if (t.length < 2) { $('obsError').textContent = "Écrivez l'observation."; return; }
+    btn.disabled = true;
+    api('/api/observations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code_client: client.code, texte: t }) })
+      .then(function (l) { obs = l; $('obsTexte').value = ''; afficherObs(); if (window.smToast) smToast('Observation ajoutée.'); })
+      .catch(function (err) { $('obsError').textContent = window.smMessage ? smMessage(err) : err.message; })
+      .finally(function () { btn.disabled = false; });
+  });
+  $('obsList').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (!window.confirm('Supprimer cette observation ?')) return;
+    api('/api/observations/' + encodeURIComponent(b.dataset.id), { method: 'DELETE' })
+      .then(function (l) { obs = l; afficherObs(); })
+      .catch(function (err) { alert(window.smMessage ? smMessage(err) : err.message); });
+  });
 
   /* ---------- Contrat du conducteur ---------- */
   var typeAffiche = null, estAdmin = false;
@@ -458,6 +496,7 @@
       return Promise.all([api('/api/paiements?code_client=' + encodeURIComponent(client.code)), api('/api/vidanges?code_client=' + encodeURIComponent(client.code))]);
     }).then(function (r) {
       paiements = {}; r[0].forEach(function (p) { paiements[p.date] = p; });
+      chargerObs();
       vid = r[1]; MONTANT_VID = vid.montant; $('vidMontant').textContent = fcfa(MONTANT_VID);
       $('vidDate').value = vid.aujourdhui; $('vidDate').max = vid.aujourdhui; $('vidError').textContent = '';
 
