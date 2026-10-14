@@ -586,7 +586,7 @@ app.patch('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
   await db.tx(async (tx) => {
     await tx.run(`UPDATE clients SET ${cles.map((c) => c + ' = ?').join(', ')} WHERE id = ?`, [...cles.map((c) => champs[c]), existant.id]);
     if (champs.code) {
-      for (const t of ['paiements', 'versements', 'vidange_paiements', 'vidanges']) await tx.run(`UPDATE ${t} SET code_client = ? WHERE code_client = ?`, [champs.code, existant.code]);
+      for (const t of ['paiements', 'versements', 'vidange_paiements', 'vidanges', 'observations']) await tx.run(`UPDATE ${t} SET code_client = ? WHERE code_client = ?`, [champs.code, existant.code]);
     }
   });
   res.json(avecCible(await db.get(`SELECT ${COLS_CLIENT} FROM clients WHERE id = ?`, [existant.id])));
@@ -799,6 +799,32 @@ app.post('/api/vidanges', exigerRole('admin', 'caissiere'), h(async (req, res) =
   await db.run('INSERT INTO vidange_paiements (code_client, date_paiement, montant, compte_id, maj_le) VALUES (?,?,?,?,?)',
     [code, date, MONTANT_VIDANGE, req.user.id, now()]);
   res.status(201).json(await etatVidange(code));
+}));
+
+/* ------------------------------------------------------------------ */
+/* Observations (commentaires) sur chaque conducteur                   */
+/* ------------------------------------------------------------------ */
+app.get('/api/observations', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const code = texte(req.query.code_client, 20).toUpperCase();
+  res.json(await db.all('SELECT id, texte, compte_id, auteur, cree_le FROM observations WHERE code_client = ? ORDER BY cree_le DESC, id DESC', [code]));
+}));
+
+app.post('/api/observations', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const code = texte(req.body.code_client, 20).toUpperCase();
+  const t = texte(req.body.texte, 1000);
+  if (t.length < 2) return res.status(400).json({ erreur: "Écrivez l'observation (2 caractères au minimum)." });
+  if (!(await db.get('SELECT 1 FROM clients WHERE code = ?', [code]))) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  await db.run('INSERT INTO observations (code_client, texte, compte_id, auteur, cree_le) VALUES (?,?,?,?,?)', [code, t, req.user.id, req.user.nom, now()]);
+  res.status(201).json(await db.all('SELECT id, texte, compte_id, auteur, cree_le FROM observations WHERE code_client = ? ORDER BY cree_le DESC, id DESC', [code]));
+}));
+
+// L'administrateur peut supprimer toute observation ; une caissière seulement les siennes.
+app.delete('/api/observations/:id', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const o = await db.get('SELECT id, code_client, compte_id FROM observations WHERE id = ?', [idParam(req.params.id)]);
+  if (!o) return res.status(404).json({ erreur: 'Observation introuvable.' });
+  if (req.user.role !== 'admin' && o.compte_id !== req.user.id) return res.status(403).json({ erreur: 'Vous ne pouvez supprimer que vos propres observations.' });
+  await db.run('DELETE FROM observations WHERE id = ?', [o.id]);
+  res.json(await db.all('SELECT id, texte, compte_id, auteur, cree_le FROM observations WHERE code_client = ? ORDER BY cree_le DESC, id DESC', [o.code_client]));
 }));
 
 // Admin : conducteurs actifs dont la vidange est en retard (14 jours écoulés depuis la dernière vidange payée).
