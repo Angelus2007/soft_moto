@@ -240,6 +240,34 @@
       <button type="button" class="btn" id="momoSaveBtn">Enregistrer les numéros</button>
     </div>
 
+    <div class="panel" id="contratPanel">
+      <h2>Clauses des contrats</h2>
+      <p class="panel-sub">Modifiez ici les phrases des contrats. Le nouveau texte est utilisé pour tous les contrats affichés, imprimés ou téléchargés ensuite, y compris pour les conducteurs déjà inscrits. Les zones de signature restent identiques.</p>
+      <div class="field" style="max-width:320px;">
+        <label for="ctType">Contrat à modifier</label>
+        <select id="ctType" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:10px; font:inherit; background:var(--panel); color:var(--ink);">
+          <option value="journee_payee">Journée payée</option>
+          <option value="droit_usage">Droit d’usage</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="ctTexte">Texte du contrat <span id="ctEtat" style="font-weight:400; color:var(--ink-faint);"></span></label>
+        <textarea id="ctTexte" rows="20" spellcheck="true" style="width:100%; font:13px/1.5 ui-monospace, Menlo, Consolas, monospace; padding:12px; border:1.5px solid var(--border); border-radius:10px; background:var(--panel); color:var(--ink); resize:vertical;"></textarea>
+      </div>
+      <details style="margin:0 0 12px;">
+        <summary style="cursor:pointer; font-weight:600; font-size:13.5px;">Comment écrire le texte ? Champs automatiques</summary>
+        <p class="panel-sub" style="margin-top:8px;">Une ligne = un paragraphe. <code># Titre</code> pour le titre, <code>## Article…</code> pour un intertitre, <code>&gt;&gt; Fait à…</code> pour la ligne « Fait à… », <code>**mot**</code> pour du gras. Cliquez sur un champ pour l’insérer à l’endroit du curseur : il sera remplacé par l’information du conducteur (des pointillés s’il n’est pas renseigné).</p>
+        <div id="ctChamps" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+      </details>
+      <p class="form-msg" id="ctMsg"></p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="btn" id="ctSave">Enregistrer les clauses</button>
+        <button type="button" class="btn ghost" id="ctPreview">Aperçu</button>
+        <button type="button" class="btn ghost" id="ctReset">Rétablir le texte d’origine</button>
+      </div>
+      <div class="sm-feuille" id="ctApercu" style="display:none; margin-top:16px;"></div>
+    </div>
+
     <div class="panel">
       <h2>Informations système</h2>
       <div class="info-row"><span class="k">Fuseau horaire</span><span class="v mono" id="infoFuseau">—</span></div>
@@ -266,6 +294,7 @@
 
 <script src="serveur-check.js"></script>
 <script src="theme.js"></script>
+<script src="contrat.js"></script>
 <script>
 (function(){
   const $ = (id) => document.getElementById(id);
@@ -320,6 +349,59 @@
     el.textContent = texte;
     el.className = 'form-msg show ' + (ok ? 'success' : 'error');
   }
+
+  // ---------- Clauses des contrats ----------
+  const ctType = $('ctType'), ctTexte = $('ctTexte'), ctMsg = $('ctMsg');
+  const EXEMPLE = { code: 'SM-001', nom: 'Koffi Mensah', telephone: '+229 97 00 00 00', marque: 'TVS', immatriculation: 'EP 1234 RB', etat_moto: 'neuve',
+    temoin_nom: 'Ama Dossou', temoin_telephone: '+229 96 00 00 00', date_debut: '2026-10-15', date_fin: '2027-10-14', montant_journalier: 3500, frequence: 'jour' };
+  let texteCharge = '';
+  function chargerContrat(){
+    const t = ctType.value, perso = !!(window.smContrat.modele(t) !== window.smContrat.DEFAUTS[t]);
+    texteCharge = window.smContrat.modele(t); ctTexte.value = texteCharge;
+    $('ctEtat').textContent = perso ? '— texte personnalisé' : '— texte d\'origine'; ctMsg.className = 'form-msg'; $('ctApercu').style.display = 'none';
+  }
+  $('ctChamps').innerHTML = window.smContrat.CHAMPS.map(function(ch){
+    return '<button type="button" class="btn ghost" data-champ="' + ch.cle + '" title="' + esc(ch.label) + '" style="padding:5px 10px; font-size:12px;">{{' + ch.cle + '}}</button>';
+  }).join('');
+  $('ctChamps').addEventListener('click', function(e){
+    const b = e.target.closest('button[data-champ]'); if(!b) return;
+    const ins = '{{' + b.dataset.champ + '}}', d = ctTexte.selectionStart, f = ctTexte.selectionEnd;
+    ctTexte.value = ctTexte.value.slice(0, d) + ins + ctTexte.value.slice(f); ctTexte.focus(); ctTexte.selectionStart = ctTexte.selectionEnd = d + ins.length;
+  });
+  ctType.addEventListener('change', function(){
+    if(ctTexte.value !== texteCharge && !window.confirm('Des modifications non enregistrées seront perdues. Continuer ?')){ ctType.value = ctType.dataset.prec || ctType.value; return; }
+    ctType.dataset.prec = ctType.value; chargerContrat();
+  });
+  $('ctPreview').addEventListener('click', function(){
+    const z = $('ctApercu'); z.innerHTML = window.smContrat.corps(EXEMPLE, ctType.value, ctTexte.value); z.style.display = 'block';
+  });
+  $('ctSave').addEventListener('click', function(){
+    const btn = this, t = ctType.value, saisi = ctTexte.value.trim();
+    if(!saisi){ afficherMsg(ctMsg, "Le texte est vide : utilisez « Rétablir le texte d'origine » pour revenir au texte initial.", false); return; }
+    btn.disabled = true;
+    // Un texte identique à celui d'origine n'est pas gardé comme « personnalisé ».
+    const envoi = saisi === window.smContrat.DEFAUTS[t] ? '' : saisi;
+    api('/api/contrats/' + t, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texte: envoi }) })
+      .then(function(r){
+        const m = {}; Object.keys(window.smContrat.TYPES).forEach(function(k){ m[k] = window.smContrat.modele(k) === window.smContrat.DEFAUTS[k] ? null : window.smContrat.modele(k); });
+        m[t] = r.texte; window.smContrat.setModeles(m); chargerContrat();
+        afficherMsg(ctMsg, 'Clauses enregistrées. Elles s\'appliquent aux contrats générés à partir de maintenant.', true);
+      })
+      .catch(function(err){ afficherMsg(ctMsg, err.message, false); })
+      .finally(function(){ btn.disabled = false; });
+  });
+  $('ctReset').addEventListener('click', function(){
+    const t = ctType.value;
+    if(!window.confirm('Rétablir le texte d\'origine de ce contrat ? Vos modifications seront perdues.')) return;
+    api('/api/contrats/' + t, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texte: '' }) })
+      .then(function(){
+        const m = {}; Object.keys(window.smContrat.TYPES).forEach(function(k){ m[k] = k === t || window.smContrat.modele(k) === window.smContrat.DEFAUTS[k] ? null : window.smContrat.modele(k); });
+        window.smContrat.setModeles(m); chargerContrat(); afficherMsg(ctMsg, 'Texte d\'origine rétabli.', true);
+      })
+      .catch(function(err){ afficherMsg(ctMsg, err.message, false); });
+  });
+  ctType.dataset.prec = ctType.value;
+  window.smContrat.pret.then(chargerContrat);
 
   // ---------- Changer mon mot de passe ----------
   const mdpActuel = $('mdpActuel');
