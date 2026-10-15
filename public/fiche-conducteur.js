@@ -293,6 +293,7 @@
   $('tabVidange').addEventListener('click', function () { basculer('vidange'); });
   $('tabRedevance').addEventListener('click', function () { basculer('redevance'); });
   $('tabContrat').addEventListener('click', function () { basculer('contrat'); });
+  if (window.smContrat && smContrat.pret) smContrat.pret.then(function () { if (client) renderContrat(); });
   $('tabObs').addEventListener('click', function () { basculer('obs'); });
 
   /* ---------- Observations (commentaires sur le conducteur) ---------- */
@@ -493,8 +494,10 @@
     Promise.all([configPrete, api('/api/clients/' + encodeURIComponent(norm))]).then(function (r) {
       client = r[1];
       // tout l'historique des paiements et des vidanges, en deux requêtes
-      return Promise.all([api('/api/paiements?code_client=' + encodeURIComponent(client.code)), api('/api/vidanges?code_client=' + encodeURIComponent(client.code))]);
+      return Promise.all([api('/api/paiements?code_client=' + encodeURIComponent(client.code)), api('/api/vidanges?code_client=' + encodeURIComponent(client.code)),
+        api('/api/clients/' + encodeURIComponent(client.code) + '/signatures').catch(function () { return {}; })]);
     }).then(function (r) {
+      client.signature_conducteur = r[2].signature_conducteur || null; client.signature_temoin = r[2].signature_temoin || null;
       paiements = {}; r[0].forEach(function (p) { paiements[p.date] = p; });
       chargerObs();
       vid = r[1]; MONTANT_VID = vid.montant; $('vidMontant').textContent = fcfa(MONTANT_VID);
