@@ -72,72 +72,118 @@
     return client && TYPES[client.type_contrat] ? client.type_contrat : 'journee_payee';
   }
 
-  /* ---------- Contrat « Journée payée » ---------- */
-  function journeePayee(c) {
+  /* ---------- Textes des contrats (modifiables par l'administrateur : page Paramètres) ----------
+   * Mise en forme d'un texte :  « # Titre »  titre ;  « ## Article »  intertitre ;  « >> Texte »  ligne « Fait à… » ;
+   * une ligne = un paragraphe ;  **mot**  gras ;  {{champ}}  remplacé par l'information du conducteur (pointillés si vide). */
+  var CHAMPS = [
+    { cle: 'code', label: 'Numéro du contrat (code du conducteur)' }, { cle: 'nom', label: 'Nom du conducteur' },
+    { cle: 'telephone', label: 'Téléphone du conducteur' }, { cle: 'marque', label: 'Marque de la moto' },
+    { cle: 'immatriculation', label: 'Plaque d’immatriculation' }, { cle: 'etat_moto', label: 'État de la moto (neuve / usagée)' },
+    { cle: 'montant', label: 'Montant (ex. 3500F)' }, { cle: 'montant_lettres', label: 'Montant en lettres et en chiffres' },
+    { cle: 'unite', label: 'par jour / par semaine / par mois' }, { cle: 'date_debut', label: 'Date de début' },
+    { cle: 'date_fin', label: 'Date de fin' }, { cle: 'duree_mois', label: 'Durée en mois' },
+    { cle: 'temoin_nom', label: 'Nom du témoin (avaliseur)' }, { cle: 'temoin_telephone', label: 'Téléphone du témoin' },
+    { cle: 'temoin_adresse', label: 'Adresse du témoin' }
+  ];
+
+  var DEFAUTS = {
+    journee_payee: [
+      '# CONTRAT - Journée payée No {{code}}',
+      'Je soussigné Etienne COCOU, Tél : 00229 01 67 28 64 83, transmet ce jour la moto de marque {{marque}} immatriculé sous le numéro {{immatriculation}} pour une période de pré-contrat valable pour quatorze (14) jours.',
+      'Le contractant, {{nom}} Tél : {{telephone}} ci-après désigné se doit de verser la somme de {{montant}} {{unite}} pendant la période de {{date_debut}} au {{date_fin}}.',
+      'Ce contrat ayant été pris connaissance par {{temoin_nom}}, qui prend l’engagement d’être avaliseur des présentes clauses et devra verser le montant sus indiqué en cas de non respect des présentes clauses par le contractant.',
+      '>> Fait à Cotonou, le {{date_debut}}'
+    ].join('\n'),
+    droit_usage: [
+      '# CONTRAT D’ATTRIBUTION DE DROIT D’USAGE No {{code}}',
+      '## Article 1 (OBJET)',
+      'Il est procédé à la remise de la moto {{etat_moto}} de marque {{marque}} portant la plaque {{immatriculation}} par COCOU Etienne (Propriétaire), Godomey Gare, Tél : +229 01 67 28 64 83 à {{nom}} (Conducteur) Téléphone {{telephone}}',
+      '## Article 2 (USAGE)',
+      'Cette moto est attribuée à usage professionnel à titre de taxi ou d’un autre selon la convenance du conducteur.',
+      '## Article 3 (PAIEMENT ET PÉRIODE)',
+      'Le conducteur doit verser la somme de {{montant_lettres}} {{unite}}. La durée du contrat est de {{duree_mois}} mois à compter de {{date_debut}} au {{date_fin}} à l’issue de laquelle un certificat de propriété sera délivré au conducteur en cas bonne exécution du contrat et de paiement de solde de tout compte.',
+      '## Article 4 (MODE DE PAIEMENT)',
+      'Le paiement se fera au secrétariat sis non loin du CEG FIYEGNON suivant un carnet de suivi.',
+      '## Article 5 (RESPONSABILITE)',
+      'Le propriétaire a la responsabilité de se rendre disponible pour l’entretien (vidange, dent chaîne, patins, pneus et du moteur) de la moto pendant la période du présent contrat. Il est donc interdit que le contractant se charge lui-même de la vidange de la moto par ses propres moyens.',
+      'Le contractant se doit d’annoncer son indisponibilité (maladie, occasion spéciales, etc…) et de ramener la moto, afin que le propriétaire confie la moto pour une autre demande contre un contrat de journée payée sur la période d’attente de deux semaines au plus, à l’issue duquel le contractant perd la validité du contrat.',
+      '## Article 6 (AVALISEUR)',
+      'Tout avaliseur a la responsabilité de poursuivre promptement les paiements quel que soit la nature de la survenance de n’importe quel risque ou événement à défaut de solder intégralement les paiements dus par le conducteur devant le commissariat territorialement compétent ou demeure l’avaliseur.',
+      '## Article 7 (HORRAIRES ET ZONES D’ACTIVITES)',
+      'Le conducteur est tenu d’arrêter rigoureusement ses activités à 20 heures au plus tard.',
+      'Les déplacements du conducteur ne sont envisagés qu’entre Cotonou et Calavi. Le non-respect de cette disposition est au risque et péril du conducteur.',
+      '## Article 8 – I (SANCTIONS)',
+      'Un retard de paiement implique une pénalité de trois cents (300) F cfa par mise de retard.',
+      'Le contractant devra se présenter le jour de la vidange (Chaque deux semaines) avant 18h sans quoi il sera soumis au paiement d’une pénalité de deux mille (2 000) F cfa par jour de retard non négociable limité à Sept (7) jours. Passé ce délai, le contrat sera purement et simplement résilié.',
+      'S’il s’avère qu’il y a eu un déplacement de rappel à l’ordre pour la cause, une pénalité de cinq mille (5 000) F cfa sera payée par le contractant pour chaque déplacement effectué.',
+      'Tous travaux de réparation de la moto de quelle nature qu’elle soit devra être effectuée à l’adresse désignée par le propriétaire, située au siège du lieu de paiement quotidien.',
+      '## Article 8 – II (RUPTURE DE CONTRAT)',
+      'Un retard de paiement pour un montant total supérieur ou égal à quinze mille (15 000) Fcfa implique, la saisie de la moto par son propriétaire.',
+      'Par ailleurs, toute moto saisie et garée passe dans un contrat journée payée dès le lendemain au profit du suppléant intérimaire du contractant désigné par le propriétaire, pour la période de cessation du contractant et limitée à deux semaines en attendant qu’il procède au paiement de la totalité de la dette dans un délai de deux semaines au plus tard avant de rentrer à nouveau en possession de la moto.',
+      'Passé ce délai, le présent contrat sera simplement considéré comme définitivement résilié et rompu sans aucune contrepartie.',
+      '## Article 9 (BONNE EXECUTION DU CONTRAT ET AVANTAGES)',
+      'La bonne exécution du présent contrat implique le paiement à temps dans le délai contractuel des sommes dues par le conducteur ou l’avaliseur donnant droit à la fin dudit contrat que le conducteur devient automatiquement le nouveau propriétaire de la moto après obtention d’un certificat de propriété énoncé à l’article 3 ci-dessus.',
+      'Le contrat sera considéré toujours valide en cas de solde restant dû par le contractant même après la date de fin réglementaire du présent contrat.',
+      '## Article 10 (ORIGINAL ET SIGNATURE)',
+      'Le présent contrat est fait en trois (3) originaux, un pour chacune des parties a savoir le propriétaire, l’avaliseur et le conducteur. Elles ont bien lu, compris tous les articles, accepté et ont signé ledit contrat en reconnaissant chacune sa responsabilité à tous les niveaux dans l’exécution de cet engagement.',
+      '>> Cotonou le {{date_debut}}'
+    ].join('\n')
+  };
+
+  // Textes personnalisés par l'administrateur (chargés depuis le serveur) ; à défaut, les textes d'origine ci-dessus.
+  var modeles = {};
+  function modele(type) { return (modeles[type] && String(modeles[type]).trim()) ? modeles[type] : DEFAUTS[type]; }
+  function setModeles(m) { modeles = m || {}; }
+  var pret = (window.fetch ? fetch('/api/contrats', { credentials: 'same-origin' }) : Promise.reject())
+    .then(function (r) { return r.ok ? r.json() : {}; }).then(setModeles).catch(function () { });
+
+  function valeursDe(c) {
     var montant = c.montant_journalier_effectif || c.montant_journalier;
-    return '' +
-      '<h1>CONTRAT - Journée payée No ' + v(c.code, '.....................') + '</h1>' +
-      '<p>Je soussigné ' + PROPRIETAIRE.nom + ', Tél : ' + PROPRIETAIRE.tel + ', transmet ce jour la moto de marque ' + v(c.marque || 'TVS', '..') +
-      ' immatriculé sous le numéro ' + v(c.immatriculation, '.........................') + ' pour une période de pré-contrat valable pour quatorze (14) jours.</p>' +
-      '<p>Le contractant, ' + v(c.nom, '..........................') + ' Tél : ' + v(c.telephone, '............................') +
-      ' ci-après désigné se doit de verser la somme de ' + (montant ? '<b class="v">' + esc(montant) + 'F</b>' : '..…..F') +
-      ' ' + unite(c) + ' pendant la période de ' + v(dateFR(c.date_debut), '...................................') +
-      ' au ' + v(dateFR(c.date_fin), '...................................') + '.</p>' +
-      '<p>Ce contrat ayant été pris connaissance par ' + v(c.temoin_nom, '..............................................') +
-      ', qui prend l’engagement d’être avaliseur des présentes clauses et devra verser le montant sus indiqué en cas de non respect des présentes clauses par le contractant.</p>' +
-      '<p class="fait">Fait à Cotonou, le ' + v(dateFR(c.date_debut), '......................................') + '</p>' +
-      '<table class="sign"><tr><td>Le propriétaire</td><td>Le contractant</td></tr>' +
+    return {
+      code: c.code, nom: c.nom, telephone: c.telephone, marque: c.marque || 'TVS', immatriculation: c.immatriculation,
+      etat_moto: c.etat_moto === 'usagee' ? 'usagée' : 'neuve',
+      montant: montant ? montant + 'F' : '', montant_lettres: montant ? enLettres(montant) + ' (' + montant + 'F cfa)' : '',
+      unite: unite(c), date_debut: dateFR(c.date_debut), date_fin: dateFR(c.date_fin), duree_mois: dureeMois(c.date_debut, c.date_fin),
+      temoin_nom: c.temoin_nom, temoin_telephone: c.temoin_telephone, temoin_adresse: c.temoin_adresse
+    };
+  }
+  var SANS_GRAS = { unite: 1, etat_moto: 1 };
+  function ligneHtml(texte, vals) {
+    return esc(texte).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\{\{\s*([a-z_]+)\s*\}\}/g, function (m, cle) {
+      if (!Object.prototype.hasOwnProperty.call(vals, cle)) return m; // champ inconnu : laissé tel quel pour que l'erreur se voie
+      var val = vals[cle] === null || vals[cle] === undefined ? '' : String(vals[cle]).trim();
+      if (!val) return POINTILLES;
+      return SANS_GRAS[cle] ? esc(val) : '<b class="v">' + esc(val) + '</b>';
+    });
+  }
+  function rendreModele(texte, c) {
+    var vals = valeursDe(c), out = '';
+    String(texte).split(/\r?\n/).forEach(function (l) {
+      var ligne = l.trim(); if (!ligne) return;
+      var m;
+      if ((m = /^##\s+(.*)$/.exec(ligne))) out += '<h3>' + ligneHtml(m[1], vals) + '</h3>';
+      else if ((m = /^#\s+(.*)$/.exec(ligne))) out += '<h1>' + ligneHtml(m[1], vals) + '</h1>';
+      else if ((m = /^>>\s*(.*)$/.exec(ligne))) out += '<p class="fait">' + ligneHtml(m[1], vals) + '</p>';
+      else out += '<p>' + ligneHtml(ligne, vals) + '</p>';
+    });
+    return out;
+  }
+
+  /* ---------- Blocs de signature (fixes) ---------- */
+  function signaturesJournee(c) {
+    return '<table class="sign"><tr><td>Le propriétaire</td><td>Le contractant</td></tr>' +
       '<tr><td class="espace"></td><td class="espace">' + sig(c.signature_conducteur) + '</td></tr>' +
       '<tr><td>' + PROPRIETAIRE.nom + '</td><td>...............................................</td></tr></table>';
   }
-
-  /* ---------- Contrat « Attribution de droit d'usage » ---------- */
-  function droitUsage(c) {
-    var montant = c.montant_journalier_effectif || c.montant_journalier;
-    var mois = dureeMois(c.date_debut, c.date_fin);
-    return '' +
-      '<h1>CONTRAT D’ATTRIBUTION DE DROIT D’USAGE No ' + v(c.code, '…………') + '</h1>' +
-      '<h3>Article 1 (OBJET)</h3>' +
-      '<p>Il est procédé à la remise de la moto ' + (c.etat_moto === 'usagee' ? 'usagée' : 'neuve') + ' de marque ' + v(c.marque || 'TVS', 'TVS') + ' portant la plaque ' + v(c.immatriculation, '………………….') +
-      ' par ' + PROPRIETAIRE.nomInverse + ' (Propriétaire), Godomey Gare, Tél : ' + PROPRIETAIRE.telCourt + ' à ' + v(c.nom, '……………………………………………….') +
-      ' (Conducteur) Téléphone ' + v(c.telephone, '……………………………………') + '</p>' +
-      '<h3>Article 2 (USAGE)</h3>' +
-      '<p>Cette moto est attribuée à usage professionnel à titre de taxi ou d’un autre selon la convenance du conducteur.</p>' +
-      '<h3>Article 3 (PAIEMENT ET PÉRIODE)</h3>' +
-      '<p>Le conducteur doit verser la somme de ' + (montant ? '<b class="v">' + esc(enLettres(montant)) + ' (' + esc(montant) + 'F cfa)</b>' : 'deux mille six cent (2600F cfa)') +
-      ' ' + unite(c, 'par jours') + '. La durée du contrat est de ' + v(mois, '……….') + ' mois à compter de ' + v(dateFR(c.date_debut), '……./……/26') +
-      ' au ' + v(dateFR(c.date_fin), '………./………/27') + ' à l’issue de laquelle un certificat de propriété sera délivré au conducteur en cas bonne exécution du contrat et de paiement de solde de tout compte.</p>' +
-      '<h3>Article 4 (MODE DE PAIEMENT)</h3>' +
-      '<p>Le paiement se fera au secrétariat sis non loin du CEG FIYEGNON suivant un carnet de suivi.</p>' +
-      '<h3>Article 5 (RESPONSABILITE)</h3>' +
-      '<p>Le propriétaire a la responsabilité de se rendre disponible pour l’entretien (vidange, dent chaîne, patins, pneus et du moteur) de la moto pendant la période du présent contrat. Il est donc interdit que le contractant se charge lui-même de la vidange de la moto par ses propres moyens.</p>' +
-      '<p>Le contractant se doit d’annoncer son indisponibilité (maladie, occasion spéciales, etc…) et de ramener la moto, afin que le propriétaire confie la moto pour une autre demande contre un contrat de journée payée sur la période d’attente de deux semaines au plus, à l’issue duquel le contractant perd la validité du contrat.</p>' +
-      '<h3>Article 6 (AVALISEUR)</h3>' +
-      '<p>Tout avaliseur a la responsabilité de poursuivre promptement les paiements quel que soit la nature de la survenance de n’importe quel risque ou événement à défaut de solder intégralement les paiements dus par le conducteur devant le commissariat territorialement compétent ou demeure l’avaliseur.</p>' +
-      '<h3>Article 7 (HORRAIRES ET ZONES D’ACTIVITES)</h3>' +
-      '<p>Le conducteur est tenu d’arrêter rigoureusement ses activités à 20 heures au plus tard.</p>' +
-      '<p>Les déplacements du conducteur ne sont envisagés qu’entre Cotonou et Calavi. Le non-respect de cette disposition est au risque et péril du conducteur.</p>' +
-      '<h3>Article 8 – I (SANCTIONS)</h3>' +
-      '<p>Un retard de paiement implique une pénalité de trois cents (300) F cfa par mise de retard.</p>' +
-      '<p>Le contractant devra se présenter le jour de la vidange (Chaque deux semaines) avant 18h sans quoi il sera soumis au paiement d’une pénalité de deux mille (2 000) F cfa par jour de retard non négociable limité à Sept (7) jours. Passé ce délai, le contrat sera purement et simplement résilié.</p>' +
-      '<p>S’il s’avère qu’il y a eu un déplacement de rappel à l’ordre pour la cause, une pénalité de cinq mille (5 000) F cfa sera payée par le contractant pour chaque déplacement effectué.</p>' +
-      '<p>Tous travaux de réparation de la moto de quelle nature qu’elle soit devra être effectuée à l’adresse désignée par le propriétaire, située au siège du lieu de paiement quotidien.</p>' +
-      '<h3>Article 8 – II (RUPTURE DE CONTRAT)</h3>' +
-      '<p>Un retard de paiement pour un montant total supérieur ou égal à quinze mille (15 000) Fcfa implique, la saisie de la moto par son propriétaire.</p>' +
-      '<p>Par ailleurs, toute moto saisie et garée passe dans un contrat journée payée dès le lendemain au profit du suppléant intérimaire du contractant désigné par le propriétaire, pour la période de cessation du contractant et limitée à deux semaines en attendant qu’il procède au paiement de la totalité de la dette dans un délai de deux semaines au plus tard avant de rentrer à nouveau en possession de la moto.</p>' +
-      '<p>Passé ce délai, le présent contrat sera simplement considéré comme définitivement résilié et rompu sans aucune contrepartie.</p>' +
-      '<h3>Article 9 (BONNE EXECUTION DU CONTRAT ET AVANTAGES)</h3>' +
-      '<p>La bonne exécution du présent contrat implique le paiement à temps dans le délai contractuel des sommes dues par le conducteur ou l’avaliseur donnant droit à la fin dudit contrat que le conducteur devient automatiquement le nouveau propriétaire de la moto après obtention d’un certificat de propriété énoncé à l’article 3 ci-dessus.</p>' +
-      '<p>Le contrat sera considéré toujours valide en cas de solde restant dû par le contractant même après la date de fin réglementaire du présent contrat.</p>' +
-      '<h3>Article 10 (ORIGINAL ET SIGNATURE)</h3>' +
-      '<p>Le présent contrat est fait en trois (3) originaux, un pour chacune des parties a savoir le propriétaire, l’avaliseur et le conducteur. Elles ont bien lu, compris tous les articles, accepté et ont signé ledit contrat en reconnaissant chacune sa responsabilité à tous les niveaux dans l’exécution de cet engagement.</p>' +
-      '<p class="fait">Cotonou le ' + v(dateFR(c.date_debut), '………/………/26') + '</p>' +
-      '<table class="sign"><tr><td>Conducteur</td><td>Nom et signature (Avaliseur)</td></tr>' +
+  function signaturesDroitUsage(c) {
+    return '<table class="sign"><tr><td>Conducteur</td><td>Nom et signature (Avaliseur)</td></tr>' +
       '<tr><td>Tél ' + v(c.telephone, '………………………..') + '</td><td>' + v(c.temoin_nom, '') + (c.temoin_telephone ? ' — Tél ' + v(c.temoin_telephone) : '') + '</td></tr>' +
       '<tr><td class="espace">' + sig(c.signature_conducteur) + '</td><td class="espace">' + sig(c.signature_temoin) + '</td></tr>' +
       '<tr><td>' + v(c.nom, '') + '</td><td></td></tr></table>' +
       '<table class="sign"><tr><td></td><td>' + PROPRIETAIRE.nomInverse + '<br>Propriétaire</td></tr></table>';
   }
+  function journeePayee(c, texte) { return rendreModele(texte === undefined ? modele('journee_payee') : texte, c) + signaturesJournee(c); }
+  function droitUsage(c, texte) { return rendreModele(texte === undefined ? modele('droit_usage') : texte, c) + signaturesDroitUsage(c); }
 
   var CSS = '' +
     '.sm-contrat{font-family:"Bookman Old Style","Book Antiqua",Georgia,serif;font-size:12pt;line-height:1.45;color:#000;text-align:justify}' +
@@ -152,9 +198,9 @@
     '.sm-contrat table.sign td.espace{height:46pt}' +
     '.sm-contrat img.sig{max-height:42pt;max-width:150pt;object-fit:contain}';
 
-  function corps(client, type) {
+  function corps(client, type, texte) {
     var t = TYPES[type] ? type : typeDe(client);
-    return '<div class="sm-contrat">' + (t === 'droit_usage' ? droitUsage(client) : journeePayee(client)) + '</div>';
+    return '<div class="sm-contrat">' + (t === 'droit_usage' ? droitUsage(client, texte) : journeePayee(client, texte)) + '</div>';
   }
 
   function documentComplet(client, type) {
@@ -191,5 +237,6 @@
   st.textContent = CSS + '.sm-feuille{background:#fff;border:1.5px solid var(--border,#DDE3EC);border-radius:12px;padding:32px 36px;max-height:620px;overflow:auto;box-shadow:inset 0 0 0 1px rgba(15,23,42,.02)}@media(max-width:640px){.sm-feuille{padding:18px 16px}.sm-contrat{font-size:11pt}}';
   document.head.appendChild(st);
 
-  window.smContrat = { TYPES: TYPES, typeDe: typeDe, corps: corps, telecharger: telecharger, imprimer: imprimer, enLettres: enLettres, dureeMois: dureeMois };
+  window.smContrat = { TYPES: TYPES, typeDe: typeDe, corps: corps, telecharger: telecharger, imprimer: imprimer, enLettres: enLettres, dureeMois: dureeMois,
+    CHAMPS: CHAMPS, DEFAUTS: DEFAUTS, modele: modele, setModeles: setModeles, pret: pret };
 })();
