@@ -23,7 +23,7 @@ app.use((req, res, next) => {
 if (process.env.RENDER || process.env.TRUST_PROXY) app.set('trust proxy', 1);
 // 10 ko partout, sauf à l'enregistrement d'un conducteur (les images de signature sont envoyées en texte base64).
 const jsonPetit = express.json({ limit: '10kb' }), jsonGrand = express.json({ limit: '1mb' });
-app.use((req, res, next) => (/^\/api\/clients(\/|$)/.test(req.path) && (req.method === 'POST' || req.method === 'PATCH') ? jsonGrand : jsonPetit)(req, res, next));
+app.use((req, res, next) => (/^\/api\/(clients|contrats)(\/|$)/.test(req.path) && (req.method === 'POST' || req.method === 'PATCH' || req.method === 'PUT') ? jsonGrand : jsonPetit)(req, res, next));
 
 // Erreur « attendue » à renvoyer au navigateur (ex. depuis une transaction).
 class ErreurHttp extends Error { constructor(statut, message) { super(message); this.statut = statut; } }
@@ -824,6 +824,34 @@ app.post('/api/vidanges', exigerRole('admin', 'caissiere'), h(async (req, res) =
   await db.run('INSERT INTO vidange_paiements (code_client, date_paiement, montant, compte_id, maj_le) VALUES (?,?,?,?,?)',
     [code, date, MONTANT_VIDANGE, req.user.id, now()]);
   res.status(201).json(await etatVidange(code));
+}));
+
+/* ------------------------------------------------------------------ */
+/* Textes (clauses) des contrats, modifiables par l'administrateur       */
+/* ------------------------------------------------------------------ */
+// On ne stocke que les textes personnalisés (parametres : contrat_journee_payee, contrat_droit_usage).
+// Sans texte personnalisé, la page utilise le texte d'origine fourni par contrat.js.
+app.get('/api/contrats', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const out = {};
+  for (const t of TYPES_CONTRAT) {
+    const r = await db.get('SELECT valeur FROM parametres WHERE cle = ?', ['contrat_' + t]);
+    out[t] = r ? r.valeur : null;
+  }
+  res.json(out);
+}));
+
+// Corps : { texte } ; un texte vide rétablit le texte d'origine.
+app.put('/api/contrats/:type', exigerRole('admin'), h(async (req, res) => {
+  const type = req.params.type;
+  if (!TYPES_CONTRAT.includes(type)) return res.status(404).json({ erreur: 'Type de contrat inconnu.' });
+  const t = typeof req.body.texte === 'string' ? req.body.texte.replace(/\r\n/g, '\n').trim() : '';
+  if (t.length > 30000) return res.status(400).json({ erreur: 'Le texte du contrat est trop long (30 000 caractères au maximum).' });
+  if (!t) {
+    await db.run('DELETE FROM parametres WHERE cle = ?', ['contrat_' + type]);
+    return res.json({ type, texte: null });
+  }
+  await setParametre('contrat_' + type, t);
+  res.json({ type, texte: t });
 }));
 
 /* ------------------------------------------------------------------ */
