@@ -113,6 +113,7 @@
   .cal-day .num{ font-weight:600; }
   .cal-day.paid{ background:var(--paye-soft); border-color:var(--paye); color:var(--paye-dark); }
   .cal-day.unpaid{ background:var(--impaye-soft); border-color:var(--impaye); color:var(--impaye-dark); }
+  .cal-day.wait{ background:var(--amber-soft); border-color:var(--amber); color:var(--amber); }
   .cal-day .amt, .cal-day .date-sub{ font-size:9px; font-family:var(--mono); opacity:0.85; letter-spacing:-0.2px; }
   .cal-day.future{ cursor:default; color:var(--ink-faint); background:var(--bg-light); }
   .cal-day.future:hover{ transform:none; }
@@ -553,12 +554,14 @@
             cell.disabled = true;
             cell.innerHTML = '<span class="num">' + day + '</span>';
           } else {
-            cell.classList.add(paid ? 'paid' : 'unpaid');
+            // Visiteur (Journée payée) pendant ses 13 premiers jours : un jour non payé n'est pas encore un impayé.
+            const sursis = !!(currentClient && currentClient.sursis) && !paid;
+            cell.classList.add(paid ? 'paid' : (sursis ? 'wait' : 'unpaid'));
             cell.innerHTML = '<span class="num">' + day + '</span>' +
-              '<span aria-hidden="true">' + (paid ? '✓' : '✗') + '</span>' +
+              '<span aria-hidden="true">' + (paid ? '✓' : (sursis ? '…' : '✗')) + '</span>' +
               '<span class="date-sub">' + dateDMY(cell.dataset.date) + '</span>' +
               (p && p.regle_le ? '<span class="date-sub" style="opacity:.85">réglé le ' + dateDMY(p.regle_le) + '</span>' : '');
-            cell.setAttribute('aria-label', jourLisible(y, m, day) + ' : ' + (paid ? 'payé, ' + montantJour.toLocaleString('fr-FR') + ' F' : 'impayé'));
+            cell.setAttribute('aria-label', jourLisible(y, m, day) + ' : ' + (paid ? 'payé, ' + montantJour.toLocaleString('fr-FR') + ' F' : (sursis ? 'en attente (sursis)' : 'impayé')));
             cell.addEventListener('click', function(){ ouvrirModal(cell); });
           }
           calGrid.appendChild(cell);
@@ -642,7 +645,14 @@
         ((it.avances || []).length ? ' · payé d\'avance : ' + (it.avances.length > 1 ? 'du ' + jjmm(it.avances[0].date) + ' au ' + jjmm(it.avances[it.avances.length - 1].date) + ' (' + it.avances.length + ' jours)' : jjmm(it.avances[0].date)) : '') + '</div>';
     } else {
       const partiel = it.statut === 'partiel', nonJour = it.frequence && it.frequence !== 'jour';
-      status = '<div class="t-status ' + (partiel ? 'partial' : 'unpaid') + '">' + (partiel ? 'Partiel ' + fmtF(nonJour ? it.verse_periode : it.montant) + ' / ' + fmtF(it.cible) : '✗ Non collecté') + '</div>';
+      const visiteur = it.jour_precontrat !== null && it.jour_precontrat !== undefined;
+      if(it.sursis && !partiel){
+        // Visiteur en sursis (13 premiers jours) : pas d'impayé, devient « Impayé » au 14e jour
+        status = '<div class="t-status partial">⏳ En attente · jour ' + it.jour_precontrat + '/13</div>';
+      } else {
+        status = '<div class="t-status ' + (partiel ? 'partial' : 'unpaid') + '">' + (partiel ? 'Partiel ' + fmtF(nonJour ? it.verse_periode : it.montant) + ' / ' + fmtF(it.cible) : (visiteur ? '✗ Impayé' : '✗ Non collecté')) + '</div>';
+      }
+      if(it.sursis && it.jours_en_attente > 0) sub += '<div class="t-sub">Visiteur · ' + it.jours_en_attente + ' jour' + (it.jours_en_attente > 1 ? 's' : '') + ' non payé' + (it.jours_en_attente > 1 ? 's' : '') + ' (' + fmtF(it.montant_en_attente) + ') · deviendra impayé au 14e jour</div>';
       if(nonJour && it.periode_debut) sub = '<div class="t-sub">Paie par ' + (it.frequence === 'semaine' ? 'semaine' : 'mois') + ' · période du ' + jjmm(it.periode_debut) + ' au ' + jjmm(it.periode_fin) + '</div>';
       if(it.jours_impayes > 0) sub += '<div class="t-sub warn">' + it.jours_impayes + ' jour' + (it.jours_impayes > 1 ? 's' : '') + ' impayé' + (it.jours_impayes > 1 ? 's' : '') + ' avant aujourd\'hui · ' + fmtF(it.montant_du) + ' dû</div>';
     }
@@ -657,7 +667,8 @@
     const filtre = function(x){ return !q || x.nom.toLowerCase().includes(q) || x.code.toLowerCase().includes(q); };
     const parCode = {}; tournee.forEach(function(t){ parCode[t.code] = t; });
     const payes = payesDuJour.map(function(p){ return Object.assign({ kind: 'paye', t: parCode[p.code] || null }, p); });
-    const impayes = tournee.filter(function(t){ return !t.paye; }).map(function(t){ return Object.assign({ kind: 'impaye', t: t }, t); });
+    const impayes = tournee.filter(function(t){ return !t.paye && !t.sursis; }).map(function(t){ return Object.assign({ kind: 'impaye', t: t }, t); });
+    const attente = tournee.filter(function(t){ return !t.paye && t.sursis; }).map(function(t){ return Object.assign({ kind: 'impaye', t: t }, t); }); // visiteurs en sursis : ni payés ni impayés
     const nbImp = totauxDuJour ? totauxDuJour.nb_impayes : impayes.length;
 
     // Résumé du jour
@@ -674,12 +685,12 @@
     }
     // Pastilles avec compteurs
     jourChips.querySelectorAll('button').forEach(function(b){
-      const m = b.dataset.mode, n = m === 'payes' ? payes.length : m === 'impayes' ? nbImp : payes.length + impayes.length;
+      const m = b.dataset.mode, n = m === 'payes' ? payes.length : m === 'impayes' ? nbImp : payes.length + impayes.length + attente.length;
       b.textContent = (m === 'payes' ? 'Payés' : m === 'impayes' ? 'Impayés' : 'Tous') + ' (' + n + ')';
       b.classList.toggle('on', m === modeListe);
     });
 
-    let list = modeListe === 'payes' ? payes : modeListe === 'impayes' ? impayes : payes.concat(impayes.filter(function(i){ return !payes.some(function(p){ return p.code === i.code; }); }));
+    let list = modeListe === 'payes' ? payes : modeListe === 'impayes' ? impayes : payes.concat(impayes.concat(attente).filter(function(i){ return !payes.some(function(p){ return p.code === i.code; }); }));
     list = list.filter(filtre);
     tourneeMeta.textContent = tournee.length || payes.length
       ? payes.length + ' ont versé · ' + nbImp + ' conducteur' + (nbImp > 1 ? 's' : '') + ' actif' + (nbImp > 1 ? 's' : '') + ' pas encore à jour aujourd\'hui'
