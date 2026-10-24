@@ -138,6 +138,8 @@
       impayes = periodesDe(auj).filter(function (p) { return p.fin < auj && sommePeriode(p) < dueDe(p); }).length;
       $('kUnpaidLabel').textContent = freq() === 'semaine' ? 'Semaines impayées' : 'Mois impayés';
     }
+    // Visiteur (Journée payée) pendant ses 13 premiers jours : rien n'est encore un impayé (il le devient au 14e jour).
+    if (client.sursis) { impayes = 0; $('kUnpaidLabel').textContent = 'Impayés · sursis (jour ' + client.jour_precontrat + '/13)'; }
     var entier = function (n) { return String(Math.round(n)); };
     if (anime && window.smCountUp) {
       window.smCountUp($('kPaid'), total, { format: fcfa });
@@ -152,7 +154,7 @@
   var calGrid = $('calGrid');
   function contenuJour(day, p, dateKey) {
     var paye = !!(p && p.paye), futur = !!dateKey && dateKey > iso(aujourdhui());
-    return '<span class="num">' + day + '</span><span aria-hidden="true">' + (paye ? '✓' : futur ? '…' : '✗') + '</span>' +
+    return '<span class="num">' + day + '</span><span aria-hidden="true">' + (paye ? '✓' : (futur || (client && client.sursis)) ? '…' : '✗') + '</span>' +
       (p && p.montant > 0 ? '<span class="amt">' + p.montant.toLocaleString('fr-FR') + '</span>' : '') +
       (p && p.montant > 0 && p.moyen ? '<span class="mv" style="display:block;font-size:9.5px;font-weight:700;opacity:.9;line-height:1.1">' + ({ especes: 'ESP', momo: 'MOMO', momo_regulateur: 'RÉG' })[p.moyen] + '</span>' : '') +
       (p && p.regle_le ? '<span class="rg" style="display:block;font-size:9px;font-weight:600;opacity:.85;line-height:1.1">' + (dateKey && p.regle_le < dateKey ? 'payé d\'avance le ' : 'réglé le ') + p.regle_le.split('-').reverse().join('/') + '</span>' : '');
@@ -160,7 +162,8 @@
   function majCellule(cell, p) {
     var day = Number(cell.dataset.date.split('-')[2]), paye = !!(p && p.paye), futur = cell.dataset.date > iso(aujourdhui());
     // Jour à venir partiellement payé d'avance : ni payé ni impayé (orange)
-    cell.classList.toggle('paid', paye); cell.classList.toggle('unpaid', !paye && !futur); cell.classList.toggle('advance', !paye && futur);
+    var sursis = !!(client && client.sursis);
+    cell.classList.toggle('paid', paye); cell.classList.toggle('unpaid', !paye && !futur && !sursis); cell.classList.toggle('wait', !paye && !futur && sursis); cell.classList.toggle('advance', !paye && futur);
     cell.innerHTML = contenuJour(day, p, cell.dataset.date);
     cell.setAttribute('aria-label', day + ' ' + MOIS_FR[viewM] + ' : ' + (paye ? 'payé' + (p.regle_le && p.regle_le < cell.dataset.date ? ' d\'avance' : '') + ', ' + p.montant.toLocaleString('fr-FR') + ' F' : futur ? 'avance partielle' : 'non payé'));
   }
@@ -255,7 +258,7 @@
       var verse = sommePeriode(p), due = dueDe(p), complete = verse >= due, terminee = p.fin < auj;
       var futur = p.debut > auj;
       var etat = complete ? 'paid' : terminee ? 'unpaid' : futur ? 'future' : 'due';
-      var badge = complete ? (futur ? 'Payé d\'avance' : 'Payé') : terminee ? (verse > 0 ? 'Partiel · impayé' : 'Impayé') : futur ? (verse > 0 ? 'Avance partielle' : 'À venir') : 'En cours';
+      var badge = complete ? (futur ? 'Payé d\'avance' : 'Payé') : terminee ? (client.sursis ? 'En attente' : (verse > 0 ? 'Partiel · impayé' : 'Impayé')) : futur ? (verse > 0 ? 'Avance partielle' : 'À venir') : 'En cours';
       var lignes = [];
       for (var k = p.debut; k <= p.fin; k = addJ(k, 1)) {
         var r = paiements[k];
