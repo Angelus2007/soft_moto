@@ -494,6 +494,10 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
         Archives
       </a>
+      <a href="notes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+        Mes notes
+      </a>
       <a href="parametres.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         Paramètres
@@ -727,10 +731,11 @@
     const q = $('searchInput').value.trim().toLowerCase();
     const ok = function(x){ return x.nom.toLowerCase().includes(q) || x.code.toLowerCase().includes(q); };
     const payes = jourDuJour.payes;
-    const impayes = collectes.filter(function(c){ return c.statut !== 'paye'; });
+    const impayes = collectes.filter(function(c){ return c.statut !== 'paye' && !c.sursis; });
+    const attente = collectes.filter(function(c){ return c.statut !== 'paye' && c.sursis; }); // visiteurs en sursis (13 premiers jours)
 
     $('collectesChips').querySelectorAll('button').forEach(function(b){
-      const m = b.dataset.mode, n = m === 'payes' ? payes.length : m === 'impayes' ? impayes.length : payes.length + impayes.length;
+      const m = b.dataset.mode, n = m === 'payes' ? payes.length : m === 'impayes' ? impayes.length : payes.length + impayes.length + attente.length;
       b.textContent = (m === 'payes' ? 'Payés' : m === 'impayes' ? 'Impayés' : 'Tous') + ' (' + n + ')';
       b.classList.toggle('on', m === modeJour);
     });
@@ -744,16 +749,20 @@
         '<td>' + esc(p.heure || '—') + '</td>' +
         '<td><span class="badge ' + (p.complet ? 'paid">Payé' : 'partial">Partiel') + '</span>' + reg + '</td></tr>';
     });
-    const rowsImpayes = impayes.filter(ok).map(function(c){
-      const b = BADGES[c.statut];
+    const ligneImp = function(c){
+      let b = BADGES[c.statut];
+      const visiteur = c.jour_precontrat !== null && c.jour_precontrat !== undefined;
+      if(c.sursis) b = ['wait', 'En attente · jour ' + c.jour_precontrat + '/13'];
+      else if(visiteur && c.statut !== 'partiel') b = ['late', 'Impayé'];
       const periodeNote = c.frequence && c.frequence !== 'jour' ? '<span class="sub-note">Paie par ' + (c.frequence === 'semaine' ? 'semaine' : 'mois') + (c.periode_debut ? ' · période du ' + jjmm(c.periode_debut) + ' au ' + jjmm(c.periode_fin) : '') + '</span>' : '';
-      const cumul = periodeNote + (c.jours_impayes > 0 ? '<span class="sub-note warn">' + c.jours_impayes + ' jour' + (c.jours_impayes > 1 ? 's' : '') + ' impayé' + (c.jours_impayes > 1 ? 's' : '') + ' avant aujourd\'hui · ' + esc(fmtF(c.montant_du)) + ' dû</span>' : '');
+      const cumul = periodeNote + (c.sursis && c.jours_en_attente > 0 ? '<span class="sub-note">Visiteur · ' + c.jours_en_attente + ' jour' + (c.jours_en_attente > 1 ? 's' : '') + ' non payé' + (c.jours_en_attente > 1 ? 's' : '') + ' (' + esc(fmtF(c.montant_en_attente)) + ') · impayé dès le 14e jour</span>' : '') + (c.jours_impayes > 0 ? '<span class="sub-note warn">' + c.jours_impayes + ' jour' + (c.jours_impayes > 1 ? 's' : '') + ' impayé' + (c.jours_impayes > 1 ? 's' : '') + ' avant aujourd\'hui · ' + esc(fmtF(c.montant_du)) + ' dû</span>' : '');
       return '<tr>' + cellConducteur(c.nom, c.code) +
         '<td class="amount' + (c.montant ? '' : ' zero') + '">' + (c.montant ? fmtF(c.montant) : '—') + '</td>' +
         '<td>' + esc(c.heure || '—') + '</td>' +
         '<td><span class="badge ' + b[0] + '">' + b[1] + '</span>' + cumul + '</td></tr>';
-    });
-    const rows = modeJour === 'payes' ? rowsPayes : modeJour === 'impayes' ? rowsImpayes : rowsPayes.concat(rowsImpayes);
+    };
+    const rowsImpayes = impayes.filter(ok).map(ligneImp), rowsAttente = attente.filter(ok).map(ligneImp);
+    const rows = modeJour === 'payes' ? rowsPayes : modeJour === 'impayes' ? rowsImpayes : rowsPayes.concat(rowsImpayes, rowsAttente);
     const shown = rows.slice(0, 40);
     $('collectesBody').innerHTML = shown.join('');
 
