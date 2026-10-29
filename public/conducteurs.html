@@ -906,6 +906,8 @@
       .then(function(c){
         clients.unshift(c);
         dernierClient = c;
+        // Conducteur créé depuis une demande : la demande passe en « acceptée » avec le code du conducteur
+        if(demandeId){ api('/api/demandes/' + demandeId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'acceptee', code_client: c.code }) }).catch(function(){}); demandeId = null; history.replaceState(null, '', 'conducteurs.html'); }
         $('toastName').textContent = c.nom;
         $('toastCode').textContent = c.code;
         toast.classList.remove('show'); void toast.offsetWidth; toast.classList.add('show');
@@ -917,6 +919,22 @@
       })
       .finally(function(){ submitBtn.disabled = false; });
   });
+
+  // ---------- Création depuis une demande (conducteurs.html?demande=ID) ----------
+  let demandeId = null;
+  (function(){
+    const id = new URLSearchParams(location.search).get('demande');
+    if(!id || !/^\d+$/.test(id)) return;
+    api('/api/demandes/' + id).then(function(d){
+      if(d.statut !== 'en_attente') return;
+      demandeId = d.id; openForm();
+      $('newName').value = d.nom || ''; $('newPhone').value = d.telephone || ''; $('newAddress').value = d.adresse || '';
+      // Achat d'une moto : le contrat « Droit d'usage » mène au certificat de propriété ; sinon on reprend le contrat souhaité
+      choisirType(d.type_contrat || (d.type === 'achat' ? 'droit_usage' : ''));
+      $('addFormError').textContent = 'Formulaire prérempli depuis la demande de ' + d.nom + '. Complétez le reste puis enregistrez : la demande passera en « acceptée ».';
+      $('newCode').focus();
+    }).catch(function(){});
+  })();
 
   // ---------- Modifier / archiver un conducteur ----------
   const editModal = $('editModal');
