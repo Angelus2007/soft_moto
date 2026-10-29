@@ -467,7 +467,8 @@ app.get('/api/clients/:code', exigerRole('admin', 'caissiere'), h(async (req, re
       ORDER BY CASE WHEN code = ? THEN 0 ELSE 1 END LIMIT 1`,
     [saisie, plaque.length >= 3 ? plaque : '', plaque, saisie]);
   if (!c) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code ou cette plaque.' });
-  res.json(avecCible(c));
+  const sv = sursisVisiteur(c, jourLocal(new Date()));
+  res.json({ ...avecCible(c), visiteur_precontrat: sv.visiteur, sursis: sv.sursis, jour_precontrat: sv.jour });
 }));
 
 app.post('/api/clients', exigerRole('admin'), h(async (req, res) => {
@@ -786,6 +787,35 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
   res.json({ ...paiement, paye: periodeInfo ? periodeInfo.complete : !!paiement.paye, cible: periodeInfo ? periodeInfo.cible : cible, frequence: freq, periode: periodeInfo, reporte, avance, ajustements, avances });
 }));
 
+// Annule le paiement enregistré pour un jour : le jour redevient « non payé ». L'opération reste tracée dans le journal des
+// versements par une ligne négative (au nom de la personne qui annule), pour que les totaux et le point de chacun restent justes.
+// L'administrateur peut annuler n'importe quel paiement ; une caissière seulement ceux enregistrés aujourd'hui.
+app.delete('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const code = texte(req.query.code_client, 20).toUpperCase();
+  const date = texte(req.query.date, 10);
+  if (!dateValide(date)) return res.status(400).json({ erreur: 'date doit être au format AAAA-MM-JJ.' });
+  const client = await db.get('SELECT statut FROM clients WHERE code = ?', [code]);
+  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  if (client.statut === 'suspendu') return res.status(409).json({ erreur: 'Ce conducteur est suspendu (archivé) : réactivez-le avant de modifier ses paiements.' });
+  const aujourdhui = jourLocal(new Date());
+  let annule = null;
+  await db.tx(async (tx) => {
+    await tx.lock('clients', 'code', code);
+    const p = await tx.get('SELECT montant, moyen, numero_momo, maj_le FROM paiements WHERE code_client = ? AND date = ?', [code, date]);
+    if (!p) throw new ErreurHttp(404, 'Aucun paiement enregistré à cette date.');
+    if (req.user.role !== 'admin' && jourLocal(new Date(p.maj_le)) !== aujourdhui) {
+      throw new ErreurHttp(403, "Ce paiement a été enregistré un autre jour : seul l'administrateur peut l'annuler.");
+    }
+    if (p.montant > 0) {
+      await tx.run('INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo) VALUES (?,?,?,?,?,?,?,?)',
+        [code, aujourdhui, date, -p.montant, p.moyen, req.user.id, now(), p.numero_momo || null]);
+    }
+    await tx.run('DELETE FROM paiements WHERE code_client = ? AND date = ?', [code, date]);
+    annule = { date, montant: p.montant, moyen: p.moyen };
+  });
+  res.json({ annule: true, ...annule });
+}));
+
 /* ------------------------------------------------------------------ */
 /* Vidange : 100 F par vidange. Le décompte de 14 jours commence le jour où le conducteur a payé. */
 /* ------------------------------------------------------------------ */
@@ -827,6 +857,65 @@ app.post('/api/vidanges', exigerRole('admin', 'caissiere'), h(async (req, res) =
 }));
 
 /* ------------------------------------------------------------------ */
+/* Mes notes : notes personnelles, visibles seulement par leur auteur    */
+/* ------------------------------------------------------------------ */
+const NOTE_SQL = `SELECT n.id, n.code_client, c.nom AS conducteur, n.texte, n.cree_le, n.maj_le
+  FROM notes n LEFT JOIN clients c ON c.code = n.code_client`;
+
+async function codeNote(brut) { // code de conducteur facultatif : doit exister
+  const code = texte(brut, 20).toUpperCase();
+  if (!code) return { code: null };
+  if (!(await db.get('SELECT 1 FROM clients WHERE code = ?', [code]))) return { erreur: 'Aucun conducteur avec ce code : laissez vide ou corrigez le code.' };
+  return { code };
+}
+
+app.get('/api/notes', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const q = texte(req.query.q, 60).toLowerCase();
+  const params = [req.user.id];
+  let filtre = '';
+  if (q) { filtre = ' AND (LOWER(n.texte) LIKE ? OR LOWER(COALESCE(n.code_client, \'\')) LIKE ? OR LOWER(COALESCE(c.nom, \'\')) LIKE ?)'; params.push('%' + q + '%', '%' + q + '%', '%' + q + '%'); }
+  res.json(await db.all(`${NOTE_SQL} WHERE n.compte_id = ?${filtre} ORDER BY n.maj_le DESC, n.id DESC LIMIT 500`, params));
+}));
+
+app.post('/api/notes', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const t = texte(req.body.texte, 4000);
+  if (!t) return res.status(400).json({ erreur: 'Écrivez votre note.' });
+  const c = await codeNote(req.body.code_client);
+  if (c.erreur) return res.status(400).json({ erreur: c.erreur });
+  const id = await db.insertId('INSERT INTO notes (compte_id, code_client, texte, cree_le, maj_le) VALUES (?,?,?,?,?)', [req.user.id, c.code, t, now(), now()]);
+  res.status(201).json(await db.get(`${NOTE_SQL} WHERE n.id = ?`, [id]));
+}));
+
+// Seul l'auteur peut modifier ou supprimer sa note (l'administrateur ne lit pas les notes des autres comptes).
+app.patch('/api/notes/:id', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const id = idParam(req.params.id);
+  const n = await db.get('SELECT id FROM notes WHERE id = ? AND compte_id = ?', [id, req.user.id]);
+  if (!n) return res.status(404).json({ erreur: 'Note introuvable.' });
+  const champs = {};
+  if (req.body.texte !== undefined) {
+    const t = texte(req.body.texte, 4000);
+    if (!t) return res.status(400).json({ erreur: 'La note ne peut pas être vide.' });
+    champs.texte = t;
+  }
+  if (req.body.code_client !== undefined) {
+    const c = await codeNote(req.body.code_client);
+    if (c.erreur) return res.status(400).json({ erreur: c.erreur });
+    champs.code_client = c.code;
+  }
+  const cles = Object.keys(champs);
+  if (!cles.length) return res.status(400).json({ erreur: 'Aucune modification fournie.' });
+  champs.maj_le = now(); cles.push('maj_le');
+  await db.run(`UPDATE notes SET ${cles.map((k) => k + ' = ?').join(', ')} WHERE id = ?`, [...cles.map((k) => champs[k]), id]);
+  res.json(await db.get(`${NOTE_SQL} WHERE n.id = ?`, [id]));
+}));
+
+app.delete('/api/notes/:id', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const r = await db.run('DELETE FROM notes WHERE id = ? AND compte_id = ?', [idParam(req.params.id), req.user.id]);
+  if (!r.changes) return res.status(404).json({ erreur: 'Note introuvable.' });
+  res.json({ ok: true });
+}));
+
+/* ------------------------------------------------------------------ */
 /* Textes (clauses) des contrats, modifiables par l'administrateur       */
 /* ------------------------------------------------------------------ */
 // On ne stocke que les textes personnalisés (parametres : contrat_journee_payee, contrat_droit_usage).
@@ -852,6 +941,71 @@ app.put('/api/contrats/:type', exigerRole('admin'), h(async (req, res) => {
   }
   await setParametre('contrat_' + type, t);
   res.json({ type, texte: t });
+}));
+
+/* ------------------------------------------------------------------ */
+/* Demandes des conducteurs : début d'un contrat ou achat d'une moto     */
+/* ------------------------------------------------------------------ */
+const TYPES_DEMANDE = ['contrat', 'achat'];            // début de contrat / achat d'une moto
+const STATUTS_DEMANDE = ['en_attente', 'acceptee', 'refusee'];
+const COLS_DEMANDE = 'id, nom, telephone, adresse, type, type_contrat, moto_souhaitee, message, statut, reponse, code_client, compte_id, cree_le, traitee_le';
+
+// Liste (administrateur) : ?statut=en_attente|acceptee|refusee ; sans filtre, toutes les demandes. En attente d'abord.
+app.get('/api/demandes', exigerRole('admin'), h(async (req, res) => {
+  const filtre = STATUTS_DEMANDE.includes(req.query.statut);
+  res.json(await db.all(`SELECT ${COLS_DEMANDE} FROM demandes ${filtre ? 'WHERE statut = ?' : ''}
+    ORDER BY CASE WHEN statut = 'en_attente' THEN 0 ELSE 1 END, cree_le DESC, id DESC`, filtre ? [req.query.statut] : []));
+}));
+
+app.get('/api/demandes/:id', exigerRole('admin'), h(async (req, res) => {
+  const d = await db.get(`SELECT ${COLS_DEMANDE} FROM demandes WHERE id = ?`, [idParam(req.params.id)]);
+  if (!d) return res.status(404).json({ erreur: 'Demande introuvable.' });
+  res.json(d);
+}));
+
+// Enregistrer une demande (administrateur ou caissière)
+app.post('/api/demandes', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const nom = texte(req.body.nom, 100), telephone = texte(req.body.telephone, 30), adresse = texte(req.body.adresse, 200);
+  const type = texte(req.body.type, 10);
+  const typeContrat = texte(req.body.type_contrat, 20) || null;
+  const moto = texte(req.body.moto_souhaitee, 100) || null;
+  const message = texte(req.body.message, 1000) || null;
+  if (nom.length < 2) return res.status(400).json({ erreur: 'Entrez le nom du demandeur.' });
+  if (!telephone) return res.status(400).json({ erreur: 'Entrez le numéro de téléphone du demandeur.' });
+  if (!TYPES_DEMANDE.includes(type)) return res.status(400).json({ erreur: "Choisissez le type de demande (début de contrat ou achat d'une moto)." });
+  if (typeContrat && !TYPES_CONTRAT.includes(typeContrat)) return res.status(400).json({ erreur: 'Type de contrat invalide.' });
+  const id = await db.insertId('INSERT INTO demandes (nom, telephone, adresse, type, type_contrat, moto_souhaitee, message, statut, compte_id, cree_le) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [nom, telephone, adresse || null, type, typeContrat, moto, message, 'en_attente', req.user.id, now()]);
+  res.status(201).json(await db.get(`SELECT ${COLS_DEMANDE} FROM demandes WHERE id = ?`, [id]));
+}));
+
+// Traiter une demande : accepter (avec le code du conducteur créé), refuser (avec un motif facultatif) ou la remettre en attente
+app.patch('/api/demandes/:id', exigerRole('admin'), h(async (req, res) => {
+  const d = await db.get(`SELECT ${COLS_DEMANDE} FROM demandes WHERE id = ?`, [idParam(req.params.id)]);
+  if (!d) return res.status(404).json({ erreur: 'Demande introuvable.' });
+  const champs = {};
+  if (req.body.statut !== undefined) {
+    if (!STATUTS_DEMANDE.includes(req.body.statut)) return res.status(400).json({ erreur: 'Statut invalide.' });
+    champs.statut = req.body.statut;
+    champs.traitee_le = req.body.statut === 'en_attente' ? null : now();
+  }
+  if (req.body.reponse !== undefined) champs.reponse = texte(req.body.reponse, 500) || null;
+  if (req.body.code_client !== undefined) {
+    const code = texte(req.body.code_client, 20).toUpperCase();
+    if (code && !(await db.get('SELECT 1 FROM clients WHERE code = ?', [code]))) return res.status(400).json({ erreur: 'Aucun conducteur avec ce code.' });
+    champs.code_client = code || null;
+  }
+  const cles = Object.keys(champs);
+  if (!cles.length) return res.status(400).json({ erreur: 'Aucune modification fournie.' });
+  await db.run(`UPDATE demandes SET ${cles.map((c) => c + ' = ?').join(', ')} WHERE id = ?`, [...cles.map((c) => champs[c]), d.id]);
+  res.json(await db.get(`SELECT ${COLS_DEMANDE} FROM demandes WHERE id = ?`, [d.id]));
+}));
+
+app.delete('/api/demandes/:id', exigerRole('admin'), h(async (req, res) => {
+  const d = await db.get('SELECT id FROM demandes WHERE id = ?', [idParam(req.params.id)]);
+  if (!d) return res.status(404).json({ erreur: 'Demande introuvable.' });
+  await db.run('DELETE FROM demandes WHERE id = ?', [d.id]);
+  res.json({ ok: true });
 }));
 
 /* ------------------------------------------------------------------ */
@@ -946,6 +1100,17 @@ function fiabilite30j(parCode, code, dateCreationIso) {
   return { pourcentage: Math.round((payes / joursHistorique) * 100), jours_historique: joursHistorique };
 }
 
+// « Visiteurs » = conducteurs en contrat « Journée payée » (pré-contrat de 14 jours). Pendant les 13 premiers jours, les jours non payés
+// ne sont PAS comptés comme impayés (sursis) ; le 14e jour, ce qui reste non payé devient « impayé ».
+const JOURS_SURSIS = 13;
+function sursisVisiteur(c, aujourdhui) {
+  if (!c || c.type_contrat !== 'journee_payee') return { visiteur: false, sursis: false, jour: null };
+  const debut = ((c.date_debut || c.date_creation) || '').slice(0, 10);
+  if (!dateValide(debut)) return { visiteur: true, sursis: false, jour: null };
+  const jour = diffJours(debut, aujourdhui) + 1; // le jour de début est le jour 1
+  return { visiteur: true, sursis: jour <= JOURS_SURSIS, jour };
+}
+
 // Jours impayés CUMULÉS (strictement avant aujourd'hui) : jours suivis (début du contrat -> veille, borné par la fin)
 // sans paiement complet. Montant dû = ce qui manque sur ces jours.
 async function bilansImpayes(aujourdhui, clients) {
@@ -981,7 +1146,15 @@ async function bilansImpayes(aujourdhui, clients) {
         j.setUTCDate(j.getUTCDate() + 1);
       }
     }
-    out.set(c.code, { jours_impayes: n, montant_du: du, depuis, consecutifs: serie, periodes_impayees: nbPeriodes, frequence: frequenceDe(c) });
+    const sv = sursisVisiteur(c, aujourdhui);
+    if (sv.sursis) {
+      // Sursis : rien n'est compté comme impayé pour l'instant (on garde le détail « en attente » pour l'affichage).
+      out.set(c.code, { jours_impayes: 0, montant_du: 0, depuis: null, consecutifs: 0, periodes_impayees: 0, frequence: frequenceDe(c),
+        visiteur: true, sursis: true, jour_precontrat: sv.jour, jours_en_attente: n, montant_en_attente: du });
+    } else {
+      out.set(c.code, { jours_impayes: n, montant_du: du, depuis, consecutifs: serie, periodes_impayees: nbPeriodes, frequence: frequenceDe(c),
+        visiteur: sv.visiteur, sursis: false, jour_precontrat: sv.jour, jours_en_attente: 0, montant_en_attente: 0 });
+    }
   }
   return out;
 }
@@ -1030,7 +1203,7 @@ async function versementsDuJour(dateStr) {
 
 // Collecte du jour pour un conducteur actif donné (utilisé par le tableau de bord et la tournée caissière).
 async function calculerCollectesDuJour(dateStr, defaut) {
-  const actifs = await db.all("SELECT code, nom, telephone, date_creation, date_debut, date_fin, montant_journalier, frequence FROM clients WHERE statut = 'actif'");
+  const actifs = await db.all("SELECT code, nom, telephone, date_creation, date_debut, date_fin, montant_journalier, frequence, type_contrat FROM clients WHERE statut = 'actif'");
   const duJour = new Map((await db.all('SELECT * FROM paiements WHERE date = ?', [dateStr])).map((p) => [p.code_client, p]));
   const bilans = await bilansImpayes(dateStr, actifs);
   const payes30 = await joursPayes30j();
@@ -1054,11 +1227,14 @@ async function calculerCollectesDuJour(dateStr, defaut) {
     }
     const fiab = freq === 'jour' ? fiabilite30j(payes30, c.code, c.date_creation) : { pourcentage: null, jours_historique: 0 };
     const b = bilans.get(c.code);
+    // Visiteur en sursis : pas d'« impayé » (statut neutre « attente ») tant que le 14e jour n'est pas arrivé.
+    if (b.sursis && statut !== 'paye' && statut !== 'partiel') statut = 'attente';
     collectes.push({
       code: c.code, nom: c.nom, statut, montant: p ? p.montant : 0, moyen: p ? p.moyen : null, numero_momo: p ? p.numero_momo : null, cible, heure: p ? heureLocale(p.maj_le) : null,
       frequence: freq, reste, verse_periode: verse, periode_debut: per ? per.debut : null, periode_fin: per ? per.fin : null, regle_le: p ? p.regle_le : null,
       fiabilite: fiab.pourcentage, fiabilite_jours: fiab.jours_historique,
-      jours_impayes: b.jours_impayes, montant_du: b.montant_du
+      jours_impayes: b.jours_impayes, montant_du: b.montant_du,
+      sursis: b.sursis, jour_precontrat: b.jour_precontrat, jours_en_attente: b.jours_en_attente, montant_en_attente: b.montant_en_attente
     });
   }
   const rang = { paye: 0, partiel: 0, retard: 1, attente: 2 };
@@ -1119,10 +1295,11 @@ app.get('/api/tournee', exigerRole('admin', 'caissiere'), h(async (req, res) => 
       code: c.code, nom: c.nom, cible: c.cible, montant: c.montant, moyen: c.moyen, numero_momo: c.numero_momo,
       frequence: c.frequence, reste: c.reste, verse_periode: c.verse_periode, periode_debut: c.periode_debut, periode_fin: c.periode_fin, regle_le: c.regle_le,
       paye: c.statut === 'paye', statut: c.statut, heure: c.heure, fiabilite: c.fiabilite, fiabilite_jours: c.fiabilite_jours,
-      jours_impayes: c.jours_impayes, montant_du: c.montant_du
+      jours_impayes: c.jours_impayes, montant_du: c.montant_du,
+      sursis: c.sursis, jour_precontrat: c.jour_precontrat, jours_en_attente: c.jours_en_attente, montant_en_attente: c.montant_en_attente
     })),
     payes: jour.payes,
-    totaux: { ...jour.totaux, nb_impayes: collectes.filter((c) => c.statut !== 'paye').length }
+    totaux: { ...jour.totaux, nb_impayes: collectes.filter((c) => c.statut !== 'paye' && !c.sursis).length }
   });
 }));
 
@@ -1167,7 +1344,7 @@ app.get('/api/impayes', exigerRole('admin'), h(async (req, res) => {
   const min = Math.min(Math.max(parseInt(req.query.min, 10) || 2, 1), 60);
   const aujourdhui = jourLocal(new Date());
   const actifs = await db.all(`SELECT id, code, nom, telephone, adresse, immatriculation, temoin_nom, temoin_telephone, temoin_adresse,
-      date_creation, date_debut, date_fin, montant_journalier, frequence FROM clients WHERE statut = 'actif'`);
+      date_creation, date_debut, date_fin, montant_journalier, frequence, type_contrat FROM clients WHERE statut = 'actif'`);
   const bilans = await bilansImpayes(aujourdhui, actifs);
   const tous = actifs.map((c) => ({ id: c.id, code: c.code, nom: c.nom, telephone: c.telephone, adresse: c.adresse, immatriculation: c.immatriculation,
     temoin_nom: c.temoin_nom, temoin_telephone: c.temoin_telephone, temoin_adresse: c.temoin_adresse, ...bilans.get(c.code),
