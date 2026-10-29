@@ -104,6 +104,30 @@ CREATE TABLE IF NOT EXISTS observations (
   auteur TEXT,
   cree_le TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notes (
+  id ${pk},
+  compte_id INTEGER NOT NULL,
+  code_client TEXT,
+  texte TEXT NOT NULL,
+  cree_le TEXT NOT NULL,
+  maj_le TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS demandes (
+  id ${pk},
+  nom TEXT NOT NULL,
+  telephone TEXT,
+  adresse TEXT,
+  type TEXT NOT NULL,
+  type_contrat TEXT,
+  moto_souhaitee TEXT,
+  message TEXT,
+  statut TEXT NOT NULL DEFAULT 'en_attente',
+  reponse TEXT,
+  code_client TEXT,
+  compte_id INTEGER,
+  cree_le TEXT NOT NULL,
+  traitee_le TEXT
+);
 CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 `);
 
@@ -128,6 +152,8 @@ CREATE INDEX IF NOT EXISTS idx_versements_jour ON versements (jour_saisie);
 CREATE INDEX IF NOT EXISTS idx_vidanges_jour ON vidanges (jour_saisie);
 CREATE INDEX IF NOT EXISTS idx_paiements_date ON paiements (date);
 CREATE INDEX IF NOT EXISTS idx_sessions_compte ON sessions (compte_id);
+CREATE INDEX IF NOT EXISTS idx_notes_compte ON notes (compte_id);
+CREATE INDEX IF NOT EXISTS idx_demandes_statut ON demandes (statut);
 CREATE INDEX IF NOT EXISTS idx_observations_client ON observations (code_client);
 CREATE INDEX IF NOT EXISTS idx_vidange_paiements_date ON vidange_paiements (date_paiement);
 `);
