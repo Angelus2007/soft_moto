@@ -234,14 +234,36 @@
   td.code-val .code-link:hover{ color:var(--accent); border-bottom-style:solid; }
   .arch-note{ color:var(--ink-soft); font-size:13px; margin:0 0 14px; }
   td.num{ font-family:var(--mono); font-weight:600; }
-  .pending-list{ display:flex; flex-direction:column; gap:10px; }
-  .pending-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; background:var(--panel); }
-  .pending-who{ display:flex; align-items:center; gap:12px; flex:1 1 240px; min-width:0; }
-  .pending-who .p-name{ font-weight:600; font-size:14.5px; }
-  .pending-who .p-email{ font-size:12.5px; color:var(--ink-faint); word-break:break-all; }
-  .pending-when{ font-size:12.5px; color:var(--ink-soft); }
-  .pending-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .chips{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+  .chips button{ padding:7px 14px; border-radius:999px; border:1.5px solid var(--border); background:var(--panel); color:var(--ink-soft); font:600 13px var(--sans); cursor:pointer; transition:.15s; }
+  .chips button:hover{ border-color:var(--accent); color:var(--accent-dark); }
+  .chips button.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .dem-new{ background:var(--panel); border:1.5px solid var(--border); border-radius:14px; padding:16px; margin-bottom:18px; display:none; }
+  .dem-new.open{ display:block; }
+  .dem-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; }
+  .dem-grid .full{ grid-column:1/-1; }
+  .dem-grid label{ display:block; font-size:12.5px; font-weight:600; color:var(--ink-soft); margin-bottom:4px; }
+  .dem-grid input,.dem-grid select,.dem-grid textarea{ width:100%; font:inherit; padding:10px 12px; border:1.5px solid var(--border); border-radius:10px; background:var(--panel); color:var(--ink); }
+  .dem-grid textarea{ min-height:70px; resize:vertical; }
+  .dem-grid input:focus,.dem-grid select:focus,.dem-grid textarea:focus{ outline:none; border-color:var(--accent); }
+  .dem-err{ color:var(--error); font-size:13px; font-weight:600; margin:10px 0 0; }
+  .dem-err:empty{ display:none; }
+  .dem-list{ display:flex; flex-direction:column; gap:10px; }
+  .dem-row{ display:flex; gap:14px; flex-wrap:wrap; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; background:var(--panel); align-items:flex-start; }
+  .dem-who{ display:flex; gap:12px; flex:1 1 280px; min-width:0; }
+  .dem-who .p-name{ font-weight:600; font-size:14.5px; }
+  .dem-who .p-sub{ font-size:12.5px; color:var(--ink-faint); }
+  .dem-msg{ margin:6px 0 0; font-size:13px; color:var(--ink-soft); white-space:pre-wrap; word-break:break-word; }
+  .dem-tags{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .dem-tag{ font:600 11.5px var(--sans); padding:3px 9px; border-radius:999px; background:var(--bg-light); border:1px solid var(--border); color:var(--ink-soft); }
+  .dem-tag.contrat{ background:var(--accent-soft, #E8EEFB); color:var(--accent-dark); border-color:transparent; }
+  .dem-tag.achat{ background:var(--amber-soft); color:var(--amber); border-color:transparent; }
+  .dem-tag.acceptee{ background:var(--paye-soft); color:var(--paye-dark); border-color:transparent; }
+  .dem-tag.refusee{ background:var(--impaye-soft); color:var(--impaye-dark); border-color:transparent; }
+  .dem-act{ display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
+  .dem-act a,.dem-act button{ text-decoration:none; display:inline-block; }
   .count-badge{ display:inline-block; min-width:24px; padding:2px 9px; border-radius:999px; background:var(--amber-soft); color:var(--amber); font:700 13px var(--sans); text-align:center; margin-left:6px; }
+  @media(max-width:640px){ .dem-grid{ grid-template-columns:1fr; } .dem-act{ margin-left:0; } }
 </style>
 <link rel="stylesheet" href="theme.css">
 </head>
@@ -325,15 +347,35 @@
 
     <div class="topbar">
       <div>
-        <h1>Demandes en attente</h1>
-        <p class="sub">Les caissières qui ont demandé un accès via « Créer un compte » attendent ici votre validation.</p>
+        <h1>Demandes</h1>
+        <p class="sub">Les personnes qui ont demandé à commencer un contrat ou à acheter une moto. Traitez les demandes en attente : créez le conducteur ou refusez.</p>
+      </div>
+      <div class="top-actions">
+        <button class="btn" id="newToggle" type="button">+ Nouvelle demande</button>
       </div>
     </div>
 
+    <div class="dem-new" id="newBox">
+      <div class="dem-grid">
+        <div><label for="dNom">Nom et prénoms</label><input type="text" id="dNom" maxlength="100" autocomplete="off"></div>
+        <div><label for="dTel">Téléphone</label><input type="tel" id="dTel" maxlength="30" autocomplete="off" placeholder="+229 …"></div>
+        <div><label for="dAdr">Adresse (facultatif)</label><input type="text" id="dAdr" maxlength="200" autocomplete="off"></div>
+        <div><label for="dType">Type de demande</label>
+          <select id="dType"><option value="contrat">Début d'un contrat</option><option value="achat">Achat d'une moto</option></select></div>
+        <div><label for="dContrat">Contrat souhaité</label>
+          <select id="dContrat"><option value="">À définir</option><option value="journee_payee">Journée payée</option><option value="droit_usage">Droit d'usage</option></select></div>
+        <div><label for="dMoto">Moto souhaitée (facultatif)</label><input type="text" id="dMoto" maxlength="100" autocomplete="off" placeholder="ex. TVS, neuve"></div>
+        <div class="full"><label for="dMsg">Message / précisions (facultatif)</label><textarea id="dMsg" maxlength="1000"></textarea></div>
+      </div>
+      <p class="dem-err" id="dErr" role="alert"></p>
+      <div style="margin-top:12px; display:flex; gap:8px;"><button type="button" class="btn" id="dSave">Enregistrer la demande</button><button type="button" class="btn ghost" id="dCancel">Annuler</button></div>
+    </div>
+
     <div class="panel">
-      <div class="panel-head"><h2>Demandes d'accès <span class="count-badge" id="pendingCount">0</span></h2></div>
-      <div class="pending-list" id="pendingList"></div>
-      <p class="empty-state" id="pendingEmpty" style="display:none;"></p>
+      <div class="panel-head"><h2>Liste des demandes <span class="count-badge" id="attCount">0</span></h2></div>
+      <div class="chips" id="filtres"></div>
+      <div class="dem-list" id="demList"></div>
+      <p class="empty-state" id="demEmpty" style="display:none;"></p>
     </div>
   </main>
 <script src="serveur-check.js"></script>
@@ -366,39 +408,84 @@
     });
   }).catch(function(){});
 
-  let erreur = '';
-  function afficher(liste){
-    $('pendingCount').textContent = liste.length;
-    $('pendingList').innerHTML = liste.map(function(r){
-      return '<div class="pending-row" data-id="' + r.id + '">' +
-        '<div class="pending-who"><div class="avatar ' + avatarClass(r.nom) + '">' + esc(initials(r.nom)) + '</div>' +
-        '<div><div class="p-name">' + esc(r.nom) + '</div><div class="p-email">' + esc(r.email) + (r.telephone ? ' · ' + esc(r.telephone) : '') + '</div></div></div>' +
-        '<div class="pending-when">Demandé le ' + esc(dateFR(r.date_creation)) + '</div>' +
-        '<div class="pending-actions"><button type="button" class="btn sm" data-act="ok">Accorder l\'accès</button>' +
-        '<button type="button" class="btn ghost sm" data-act="no">Refuser</button></div></div>';
+  const TYPES = { contrat: "Début d'un contrat", achat: "Achat d'une moto" };
+  const CONTRATS = { journee_payee: 'Journée payée', droit_usage: "Droit d'usage" };
+  const FILTRES = [{ cle: 'en_attente', nom: 'En attente' }, { cle: 'acceptee', nom: 'Acceptées' }, { cle: 'refusee', nom: 'Refusées' }, { cle: 'toutes', nom: 'Toutes' }];
+  let demandes = [], erreur = '', filtre = 'en_attente';
+  const json = (m, o) => ({ method: m, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o) });
+
+  function render(){
+    const nAtt = demandes.filter(function(d){ return d.statut === 'en_attente'; }).length;
+    $('attCount').textContent = nAtt;
+    $('filtres').innerHTML = FILTRES.map(function(f){
+      const n = f.cle === 'toutes' ? demandes.length : demandes.filter(function(d){ return d.statut === f.cle; }).length;
+      return '<button type="button" data-f="' + f.cle + '" class="' + (filtre === f.cle ? 'on' : '') + '">' + f.nom + ' (' + n + ')</button>';
     }).join('');
-    const msg = erreur || (liste.length ? '' : "Aucune demande en attente pour l'instant.");
-    $('pendingEmpty').textContent = msg; $('pendingEmpty').style.display = msg ? 'block' : 'none';
+    const l = demandes.filter(function(d){ return filtre === 'toutes' || d.statut === filtre; });
+    $('demList').innerHTML = l.map(function(d){
+      const tags = '<span class="dem-tag ' + d.type + '">' + esc(TYPES[d.type] || d.type) + '</span>' +
+        (d.type_contrat ? '<span class="dem-tag">' + esc(CONTRATS[d.type_contrat] || d.type_contrat) + '</span>' : '') +
+        (d.moto_souhaitee ? '<span class="dem-tag">' + esc(d.moto_souhaitee) + '</span>' : '') +
+        (d.statut !== 'en_attente' ? '<span class="dem-tag ' + d.statut + '">' + (d.statut === 'acceptee' ? 'Acceptée' : 'Refusée') + '</span>' : '');
+      let actions = '';
+      if(d.statut === 'en_attente'){
+        actions = '<a class="btn sm" href="conducteurs.html?demande=' + d.id + '">Créer le conducteur</a>' +
+          '<button type="button" class="btn ghost sm" data-act="refuse">Refuser</button>';
+      } else {
+        actions = (d.code_client ? '<a class="btn ghost sm" href="fiche-conducteur.html?code=' + encodeURIComponent(d.code_client) + '">Fiche ' + esc(d.code_client) + '</a>' : '') +
+          '<button type="button" class="btn ghost sm" data-act="reopen">Remettre en attente</button>';
+      }
+      actions += '<button type="button" class="btn ghost sm" data-act="del">Supprimer</button>';
+      return '<div class="dem-row" data-id="' + d.id + '"><div class="dem-who"><div class="avatar ' + avatarClass(d.nom) + '">' + esc(initials(d.nom)) + '</div><div style="min-width:0">' +
+        '<div class="p-name">' + esc(d.nom) + '</div><div class="p-sub">' + esc(d.telephone || '—') + (d.adresse ? ' · ' + esc(d.adresse) : '') + ' · demandé le ' + esc(dateFR(d.cree_le)) + '</div>' +
+        '<div class="dem-tags">' + tags + '</div>' +
+        (d.message ? '<p class="dem-msg">' + esc(d.message) + '</p>' : '') +
+        (d.reponse ? '<p class="dem-msg"><strong>Réponse :</strong> ' + esc(d.reponse) + '</p>' : '') + '</div></div>' +
+        '<div class="dem-act">' + actions + '</div></div>';
+    }).join('');
+    const msg = erreur || (!demandes.length ? "Aucune demande pour l'instant. Utilisez « Nouvelle demande » pour en enregistrer une." : (!l.length ? 'Aucune demande dans cette catégorie.' : ''));
+    $('demEmpty').textContent = msg; $('demEmpty').style.display = msg ? 'block' : 'none';
   }
   function charger(){
-    return api('/api/comptes?role=caissiere')
-      .then(function(l){ erreur = ''; afficher(l.filter(function(c){ return c.statut === 'en_attente'; })); })
-      .catch(function(err){ erreur = smMessage(err); afficher([]); });
+    return api('/api/demandes').then(function(l){ demandes = l; erreur = ''; render(); }).catch(function(err){ erreur = smMessage(err); render(); });
   }
   charger();
+  $('filtres').addEventListener('click', function(e){ const b = e.target.closest('button[data-f]'); if(!b) return; filtre = b.dataset.f; render(); });
 
-  $('pendingList').addEventListener('click', function(e){
+  // Nouvelle demande
+  $('newToggle').addEventListener('click', function(){ $('newBox').classList.toggle('open'); $('dNom').focus(); });
+  $('dCancel').addEventListener('click', function(){ $('newBox').classList.remove('open'); $('dErr').textContent = ''; });
+  $('dSave').addEventListener('click', function(){
+    const btn = this; $('dErr').textContent = '';
+    btn.disabled = true;
+    api('/api/demandes', json('POST', { nom: $('dNom').value, telephone: $('dTel').value, adresse: $('dAdr').value, type: $('dType').value,
+      type_contrat: $('dContrat').value, moto_souhaitee: $('dMoto').value, message: $('dMsg').value }))
+      .then(function(d){
+        demandes.unshift(d); filtre = 'en_attente';
+        ['dNom', 'dTel', 'dAdr', 'dMoto', 'dMsg'].forEach(function(i){ $(i).value = ''; }); $('dContrat').value = '';
+        $('newBox').classList.remove('open'); render(); if(window.smToast) smToast('Demande enregistrée.');
+      })
+      .catch(function(err){ $('dErr').textContent = smMessage(err); })
+      .finally(function(){ btn.disabled = false; });
+  });
+
+  // Refuser / remettre en attente / supprimer
+  $('demList').addEventListener('click', function(e){
     const b = e.target.closest('button[data-act]'); if(!b) return;
-    const ligne = b.closest('.pending-row'), id = ligne.dataset.id, nom = ligne.querySelector('.p-name').textContent;
-    if(b.dataset.act === 'ok'){
-      b.disabled = true;
-      api('/api/comptes/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'actif' }) })
-        .then(function(){ if(window.smToast) smToast('Accès accordé à ' + nom + '.'); charger(); })
-        .catch(function(err){ b.disabled = false; alert(smMessage(err)); });
+    const ligne = b.closest('.dem-row'), id = Number(ligne.dataset.id), d = demandes.find(function(x){ return x.id === id; }); if(!d) return;
+    function maj(o, msg){
+      api('/api/demandes/' + id, json('PATCH', o)).then(function(m){ demandes[demandes.indexOf(d)] = m; render(); if(window.smToast) smToast(msg); })
+        .catch(function(err){ alert(smMessage(err)); });
+    }
+    if(b.dataset.act === 'refuse'){
+      const motif = window.prompt('Refuser la demande de ' + d.nom + ' ?\nMotif (facultatif) :', '');
+      if(motif === null) return;
+      maj({ statut: 'refusee', reponse: motif }, 'Demande refusée.');
+    } else if(b.dataset.act === 'reopen'){
+      maj({ statut: 'en_attente' }, 'Demande remise en attente.');
     } else {
-      if(!window.confirm('Refuser et supprimer la demande de ' + nom + ' ?')) return;
-      api('/api/comptes/' + id, { method: 'DELETE' })
-        .then(function(){ if(window.smToast) smToast('Demande refusée.'); charger(); })
+      if(!window.confirm('Supprimer définitivement la demande de ' + d.nom + ' ?')) return;
+      api('/api/demandes/' + id, { method: 'DELETE' }).then(function(){ demandes = demandes.filter(function(x){ return x.id !== id; }); render(); })
         .catch(function(err){ alert(smMessage(err)); });
     }
   });
