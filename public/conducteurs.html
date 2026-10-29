@@ -200,6 +200,12 @@
   .badge.active{ background:var(--accent-soft); color:var(--accent-dark); }
   .badge.inactive{ background:#E6EAF1; color:var(--ink-faint); }
   .badge.new{ background:var(--amber-soft); color:var(--amber); }
+  .chips{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+  .chips button{ padding:7px 14px; border-radius:999px; border:1.5px solid var(--border); background:var(--panel); color:var(--ink-soft); font:600 13px var(--sans); cursor:pointer; transition:.15s; }
+  .chips button:hover{ border-color:var(--accent); color:var(--accent-dark); }
+  .chips button.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  tr.grp td{ background:var(--bg-light); font-family:var(--serif); font-size:15px; font-weight:600; padding:10px 14px; border-bottom:1.5px solid var(--border); }
+  tr.grp td span{ font:600 12px var(--sans); color:var(--ink-faint); margin-left:6px; }
   .row-actions{ display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
   .row-actions button{ border:1.5px solid var(--border); background:var(--panel); color:var(--ink); border-radius:8px; padding:6px 11px; font:600 12px var(--sans); cursor:pointer; }
   .row-actions button:hover{ border-color:var(--accent); color:var(--accent-dark); }
@@ -284,9 +290,17 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
         Employés
       </a>
+      <a href="demandes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        Demandes
+      </a>
       <a href="archives.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
         Archives
+      </a>
+      <a href="notes.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+        Mes notes
       </a>
       <a href="parametres.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -545,6 +559,8 @@
         </div>
       </div>
 
+      <div class="chips" id="typeChips" role="group" aria-label="Type de paiement du contrat"></div>
+
       <table>
         <thead>
           <tr><th>Code</th><th>Conducteur</th><th>Inscrit le</th><th>Statut</th><th></th></tr>
@@ -617,6 +633,14 @@
   const searchInput = $('searchInput');
   let clients = [];
   let loadError = '';
+  // Conducteurs séparés selon la fréquence de paiement de leur contrat : journalier, hebdomadaire ou mensuel
+  const TYPES_PAIEMENT = [
+    { cle: 'jour', pluriel: 'Journaliers', libelle: 'Journalier' },
+    { cle: 'semaine', pluriel: 'Hebdomadaires', libelle: 'Hebdomadaire' },
+    { cle: 'mois', pluriel: 'Mensuels', libelle: 'Mensuel' }
+  ];
+  const typeDe = (c) => (c.frequence === 'semaine' || c.frequence === 'mois') ? c.frequence : 'jour';
+  let filtreType = 'tous';
 
   function badge(c){
     if(c.statut === 'inactif') return '<span class="badge inactive">Inactif</span>';
@@ -630,13 +654,25 @@
   function render(){
     const q = searchInput.value.trim().toLowerCase();
     const qp = plaqueNorm(q);
-    const list = clients.filter(c => c.nom.toLowerCase().includes(q) || c.code.toLowerCase().includes(q) || (qp.length >= 2 && plaqueNorm(c.immatriculation).includes(qp)));
+    const trouves = clients.filter(c => c.nom.toLowerCase().includes(q) || c.code.toLowerCase().includes(q) || (qp.length >= 2 && plaqueNorm(c.immatriculation).includes(qp)));
+    // Pastilles : Tous / Journaliers / Hebdomadaires / Mensuels, avec le nombre de conducteurs trouvés
+    $('typeChips').innerHTML = [{ cle: 'tous', pluriel: 'Tous' }].concat(TYPES_PAIEMENT).map(function(t){
+      const n = t.cle === 'tous' ? trouves.length : trouves.filter(c => typeDe(c) === t.cle).length;
+      return '<button type="button" data-type="' + t.cle + '" class="' + (filtreType === t.cle ? 'on' : '') + '" aria-pressed="' + (filtreType === t.cle) + '">' + t.pluriel + ' (' + n + ')</button>';
+    }).join('');
+    const list = trouves.filter(c => filtreType === 'tous' || typeDe(c) === filtreType);
+    // Dans « Tous », les conducteurs sont regroupés par type, chaque groupe sous son titre.
+    let groupeCourant = '';
+    const ligneGroupe = (t) => '<tr class="grp"><td colspan="5">' + t.pluriel + '<span>' + trouves.filter(c => typeDe(c) === t.cle).length + ' conducteur(s)</span></td></tr>';
+    const triee = filtreType === 'tous' ? TYPES_PAIEMENT.reduce((acc, t) => acc.concat(list.filter(c => typeDe(c) === t.cle)), []) : list;
 
-    driversBody.innerHTML = list.map(function(c){
-      return '<tr>' +
+    driversBody.innerHTML = triee.map(function(c){
+      let entete = '';
+      if(filtreType === 'tous' && typeDe(c) !== groupeCourant){ groupeCourant = typeDe(c); entete = ligneGroupe(TYPES_PAIEMENT.find(t => t.cle === groupeCourant)); }
+      return entete + '<tr>' +
         '<td class="code-val" data-label="Code"><a class="code-link" href="fiche-conducteur.html?code=' + encodeURIComponent(c.code) + '" title="Ouvrir la fiche : vidange et redevance">' + esc(c.code) + '</a></td>' +
         '<td data-label="Conducteur"><div class="driver-cell"><div class="avatar ' + avatarClass(c.nom) + '">' + esc(initials(c.nom)) + '</div>' +
-        '<div><div class="d-name">' + esc(c.nom) + '</div><div class="d-phone">' + esc(c.telephone || '—') + (c.immatriculation ? ' · ' + esc(c.immatriculation) : '') + '</div>' + (c.etat_moto ? '<div class="d-moto">Moto ' + (c.etat_moto === 'neuve' ? 'neuve' : 'usagée') + '</div>' : '') + '</div></div></td>' +
+        '<div><div class="d-name">' + esc(c.nom) + '</div><div class="d-phone">' + esc(c.telephone || '—') + (c.immatriculation ? ' · ' + esc(c.immatriculation) : '') + '</div><div class="d-moto">Contrat ' + TYPES_PAIEMENT.find(t => t.cle === typeDe(c)).libelle.toLowerCase() + '</div>' + (c.etat_moto ? '<div class="d-moto">Moto ' + (c.etat_moto === 'neuve' ? 'neuve' : 'usagée') + '</div>' : '') + '</div></div></td>' +
         '<td data-label="Inscrit le">' + formatDateFR(c.date_creation) + '</td>' +
         '<td data-label="Statut">' + badge(c) + '</td>' +
         '<td data-label="Actions"><div class="row-actions"><button type="button" data-act="edit" data-code="' + esc(c.code) + '">Modifier</button>' +
@@ -646,7 +682,7 @@
     let msg = '';
     if(loadError) msg = loadError;
     else if(!clients.length) msg = "Aucun conducteur pour l'instant. Ajoutez le premier avec le bouton ci-dessus.";
-    else if(!list.length) msg = 'Aucun conducteur ne correspond à cette recherche.';
+    else if(!list.length) msg = filtreType === 'tous' ? 'Aucun conducteur ne correspond à cette recherche.' : 'Aucun conducteur de ce type ne correspond à la recherche.';
     driversEmpty.textContent = msg;
     driversEmpty.style.display = msg ? 'block' : 'none';
 
@@ -668,6 +704,7 @@
   }
   load();
   searchInput.addEventListener('input', render);
+  $('typeChips').addEventListener('click', function(e){ const b = e.target.closest('button[data-type]'); if(!b) return; filtreType = b.dataset.type; render(); });
   // Entrée : ouvre la fiche (vidange + redevance) du conducteur recherché par son code
   searchInput.addEventListener('keydown', function(e){
     if(e.key !== 'Enter') return;
