@@ -414,7 +414,7 @@
   function ouvrirModal(cell) {
     var existant = paiements[cell.dataset.date], cible = client.montant_journalier_effectif;
     var a = cell.dataset.date.split('-').map(Number);
-    ctx = { cell: cell, date: cell.dataset.date, cible: cible };
+    ctx = { cell: cell, date: cell.dataset.date, cible: cible, peutAnnuler: !!existant && (existant.montant > 0 || existant.paye) };
     $('modalCibleLabel').textContent = 'Objectif du jour';
     $('modalDate').textContent = client.nom + ' — ' + a[2] + ' ' + MOIS_FR[a[1] - 1] + ' ' + a[0];
     $('modalCible').textContent = cible.toLocaleString('fr-FR') + ' F';
@@ -424,6 +424,7 @@
     smAvanceContexte({ actif: true, arrieres: arrieresAvant(cell.dataset.date), date: cell.dataset.date,
       note: existant && existant.regle_le && existant.regle_le < cell.dataset.date ? 'Ce jour est déjà payé d\'avance (versé le ' + jjmm(existant.regle_le) + ').' : '' });
     $('modalError').classList.remove('show'); $('amountInput').removeAttribute('data-invalid');
+    $('modalVoidBtn').style.display = ctx && ctx.peutAnnuler ? 'block' : 'none';
     modal.classList.add('show');
     setTimeout(function () { $('amountInput').focus(); $('amountInput').select(); }, 60);
   }
@@ -432,7 +433,7 @@
     var existant = paiements[dateIso], due = dueDe(p);
     var autres = sommePeriode(p) - (existant ? existant.montant : 0), reste = Math.max(0, due - autres);
     var a = dateIso.split('-').map(Number);
-    ctx = { cell: null, date: dateIso, cible: due, complet: reste, periode: p };
+    ctx = { cell: null, date: dateIso, cible: due, complet: reste, periode: p, peutAnnuler: !!existant && (existant.montant > 0 || existant.paye) };
     $('modalDate').textContent = client.nom + ' — ' + a[2] + ' ' + MOIS_FR[a[1] - 1] + ' ' + a[0] + (autres > 0 ? ' · déjà versé les autres jours de la période : ' + fcfa(autres) : '');
     $('modalCibleLabel').textContent = 'Montant de la ' + NOM_PERIODE[freq()];
     $('modalCible').textContent = due.toLocaleString('fr-FR') + ' F';
@@ -441,6 +442,7 @@
     smNumeroSet(existant ? existant.numero_momo : null);
     smAvanceContexte({ actif: false, note: dateIso > iso(aujourdhui()) ? 'Paiement d\'avance : cette période n\'a pas encore commencé.' : '' });
     $('modalError').classList.remove('show'); $('amountInput').removeAttribute('data-invalid');
+    $('modalVoidBtn').style.display = ctx && ctx.peutAnnuler ? 'block' : 'none';
     modal.classList.add('show');
     setTimeout(function () { $('amountInput').focus(); $('amountInput').select(); }, 60);
   }
@@ -484,6 +486,23 @@
       .finally(function () { $('modalSaveBtn').disabled = false; });
   }
   $('modalSaveBtn').addEventListener('click', enregistrer);
+
+  // Annuler le paiement enregistré pour ce jour (le jour redevient non payé ; l'opération reste tracée côté serveur)
+  $('modalVoidBtn').addEventListener('click', function () {
+    var c = ctx; if (!c) return;
+    if (!window.confirm('Annuler le paiement enregistré pour ce jour ? Le jour redeviendra non payé.')) return;
+    var btn = this; btn.disabled = true;
+    api('/api/paiements?code_client=' + encodeURIComponent(client.code) + '&date=' + encodeURIComponent(c.date), { method: 'DELETE' })
+      .then(function (r) {
+        delete paiements[c.date];
+        if (c.cell) { renderCalendar(); totaux(); } else { renderPeriodesRedevance(); }
+        afficherKpis(true);
+        if (window.smToast) smToast('Paiement annulé (' + fcfa(r.montant || 0) + ').');
+        fermerModal();
+      })
+      .catch(function (err) { $('modalError').textContent = window.smMessage ? window.smMessage(err) : err.message; $('modalError').classList.add('show'); })
+      .finally(function () { btn.disabled = false; });
+  });
 
   /* ---------- Chargement d'un conducteur ---------- */
   function erreurRecherche(msg) {
