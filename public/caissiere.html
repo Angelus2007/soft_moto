@@ -218,6 +218,8 @@
   .modal-actions .cancel{ background:var(--bg-light); border-color:var(--border); color:var(--ink-soft); }
   .modal-actions .save{ background:var(--accent); color:var(--cream); }
   .modal-actions .save:hover{ background:var(--accent-dark); }
+  .modal-void{ display:none; width:100%; margin-top:12px; padding:10px; border-radius:10px; border:1.5px solid var(--impaye); background:var(--impaye-soft); color:var(--impaye-dark); font:600 13.5px var(--sans); cursor:pointer; }
+  .modal-void:disabled{ opacity:.6; cursor:default; }
   .modal-actions button:disabled{ opacity:0.6; cursor:default; }
 </style>
 <link rel="stylesheet" href="theme.css">
@@ -391,6 +393,7 @@
       <button type="button" class="cancel" id="modalCancelBtn">Annuler</button>
       <button type="button" class="save btn" id="modalSaveBtn">Enregistrer</button>
     </div>
+    <button type="button" class="modal-void" id="modalVoidBtn">Annuler ce paiement</button>
   </div>
 </div>
 
@@ -734,6 +737,8 @@
       info: t.frequence && t.frequence !== 'jour' ? ' · déjà versé les autres jours de la période : ' + fmtF((t.verse_periode || 0) - (t.montant || 0)) : '',
       avance: !(t.frequence && t.frequence !== 'jour'), arrieres: t.montant_du || 0,
       noteAvance: t.regle_le && t.regle_le < aujourdhuiISO() ? 'Ce jour est déjà payé d\'avance (versé le ' + jjmm(t.regle_le) + ').' : '',
+      peutAnnuler: (t.montant || 0) > 0,
+      onCancelled: function(){ t.paye = false; t.montant = 0; t.moyen = null; t.numero_momo = null; chargerTournee(); },
       onSaved: function(p){
         t.paye = p.paye; t.montant = p.montant; t.moyen = p.moyen; t.numero_momo = p.numero_momo;
         if (p.periode) t.verse_periode = p.periode.verse;
@@ -774,7 +779,8 @@
   const modalCancelBtn = document.getElementById('modalCancelBtn');
   const quickFullBtn = document.getElementById('quickFullBtn');
   const quickZeroBtn = document.getElementById('quickZeroBtn');
-  let contexteEnCours = null; // { code, date, cible, onSaved(p) }
+  let contexteEnCours = null; // { code, date, cible, onSaved(p), peutAnnuler, onCancelled() }
+  const $void = document.getElementById('modalVoidBtn');
 
   function ouvrirModalContexte(ctx){
     contexteEnCours = ctx;
@@ -788,6 +794,7 @@
     smAvanceContexte({ actif: ctx.avance !== false, arrieres: ctx.arrieres || 0, date: ctx.date, note: ctx.noteAvance || '' });
     modalError.classList.remove('show');
     amountInput.removeAttribute('data-invalid');
+    $void.style.display = ctx.peutAnnuler ? 'block' : 'none';
 
     amountModal.classList.add('show');
     setTimeout(function(){ amountInput.focus(); amountInput.select(); }, 50);
@@ -811,6 +818,8 @@
     ouvrirModalContexte({
       code: currentClient.code, date: cell.dataset.date, cible: currentClient.montant_journalier_effectif,
       montantExistant: existant ? existant.montant : null, moyenExistant: existant ? existant.moyen : null, numeroExistant: existant ? existant.numero_momo : null,
+      peutAnnuler: !!existant && (existant.montant > 0 || existant.paye),
+      onCancelled: function(){ delete paiementsParJour[cell.dataset.date]; renderCalendar(); },
       onSaved: function(p){
         appliquerPaiementSurCellule(cell, p);
         recomputeTotals();
@@ -861,6 +870,22 @@
       .finally(function(){ modalSaveBtn.disabled = false; });
   }
   modalSaveBtn.addEventListener('click', enregistrerMontant);
+
+  // Annuler le paiement enregistré pour ce jour (le jour redevient non payé ; l'opération reste tracée)
+  $void.addEventListener('click', function(){
+    const ctx = contexteEnCours; if(!ctx) return;
+    if(!window.confirm('Annuler le paiement enregistré pour ce jour ? Le jour redeviendra non payé.')) return;
+    $void.disabled = true;
+    api('/api/paiements?code_client=' + encodeURIComponent(ctx.code) + '&date=' + encodeURIComponent(ctx.date), { method: 'DELETE' })
+      .then(function(r){
+        if(ctx.onCancelled) ctx.onCancelled();
+        chargerPoint(); if(currentClient && currentClient.code === ctx.code) recomputeTotals();
+        if(window.smToast) window.smToast('Paiement annulé (' + Number(r.montant || 0).toLocaleString('fr-FR') + ' F).');
+        fermerModal();
+      })
+      .catch(function(err){ modalError.textContent = esc(smMessage(err)); modalError.classList.add('show'); })
+      .finally(function(){ $void.disabled = false; });
+  });
 
   function recomputeTotals(){
     const cible = currentClient ? currentClient.montant_journalier_effectif : 0;
