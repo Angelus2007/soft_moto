@@ -272,6 +272,8 @@
   .modal-actions button{ flex:1; padding:12px; border-radius:10px; font-size:14.5px; font-weight:600; cursor:pointer; border:1.5px solid transparent; }
   .modal-actions .cancel{ background:var(--bg-light); border-color:var(--border); color:var(--ink-soft); }
   .modal-actions .save{ background:var(--accent); color:#fff; }
+  .modal-void{ display:none; width:100%; margin-top:12px; padding:10px; border-radius:10px; border:1.5px solid var(--impaye); background:var(--impaye-soft); color:var(--impaye-dark); font:600 13.5px var(--sans); cursor:pointer; }
+  .modal-void:disabled{ opacity:.6; cursor:default; }
   .modal-actions .save:hover{ background:var(--accent-dark); }
   .modal-actions button:disabled{ opacity:.6; cursor:default; }
 
@@ -533,6 +535,7 @@
       <button type="button" class="cancel" id="modalCancelBtn">Annuler</button>
       <button type="button" class="save btn" id="modalSaveBtn">Enregistrer</button>
     </div>
+    <button type="button" class="modal-void" id="modalVoidBtn">Annuler ce paiement</button>
   </div>
 </div>
 
