@@ -819,7 +819,14 @@
       code: currentClient.code, date: cell.dataset.date, cible: currentClient.montant_journalier_effectif,
       montantExistant: existant ? existant.montant : null, moyenExistant: existant ? existant.moyen : null, numeroExistant: existant ? existant.numero_momo : null,
       peutAnnuler: !!existant && (existant.montant > 0 || existant.paye),
-      onCancelled: function(){ delete paiementsParJour[cell.dataset.date]; renderCalendar(); },
+      onCancelled: function(r){
+        // L'annulation peut toucher plusieurs jours (surplus réparti sur d'autres jours) : on met à jour chacun d'eux
+        (r.jours || [{ date: cell.dataset.date, supprime: true }]).forEach(function(j){
+          if(j.supprime) delete paiementsParJour[j.date];
+          else paiementsParJour[j.date] = Object.assign({}, paiementsParJour[j.date] || {}, { montant: j.montant, paye: j.paye });
+        });
+        renderCalendar();
+      },
       onSaved: function(p){
         appliquerPaiementSurCellule(cell, p);
         recomputeTotals();
@@ -878,9 +885,9 @@
     $void.disabled = true;
     api('/api/paiements?code_client=' + encodeURIComponent(ctx.code) + '&date=' + encodeURIComponent(ctx.date), { method: 'DELETE' })
       .then(function(r){
-        if(ctx.onCancelled) ctx.onCancelled();
+        if(ctx.onCancelled) ctx.onCancelled(r);
         chargerPoint(); if(currentClient && currentClient.code === ctx.code) recomputeTotals();
-        if(window.smToast) window.smToast('Paiement annulé (' + Number(r.montant || 0).toLocaleString('fr-FR') + ' F).');
+        if(window.smToast) window.smToast('Paiement annulé : ' + Number(r.montant || 0).toLocaleString('fr-FR') + ' F' + ((r.jours || []).length > 1 ? ' sur ' + r.jours.length + ' jours (surplus compris).' : '.'));
         fermerModal();
       })
       .catch(function(err){ modalError.textContent = esc(smMessage(err)); modalError.classList.add('show'); })
