@@ -334,6 +334,10 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
         Employés
       </a>
+      <a href="contrats.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>
+        Contrats
+      </a>
       <a href="demandes.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
         Demandes
@@ -473,11 +477,12 @@
         <div class="box-card">
           <h2>Contrat du conducteur</h2>
           <p class="desc">Contrat n° <strong id="contratNo">—</strong>, généré avec le code du conducteur et les informations de son dossier.</p>
-          <p class="type-label">TYPE DE CONTRAT :</p>
-          <div class="type-row" id="ficheTypeRow" role="group" aria-label="Type de contrat">
+          <p class="desc" id="contratTypeTexte" style="margin:0 0 10px;"></p>
+          <div class="type-row" id="ficheTypeRow" role="group" aria-label="Choisir le contrat du conducteur" style="display:none;">
             <button type="button" data-type="journee_payee">Contrat JOURNÉE PAYÉE</button>
             <button type="button" data-type="droit_usage">Contrat DROIT D’USAGE</button>
           </div>
+          <button type="button" class="c-btn ghost" id="contratChange" style="display:none; margin-bottom:6px;"></button>
           <div id="freqBloc" style="display:none; margin-top:16px;">
             <p class="type-label">REDEVANCE PAYÉE :</p>
             <div class="type-row" id="ficheFreqRow" role="group" aria-label="Fréquence de paiement de la redevance">
