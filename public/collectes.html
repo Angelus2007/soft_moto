@@ -123,6 +123,7 @@
   .badge{ display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; }
   .badge.paid{ background:var(--paye-soft); color:var(--paye-dark); }
   .badge.late{ background:var(--impaye-soft); color:var(--impaye-dark); }
+  .badge.part{ background:var(--amber-soft); color:var(--amber); }
   .empty-state{ color:var(--ink-faint); font-size:13.5px; padding:20px 0; text-align:center; }
   .row-limit-note{ color:var(--ink-faint); font-size:12.5px; padding:12px 0; text-align:center; }
 
@@ -204,6 +205,10 @@
       <a href="employes.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
         Employés
+      </a>
+      <a href="contrats.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>
+        Contrats
       </a>
       <a href="demandes.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
@@ -426,7 +431,8 @@
       return matchQ && matchStatut;
     });
 
-    $('sumTotal').textContent = fmtF(lignes.reduce((s, l) => s + (l.paye ? l.montant : 0), 0));
+    // Total = tout l'argent versé (les paiements partiels comptent aussi)
+    $('sumTotal').textContent = fmtF(lignes.reduce((s, l) => s + l.montant, 0));
     $('sumPayes').textContent = lignes.filter(function(l){ return l.paye; }).length;
     $('sumLignes').textContent = list.length;
 
@@ -438,7 +444,7 @@
         '<div><div class="d-name">' + esc(l.client_nom || 'Conducteur supprimé') + '</div><div class="d-code">' + esc(l.code_client) + '</div></div></div></td>' +
         '<td class="amount">' + fmtF(l.montant) + '</td>' +
         '<td>' + (l.moyen && l.montant > 0 ? '<span class="moyen-tag">' + esc(smMoyenLabel(l.moyen)) + '</span>' : '—') + '</td>' +
-        '<td><span class="badge ' + (l.paye ? 'paid">Payé' : 'late">Impayé') + '</span></td>' +
+        '<td><span class="badge ' + (l.paye ? 'paid">Payé' : (l.montant > 0 ? 'part">Partiel' : 'late">Impayé')) + '</span></td>' +
         '<td>' + esc(l.caissiere_nom) + '</td>' +
         '<td class="date-col">' + esc(heureLocale(l.maj_le)) + '</td></tr>';
     }).join('');
