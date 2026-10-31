@@ -74,7 +74,9 @@ CREATE TABLE IF NOT EXISTS versements (
   moyen TEXT,
   compte_id INTEGER,
   cree_le TEXT NOT NULL,
-  numero_momo TEXT
+  numero_momo TEXT,
+  lot TEXT,
+  annule INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS vidanges (
   id ${pk},
@@ -134,7 +136,7 @@ CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NUL
   // Mise à jour d'une base créée avec une ancienne version (colonnes ajoutées au fil des évolutions).
   const ajouts = {
     paiements: [['moyen', 'TEXT'], ['regle_le', 'TEXT'], ['numero_momo', 'TEXT']],
-    versements: [['numero_momo', 'TEXT']],
+    versements: [['numero_momo', 'TEXT'], ['lot', 'TEXT'], ['annule', 'INTEGER NOT NULL DEFAULT 0']],
     clients: [
       ['code', 'TEXT'], ['statut', "TEXT NOT NULL DEFAULT 'actif'"], ['date_creation', 'TEXT'], ['prix_moto', 'INTEGER'],
       ['montant_journalier', 'INTEGER'], ['temoin_nom', 'TEXT'], ['temoin_telephone', 'TEXT'], ['temoin_adresse', 'TEXT'],
@@ -149,6 +151,7 @@ CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NUL
   await db.exec(`
 CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_code ON clients (code);
 CREATE INDEX IF NOT EXISTS idx_versements_jour ON versements (jour_saisie);
+CREATE INDEX IF NOT EXISTS idx_versements_lot ON versements (lot);
 CREATE INDEX IF NOT EXISTS idx_vidanges_jour ON vidanges (jour_saisie);
 CREATE INDEX IF NOT EXISTS idx_paiements_date ON paiements (date);
 CREATE INDEX IF NOT EXISTS idx_sessions_compte ON sessions (compte_id);
