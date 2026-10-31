@@ -340,20 +340,35 @@
   var typeAffiche = null, estAdmin = false;
   function renderContrat() {
     if (!client || !window.smContrat) return;
-    var enregistre = smContrat.typeDe(client), t = typeAffiche || enregistre;
+    // Un conducteur n'a qu'UN contrat. Tant qu'aucun n'est enregistré (anciennes fiches), l'admin choisit une fois lequel.
+    var enregistre = smContrat.typeDe(client), sans = !client.type_contrat, t = sans ? (typeAffiche || enregistre) : enregistre;
+    var autre = enregistre === 'journee_payee' ? 'droit_usage' : 'journee_payee';
     $('contratNo').textContent = client.code;
+    $('ficheTypeRow').style.display = sans && estAdmin ? '' : 'none';
     document.querySelectorAll('#ficheTypeRow button').forEach(function (b) {
       b.classList.toggle('on', b.dataset.type === t); b.setAttribute('aria-pressed', b.dataset.type === t);
     });
-    var sans = !client.type_contrat;
-    $('contratNote').textContent = t === enregistre
-      ? (sans ? 'Aucun type n’a été enregistré pour ce conducteur : le contrat JOURNÉE PAYÉE est affiché par défaut.' : 'Contrat enregistré pour ce conducteur.')
-      : 'Aperçu : ce n’est pas le type enregistré pour ce conducteur (' + smContrat.TYPES[enregistre].label + ').';
-    $('contratSave').style.display = estAdmin && (t !== enregistre || sans) ? '' : 'none';
+    $('contratTypeTexte').innerHTML = sans
+      ? 'Aucun contrat n’est encore enregistré pour ce conducteur (' + smContrat.TYPES[enregistre].label + ' affiché par défaut).' + (estAdmin ? ' Choisissez son contrat ci-dessous : il n’en aura qu’un seul.' : '')
+      : 'Contrat du conducteur : <strong>' + smContrat.TYPES[enregistre].label + '</strong>. Un conducteur n’a qu’un seul contrat.';
+    $('contratNote').textContent = sans ? '' : 'Contrat enregistré pour ce conducteur.';
+    $('contratSave').style.display = estAdmin && sans ? '' : 'none';
+    $('contratSave').textContent = 'Enregistrer ce contrat pour ce conducteur';
+    $('contratChange').style.display = estAdmin && !sans ? '' : 'none';
+    $('contratChange').textContent = 'Remplacer par le contrat ' + smContrat.TYPES[autre].label;
     $('freqBloc').style.display = estAdmin ? '' : 'none';
     document.querySelectorAll('#ficheFreqRow button').forEach(function (b) { b.classList.toggle('on', b.dataset.freq === freq()); b.setAttribute('aria-pressed', b.dataset.freq === freq()); });
     $('contratFeuille').innerHTML = smContrat.corps(client, t);
   }
+  // Remplacer le contrat (ex. fin du pré-contrat « Journée payée » -> « Droit d'usage ») : l'ancien contrat disparaît du dossier
+  $('contratChange').addEventListener('click', function () {
+    var actuel = smContrat.typeDe(client), nouveau = actuel === 'journee_payee' ? 'droit_usage' : 'journee_payee', btn = this;
+    if (!window.confirm('Un conducteur n’a qu’un seul contrat.\n\nRemplacer le contrat ' + smContrat.TYPES[actuel].label + ' de ' + client.nom + ' par le contrat ' + smContrat.TYPES[nouveau].label + ' ?\n\nL’ancien contrat ne sera plus affiché ni imprimable. Pensez ensuite à vérifier les dates et le montant (bouton « Modifier » dans la liste des conducteurs).')) return;
+    btn.disabled = true;
+    api('/api/clients/' + client.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type_contrat: nouveau }) })
+      .then(function () { if (window.smToast) smToast('Contrat remplacé par ' + smContrat.TYPES[nouveau].label + '.'); setTimeout(function () { window.location.reload(); }, 700); })
+      .catch(function (err) { btn.disabled = false; alert(window.smMessage ? smMessage(err) : 'Enregistrement impossible.'); });
+  });
   $('ficheTypeRow').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
     typeAffiche = b.dataset.type; renderContrat();
@@ -494,10 +509,13 @@
     var btn = this; btn.disabled = true;
     api('/api/paiements?code_client=' + encodeURIComponent(client.code) + '&date=' + encodeURIComponent(c.date), { method: 'DELETE' })
       .then(function (r) {
-        delete paiements[c.date];
-        if (c.cell) { renderCalendar(); totaux(); } else { renderPeriodesRedevance(); }
+        // L'annulation peut toucher plusieurs jours (surplus réparti sur d'autres jours) : on met à jour chacun d'eux
+        (r.jours || [{ date: c.date, supprime: true }]).forEach(function (x) {
+          if (x.supprime) delete paiements[x.date]; else paiements[x.date] = Object.assign({}, paiements[x.date] || {}, { montant: x.montant, paye: x.paye });
+        });
+        renderCalendar(); totaux(); if (freq() !== 'jour') renderPeriodesRedevance();
         afficherKpis(true);
-        if (window.smToast) smToast('Paiement annulé (' + fcfa(r.montant || 0) + ').');
+        if (window.smToast) smToast('Paiement annulé : ' + fcfa(r.montant || 0) + ((r.jours || []).length > 1 ? ' sur ' + r.jours.length + ' jours (surplus compris).' : '.'));
         fermerModal();
       })
       .catch(function (err) { $('modalError').textContent = window.smMessage ? window.smMessage(err) : err.message; $('modalError').classList.add('show'); })
