@@ -290,6 +290,10 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
         Employés
       </a>
+      <a href="contrats.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>
+        Contrats
+      </a>
       <a href="demandes.html">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
         Demandes
@@ -938,7 +942,7 @@
 
   // ---------- Modifier / archiver un conducteur ----------
   const editModal = $('editModal');
-  let edId = null, ed = {};
+  let edId = null, ed = {}, edTypeOrigine = null;
   function choisirEd(rowId, cle, valeur){
     ed[cle] = valeur;
     $(rowId).querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.v === valeur); b.setAttribute('aria-pressed', b.dataset.v === valeur); });
@@ -950,7 +954,7 @@
   ['edPrice', 'edStart', 'edEnd'].forEach(function(id){ $(id).addEventListener('input', majMontantDuEd); $(id).addEventListener('change', majMontantDuEd); });
   $('edFreqRow').addEventListener('click', majMontantDuEd);
   function ouvrirEdition(c){
-    edId = c.id; ed = {};
+    edId = c.id; ed = {}; edTypeOrigine = c.type_contrat || null;
     $('editSub').textContent = c.nom + ' · ' + c.code;
     $('edCode').value = c.code || ''; $('edName').value = c.nom || ''; $('edPhone').value = c.telephone || ''; $('edAddress').value = c.adresse || '';
     $('edVisiteur').value = c.visiteur || '';
@@ -981,6 +985,8 @@
     if(!code){ $('edError').textContent = 'Entrez le code du conducteur.'; return; }
     if(!Number($('edPrice').value) || Number($('edPrice').value) < 1){ $('edError').textContent = 'Entrez le montant de base.'; return; }
     if($('edStart').value && $('edEnd').value && $('edEnd').value < $('edStart').value){ $('edError').textContent = 'La date de fin doit être après la date de début.'; return; }
+    if(edTypeOrigine && ed.type_contrat && ed.type_contrat !== edTypeOrigine &&
+       !window.confirm('Un conducteur n\'a qu\'un seul contrat.\n\nRemplacer son contrat actuel par l\'autre type de contrat ? L\'ancien contrat ne sera plus affiché ni imprimable.')) return;
     if(ed.statut === 'suspendu' && !window.confirm('Suspendre ' + nom + ' ? Il sera archivé : plus de collecte ni de paiement tant qu\'il n\'est pas réactivé.')) return;
     const body = {
       code: code, nom: nom, telephone: $('edPhone').value.trim(), adresse: $('edAddress').value.trim(), visiteur: $('edVisiteur').value.trim(),
