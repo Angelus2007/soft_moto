@@ -614,6 +614,12 @@ app.patch('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
     if (champs.code) {
       for (const t of ['paiements', 'versements', 'vidange_paiements', 'vidanges', 'observations']) await tx.run(`UPDATE ${t} SET code_client = ? WHERE code_client = ?`, [champs.code, existant.code]);
     }
+    // Un conducteur n'a qu'un seul contrat : tout changement de type est consigné dans ses observations.
+    if (champs.type_contrat && champs.type_contrat !== existant.type_contrat) {
+      const LIB = { journee_payee: 'Journée payée', droit_usage: "Droit d'usage" };
+      await tx.run('INSERT INTO observations (code_client, texte, compte_id, auteur, cree_le) VALUES (?,?,?,?,?)',
+        [champs.code || existant.code, `Contrat changé : ${LIB[existant.type_contrat] || 'non défini'} → ${LIB[champs.type_contrat]}.`, req.user.id, req.user.nom, now()]);
+    }
   });
   res.json(avecCible(await db.get(`SELECT ${COLS_CLIENT} FROM clients WHERE id = ?`, [existant.id])));
 }));
@@ -657,7 +663,14 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
   // Paiement par semaine ou par mois : le versement se rattache à la période du contrat qui contient la date choisie.
   const periodeCible = freq === 'jour' ? null : periodeDe(client, date);
   if (freq !== 'jour' && !periodeCible) return res.status(400).json({ erreur: 'Cette date est en dehors de la durée du contrat du conducteur.' });
+  // Par jour : la date doit rester dans la durée du contrat (quand le début / la fin sont renseignés).
+  if (freq === 'jour') {
+    const dDebut = (client.date_debut || '').slice(0, 10), dFin = (client.date_fin || '').slice(0, 10);
+    if (dateValide(dDebut) && date < dDebut) return res.status(400).json({ erreur: 'Cette date est avant le début du contrat du conducteur (' + dDebut.split('-').reverse().join('/') + ').' });
+    if (dateValide(dFin) && date > dFin) return res.status(400).json({ erreur: 'Cette date est après la fin du contrat du conducteur (' + dFin.split('-').reverse().join('/') + ').' });
+  }
   const jourSaisie = jourLocal(new Date());
+  const lot = crypto.randomUUID(); // identifie cette saisie : permet de l'annuler en entier, surplus compris
   const ajustements = []; // jours antérieurs comblés grâce au surplus
   const avances = [];     // jours À VENIR payés d'avance grâce au surplus restant
   let reporte = 0;        // total du surplus utilisé pour combler les jours impayés
@@ -685,8 +698,8 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
               SET paye = excluded.paye, montant = excluded.montant, compte_id = excluded.compte_id, maj_le = excluded.maj_le, moyen = excluded.moyen, regle_le = excluded.regle_le, numero_momo = excluded.numero_momo`,
       [c, d, paye, m, req.user.id, now(), moy, regle, num]);
     const journal = (jourConcerne, mt, moy, num) => tx.run(
-      'INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo) VALUES (?,?,?,?,?,?,?,?)',
-      [code, jourSaisie, jourConcerne, mt, moy, req.user.id, now(), num]);
+      'INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo, lot) VALUES (?,?,?,?,?,?,?,?,?)',
+      [code, jourSaisie, jourConcerne, mt, moy, req.user.id, now(), num, lot]);
 
     let garde = montant; // ce qui reste inscrit sur le jour saisi
     const surplus = montant - cible;
@@ -787,33 +800,79 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
   res.json({ ...paiement, paye: periodeInfo ? periodeInfo.complete : !!paiement.paye, cible: periodeInfo ? periodeInfo.cible : cible, frequence: freq, periode: periodeInfo, reporte, avance, ajustements, avances });
 }));
 
-// Annule le paiement enregistré pour un jour : le jour redevient « non payé ». L'opération reste tracée dans le journal des
-// versements par une ligne négative (au nom de la personne qui annule), pour que les totaux et le point de chacun restent justes.
-// L'administrateur peut annuler n'importe quel paiement ; une caissière seulement ceux enregistrés aujourd'hui.
+// Annule le paiement d'un jour EN ENTIER : le montant du jour, et aussi les surplus que cette saisie a répartis sur d'autres jours
+// (jours antérieurs comblés ou jours payés d'avance). Exemple : 5 200 F saisis pour 2 jours de 2 600 F => les 2 jours redeviennent non payés.
+// Chaque saisie est repérée par son « lot » dans le journal des versements ; les anciennes saisies (sans lot) sont regroupées par
+// compte et par heure (quelques secondes). L'opération reste tracée par des lignes négatives (au nom de la personne qui annule).
+// L'administrateur peut tout annuler ; une caissière seulement les paiements saisis aujourd'hui.
 app.delete('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) => {
   const code = texte(req.query.code_client, 20).toUpperCase();
   const date = texte(req.query.date, 10);
   if (!dateValide(date)) return res.status(400).json({ erreur: 'date doit être au format AAAA-MM-JJ.' });
-  const client = await db.get('SELECT statut FROM clients WHERE code = ?', [code]);
+  const client = await db.get('SELECT statut, montant_journalier, frequence FROM clients WHERE code = ?', [code]);
   if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
   if (client.statut === 'suspendu') return res.status(409).json({ erreur: 'Ce conducteur est suspendu (archivé) : réactivez-le avant de modifier ses paiements.' });
   const aujourdhui = jourLocal(new Date());
-  let annule = null;
+  const cible = cibleJourniere(client), freq = frequenceDe(client);
+  const jours = [];
+  let totalAnnule = 0;
+
   await db.tx(async (tx) => {
     await tx.lock('clients', 'code', code);
     const p = await tx.get('SELECT montant, moyen, numero_momo, maj_le FROM paiements WHERE code_client = ? AND date = ?', [code, date]);
     if (!p) throw new ErreurHttp(404, 'Aucun paiement enregistré à cette date.');
-    if (req.user.role !== 'admin' && jourLocal(new Date(p.maj_le)) !== aujourdhui) {
-      throw new ErreurHttp(403, "Ce paiement a été enregistré un autre jour : seul l'administrateur peut l'annuler.");
+
+    // Versements qui ont alimenté ce jour + tout ce que leurs saisies ont réparti ailleurs
+    const COLS_V = 'id, lot, compte_id, cree_le, jour_saisie, jour_concerne, montant, moyen, numero_momo';
+    const aRetirer = new Map();
+    for (const r of await tx.all(`SELECT ${COLS_V} FROM versements WHERE code_client = ? AND jour_concerne = ? AND montant > 0 AND annule = 0`, [code, date])) {
+      aRetirer.set(r.id, r);
+      let memeSaisie;
+      if (r.lot) memeSaisie = await tx.all(`SELECT ${COLS_V} FROM versements WHERE code_client = ? AND lot = ? AND montant > 0 AND annule = 0`, [code, r.lot]);
+      else {
+        const anciens = await tx.all(`SELECT ${COLS_V} FROM versements WHERE code_client = ? AND lot IS NULL AND montant > 0 AND annule = 0`, [code]);
+        memeSaisie = anciens.filter((x) => String(x.compte_id) === String(r.compte_id) && Math.abs(new Date(x.cree_le) - new Date(r.cree_le)) <= 5000);
+      }
+      memeSaisie.forEach((x) => aRetirer.set(x.id, x));
     }
-    if (p.montant > 0) {
-      await tx.run('INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo) VALUES (?,?,?,?,?,?,?,?)',
-        [code, aujourdhui, date, -p.montant, p.moyen, req.user.id, now(), p.numero_momo || null]);
+    if (req.user.role !== 'admin') {
+      const tousAujourdhui = [...aRetirer.values()].every((r) => r.jour_saisie === aujourdhui);
+      if (!tousAujourdhui || jourLocal(new Date(p.maj_le)) !== aujourdhui) {
+        throw new ErreurHttp(403, "Ce paiement (ou une partie de ses surplus) a été enregistré un autre jour : seul l'administrateur peut l'annuler.");
+      }
     }
-    await tx.run('DELETE FROM paiements WHERE code_client = ? AND date = ?', [code, date]);
-    annule = { date, montant: p.montant, moyen: p.moyen };
+
+    const parJour = new Map();
+    for (const r of aRetirer.values()) { if (!parJour.has(r.jour_concerne)) parJour.set(r.jour_concerne, []); parJour.get(r.jour_concerne).push(r); }
+    if (!parJour.has(date)) parJour.set(date, []); // ancien paiement sans journal : on retire quand même le montant du jour
+
+    const journalNeg = (jour, montant, moyen, numero) => tx.run(
+      'INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo, annule) VALUES (?,?,?,?,?,?,?,?,1)',
+      [code, aujourdhui, jour, -montant, moyen, req.user.id, now(), numero || null]);
+
+    for (const [k, rows] of parJour) {
+      const cur = await tx.get('SELECT montant, regle_le FROM paiements WHERE code_client = ? AND date = ?', [code, k]);
+      let reste = cur ? cur.montant : 0;
+      for (const r of rows) {
+        const retire = Math.min(r.montant, reste);
+        if (retire > 0) { await journalNeg(k, retire, r.moyen, r.numero_momo); reste -= retire; totalAnnule += retire; }
+      }
+      if (k === date && reste > 0) { await journalNeg(k, reste, p.moyen, p.numero_momo); totalAnnule += reste; reste = 0; } // le jour demandé est vidé complètement
+      if (!cur) continue;
+      if (reste <= 0) {
+        await tx.run('DELETE FROM paiements WHERE code_client = ? AND date = ?', [code, k]);
+        jours.push({ date: k, montant: 0, paye: false, supprime: true });
+      } else {
+        const paye = freq === 'jour' ? reste >= cible : true;
+        await tx.run('UPDATE paiements SET montant = ?, paye = ?, regle_le = ?, maj_le = ?, compte_id = ? WHERE code_client = ? AND date = ?',
+          [reste, paye ? 1 : 0, reste >= cible ? cur.regle_le : null, now(), req.user.id, code, k]);
+        jours.push({ date: k, montant: reste, paye, supprime: false });
+      }
+    }
+    for (const r of aRetirer.values()) await tx.run('UPDATE versements SET annule = 1 WHERE id = ?', [r.id]);
   });
-  res.json({ annule: true, ...annule });
+  jours.sort((a, b) => (a.date < b.date ? -1 : 1));
+  res.json({ annule: true, date, montant: totalAnnule, jours });
 }));
 
 /* ------------------------------------------------------------------ */
@@ -927,6 +986,39 @@ app.get('/api/contrats', exigerRole('admin', 'caissiere'), h(async (req, res) =>
     out[t] = r ? r.valeur : null;
   }
   res.json(out);
+}));
+
+// Suivi des contrats : un conducteur n'a qu'UN contrat, « Journée payée » (pré-contrat de 14 jours) ou « Droit d'usage ».
+// Renvoie les conducteurs actifs rangés par contrat, avec les alertes : pré-contrat bientôt terminé / terminé (à transformer en droit
+// d'usage), droit d'usage bientôt arrivé à son terme / échu, contrat non défini.
+const JOURS_PRECONTRAT = 14;
+app.get('/api/contrats/suivi', exigerRole('admin'), h(async (req, res) => {
+  const aujourdhui = jourLocal(new Date());
+  const rows = await db.all(`SELECT c.id, c.code, c.nom, c.telephone, c.immatriculation, c.marque, c.type_contrat, c.frequence, c.date_debut, c.date_creation, c.date_fin,
+      c.montant_journalier, c.prix_moto, COALESCE(SUM(p.montant), 0) AS verse
+    FROM clients c LEFT JOIN paiements p ON p.code_client = c.code WHERE c.statut = 'actif' GROUP BY c.id ORDER BY c.nom`);
+  const out = { journee_payee: [], droit_usage: [], sans_contrat: [] };
+  for (const r of rows) {
+    const debut = ((r.date_debut || r.date_creation) || '').slice(0, 10);
+    const base = { id: r.id, code: r.code, nom: r.nom, telephone: r.telephone, immatriculation: r.immatriculation, frequence: frequenceDe(r),
+      montant: cibleJourniere(r), date_debut: dateValide(debut) ? debut : null, date_fin: r.date_fin ? r.date_fin.slice(0, 10) : null, verse: r.verse };
+    if (r.type_contrat === 'journee_payee') {
+      const jour = dateValide(debut) ? diffJours(debut, aujourdhui) + 1 : null;
+      const restant = jour === null ? null : JOURS_PRECONTRAT - jour;
+      const etat = jour === null ? 'en_cours' : jour < 1 ? 'a_venir' : jour > JOURS_PRECONTRAT ? 'termine' : jour >= JOURS_PRECONTRAT - 2 ? 'bientot' : 'en_cours';
+      out.journee_payee.push({ ...base, jour_precontrat: jour, jours_restants: restant, etat });
+    } else if (r.type_contrat === 'droit_usage') {
+      const fin = base.date_fin;
+      const restant = fin ? diffJours(aujourdhui, fin) : null;
+      const etat = restant === null ? 'en_cours' : restant < 0 ? 'termine' : restant <= 30 ? 'bientot' : 'en_cours';
+      out.droit_usage.push({ ...base, jours_restants: restant, etat, prix: r.prix_moto || null, reste: r.prix_moto ? Math.max(0, r.prix_moto - r.verse) : null,
+        pct: r.prix_moto ? Math.min(100, Math.floor(r.verse / r.prix_moto * 100)) : null });
+    } else out.sans_contrat.push({ ...base });
+  }
+  const urgent = (l) => l.filter((x) => x.etat === 'bientot' || x.etat === 'termine').length;
+  res.json({ date: aujourdhui, jours_precontrat: JOURS_PRECONTRAT, ...out,
+    compteurs: { journee_payee: out.journee_payee.length, droit_usage: out.droit_usage.length, sans_contrat: out.sans_contrat.length,
+      a_traiter: urgent(out.journee_payee) + out.droit_usage.filter((x) => x.etat === 'termine').length + out.sans_contrat.length } });
 }));
 
 // Corps : { texte } ; un texte vide rétablit le texte d'origine.
@@ -1162,6 +1254,15 @@ async function bilansImpayes(aujourdhui, clients) {
 // Tout ce qui a été REÇU un jour donné (journal des versements) : par conducteur, avec moyen(s) et
 // les anciens jours éventuellement régularisés grâce au surplus. Reprend aussi les paiements saisis
 // avant la mise en place du journal.
+// Total encaissé un jour donné : journal des versements (annulations comprises) + paiements saisis avant la mise en place du journal.
+async function encaisseDuJour(dateStr) {
+  const l = await db.get('SELECT COALESCE(SUM(montant), 0) AS t FROM versements WHERE jour_saisie = ?', [dateStr]);
+  const codes = new Set((await db.all('SELECT DISTINCT code_client FROM versements WHERE jour_saisie = ?', [dateStr])).map((r) => r.code_client));
+  const anciens = (await db.all('SELECT code_client, montant, maj_le FROM paiements WHERE date = ? AND montant > 0', [dateStr]))
+    .filter((r) => !codes.has(r.code_client) && jourLocal(new Date(r.maj_le)) === dateStr);
+  return l.t + anciens.reduce((t, r) => t + r.montant, 0);
+}
+
 async function versementsDuJour(dateStr) {
   const ledger = await db.all(`SELECT v.code_client AS code, c.nom AS nom, SUM(v.montant) AS total, MAX(v.cree_le) AS dernier,
         ${db.groupConcat('v.moyen')} AS moyens, ${db.groupConcat('v.numero_momo')} AS numeros
@@ -1246,7 +1347,7 @@ app.get('/api/tableau-de-bord', exigerRole('admin'), h(async (req, res) => {
   const maintenant = new Date();
   const aujourdhui = jourLocal(maintenant);
   const jour = (n) => jourLocal(new Date(maintenant.getTime() - n * 86400000));
-  const somme = async (d) => (await db.get('SELECT COALESCE(SUM(montant), 0) AS t FROM paiements WHERE date = ? AND paye = 1', [d])).t;
+  const somme = (d) => encaisseDuJour(d); // argent réellement reçu ce jour-là (paiements partiels et surplus compris)
   const defaut = getVersementDefaut();
 
   const total = (await db.get('SELECT COUNT(*) AS n FROM clients')).n;
@@ -1255,7 +1356,7 @@ app.get('/api/tableau-de-bord', exigerRole('admin'), h(async (req, res) => {
 
   const financements = (await db.all(`
     SELECT c.code, c.nom, c.prix_moto AS prix, c.montant_journalier, c.frequence,
-           COALESCE(SUM(CASE WHEN p.paye = 1 THEN p.montant END), 0) AS verse
+           COALESCE(SUM(p.montant), 0) AS verse
     FROM clients c LEFT JOIN paiements p ON p.code_client = c.code
     WHERE c.prix_moto > 0 GROUP BY c.id`))
     .map((f) => ({
@@ -1377,7 +1478,7 @@ app.get('/api/financements', exigerRole('admin'), h(async (req, res) => {
   const defaut = getVersementDefaut();
   const rows = await db.all(`
     SELECT c.id, c.code, c.nom, c.statut, c.date_creation, c.prix_moto, c.montant_journalier, c.frequence,
-           COALESCE(SUM(CASE WHEN p.paye = 1 THEN p.montant END), 0) AS verse
+           COALESCE(SUM(p.montant), 0) AS verse
     FROM clients c LEFT JOIN paiements p ON p.code_client = c.code
     WHERE c.statut <> 'suspendu'
     GROUP BY c.id ORDER BY c.nom`);
@@ -1429,7 +1530,7 @@ app.get('/api/collectes', exigerRole('admin'), h(async (req, res) => {
       'Montant (F CFA)', 'Moyen', 'Numéro MOMO', 'Statut', 'Caissière', 'Enregistré le'];
     const lignes = rows.map((r) => [
       r.date, r.code_client, r.client_nom || '', csvTel(r.client_telephone), r.client_adresse || '', r.immatriculation || '', r.temoin_nom || '', csvTel(r.temoin_telephone),
-      r.montant, MOYENS[r.moyen] || '', r.numero_momo || '', r.paye ? 'Payé' : 'Impayé', r.caissiere_nom, r.maj_le
+      r.montant, MOYENS[r.moyen] || '', r.numero_momo || '', r.paye ? 'Payé' : (r.montant > 0 ? 'Partiel' : 'Impayé'), r.caissiere_nom, r.maj_le
     ].map(csvEchappe).join(';'));
     const csv = '\uFEFF' + [entetes.join(';'), ...lignes].join('\r\n');
     res.set('Content-Type', 'text/csv; charset=utf-8');
@@ -1437,11 +1538,13 @@ app.get('/api/collectes', exigerRole('admin'), h(async (req, res) => {
     return res.send(csv);
   }
 
+  // statut : « paye » (jour complet), « partiel » (de l'argent versé mais jour incomplet), « impaye » (rien versé)
+  const statutDe = (r) => (r.paye ? 'paye' : (r.montant > 0 ? 'partiel' : 'impaye'));
   res.json({
     debut, fin,
-    total_collecte: rows.reduce((s, r) => s + (r.paye ? r.montant : 0), 0),
-    nb_versements: rows.filter((r) => r.paye).length,
-    lignes: rows.map((r) => ({ ...r, paye: !!r.paye }))
+    total_collecte: rows.reduce((s, r) => s + r.montant, 0),
+    nb_versements: rows.filter((r) => r.montant > 0).length,
+    lignes: rows.map((r) => ({ ...r, paye: !!r.paye, statut: statutDe(r) }))
   });
 }));
 
