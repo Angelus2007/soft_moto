@@ -1156,6 +1156,39 @@ app.get('/api/vidanges/retards', exigerRole('admin'), h(async (req, res) => {
   res.json({ date: aujourdhui, delai: DELAI_VIDANGE, sans_vidange: jamais, conducteurs: retards });
 }));
 
+// Suivi des vidanges de tous les conducteurs actifs : qui doit payer AUJOURD'HUI (14 jours atteints), qui est en retard, qui approche.
+// Le décompte de 14 jours part du jour où le conducteur a payé sa dernière vidange. ?format=csv (Excel) avec ?statut=a_payer|aujourdhui|retard|bientot|ok|jamais
+const SITUATIONS_VIDANGE = ['aujourdhui', 'retard', 'bientot', 'ok', 'jamais'];
+app.get('/api/vidanges/suivi', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const aujourdhui = jourLocal(new Date());
+  const rows = await db.all(`SELECT c.code, c.nom, c.telephone, c.immatriculation, MAX(v.date_paiement) AS derniere
+    FROM clients c LEFT JOIN vidange_paiements v ON v.code_client = c.code WHERE c.statut = 'actif' GROUP BY c.id, c.code, c.nom, c.telephone, c.immatriculation`);
+  const liste = rows.map((r) => {
+    const prochaine = r.derniere ? addJours(r.derniere, DELAI_VIDANGE) : null;
+    const restant = prochaine ? diffJours(aujourdhui, prochaine) : null; // > 0 : à venir ; 0 : aujourd'hui ; < 0 : en retard
+    const statut = !r.derniere ? 'jamais' : restant < 0 ? 'retard' : restant === 0 ? 'aujourdhui' : restant <= 3 ? 'bientot' : 'ok';
+    return { code: r.code, nom: r.nom, telephone: r.telephone, immatriculation: r.immatriculation, derniere: r.derniere, prochaine, jours_restants: restant, statut };
+  });
+  const rang = { aujourdhui: 0, retard: 1, bientot: 2, jamais: 3, ok: 4 };
+  liste.sort((a, b) => (rang[a.statut] - rang[b.statut]) || (a.statut === 'retard' ? a.jours_restants - b.jours_restants : (a.jours_restants ?? 999) - (b.jours_restants ?? 999)) || (a.nom > b.nom ? 1 : -1));
+  const compte = (s) => liste.filter((x) => x.statut === s).length;
+
+  if (req.query.format === 'csv') {
+    const f = req.query.statut;
+    const sel = f === 'a_payer' ? liste.filter((x) => x.statut === 'aujourdhui' || x.statut === 'retard') : SITUATIONS_VIDANGE.includes(f) ? liste.filter((x) => x.statut === f) : liste;
+    const texteSituation = (x) => x.statut === 'jamais' ? 'Aucune vidange payée' : x.statut === 'aujourdhui' ? "À payer aujourd'hui"
+      : x.statut === 'retard' ? `En retard de ${-x.jours_restants} jour(s)` : `Dans ${x.jours_restants} jour(s)`;
+    const entetes = ['Code', 'Conducteur', 'Téléphone', 'Plaque', 'Dernière vidange payée', 'Prochaine vidange', 'Situation'];
+    const lignes = sel.map((x) => [x.code, x.nom, csvTel(x.telephone), x.immatriculation || '', x.derniere || '', x.prochaine || '', texteSituation(x)].map(csvEchappe).join(';'));
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="vidanges_${aujourdhui}.csv"`);
+    return res.send('\uFEFF' + [entetes.join(';'), ...lignes].join('\r\n'));
+  }
+  res.json({ date: aujourdhui, delai: DELAI_VIDANGE, montant: MONTANT_VIDANGE,
+    compteurs: { aujourdhui: compte('aujourdhui'), retard: compte('retard'), bientot: compte('bientot'), ok: compte('ok'), jamais: compte('jamais'), total: liste.length },
+    conducteurs: liste });
+}));
+
 // Annule une vidange saisie par erreur : le décompte repart de la vidange précédente.
 app.delete('/api/vidanges/:id', exigerRole('admin', 'caissiere'), h(async (req, res) => {
   const v = await db.get('SELECT id, code_client FROM vidange_paiements WHERE id = ?', [idParam(req.params.id)]);
