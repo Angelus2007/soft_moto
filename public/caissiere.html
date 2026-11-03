@@ -272,6 +272,16 @@
     <p class="tournee-meta" id="pointMois" style="margin-top:12px;"></p>
   </div>
 
+  <div class="panel" id="vidPanel" style="display:none;">
+    <div class="tournee-head">
+      <div>
+        <h2 style="margin-bottom:2px;">Vidanges à payer</h2>
+        <p class="hint" style="margin:0;">Conducteurs dont les <strong>14 jours</strong> sont atteints (« aujourd'hui ») ou dépassés (« en retard »).</p>
+      </div>
+    </div>
+    <div class="tournee-list" id="vidList" style="max-height:260px;"></div>
+  </div>
+
   <div class="panel">
     <div class="tournee-head">
       <div>
@@ -618,6 +628,30 @@
   }
   pointDate.addEventListener('change', chargerPoint);
   chargerPoint();
+
+  // ---------- Vidanges à payer (aujourd'hui / en retard) ----------
+  function chargerVidangesDues(){
+    api('/api/vidanges/suivi').then(function(d){
+      const l = d.conducteurs.filter(function(c){ return c.statut === 'aujourdhui' || c.statut === 'retard'; });
+      document.getElementById('vidPanel').style.display = l.length ? '' : 'none';
+      document.getElementById('vidList').innerHTML = l.map(function(c){
+        const auj = c.statut === 'aujourdhui';
+        return '<div class="tournee-row no-click"><div class="avatar ' + avatarClass(c.nom) + '">' + esc(initials(c.nom)) + '</div>' +
+          '<div class="t-who"><div class="t-name">' + esc(c.nom) + '</div><div class="t-code">' + esc(c.code) + (c.telephone ? ' · ' + esc(c.telephone) : '') + '</div></div>' +
+          '<div class="t-status ' + (auj ? 'partial' : 'unpaid') + '">' + (auj ? "Aujourd'hui" : 'En retard de ' + Math.abs(c.jours_restants) + ' j') + '</div>' +
+          '<button type="button" class="btn sm" data-vid="' + esc(c.code) + '" style="margin-left:8px;">Payée</button></div>';
+      }).join('');
+    }).catch(function(){});
+  }
+  document.getElementById('vidList').addEventListener('click', function(e){
+    const b = e.target.closest('button[data-vid]'); if(!b) return;
+    if(!window.confirm('Enregistrer la vidange payée aujourd\'hui (100 F) ? Le décompte de 14 jours repart d\'aujourd\'hui.')) return;
+    b.disabled = true;
+    api('/api/vidanges', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code_client: b.dataset.vid }) })
+      .then(function(){ if(window.smToast) window.smToast('Vidange enregistrée.'); chargerVidangesDues(); chargerPoint(); })
+      .catch(function(err){ b.disabled = false; alert(smMessage(err)); });
+  });
+  chargerVidangesDues();
 
   // ---------- Ma tournée du jour ----------
   const tourneeList = document.getElementById('tourneeList');
