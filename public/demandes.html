@@ -315,10 +315,6 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>
         Contrats
       </a>
-      <a href="vidanges.html">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.7 5.7a8 8 0 1 1-11.4 0z"/></svg>
-        Vidanges
-      </a>
       <a href="demandes.html" class="active">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
         Demandes
@@ -386,6 +382,30 @@
       <p class="empty-state" id="demEmpty" style="display:none;"></p>
     </div>
   </main>
+
+  <div class="modal-edit" id="editDemModal" role="dialog" aria-modal="true" aria-labelledby="editDemTitle">
+    <div class="card">
+      <h2 id="editDemTitle">Modifier la demande</h2>
+      <p class="sub" id="editDemSub">Corrigez les informations saisies.</p>
+      <div class="dem-grid">
+        <div><label for="eNom">Nom et prénoms</label><input type="text" id="eNom" maxlength="100" autocomplete="off"></div>
+        <div><label for="eTel">Téléphone</label><input type="tel" id="eTel" maxlength="30" autocomplete="off"></div>
+        <div><label for="eAdr">Adresse (facultatif)</label><input type="text" id="eAdr" maxlength="200" autocomplete="off"></div>
+        <div><label for="eType">Type de demande</label>
+          <select id="eType"><option value="contrat">Début d'un contrat</option><option value="achat">Achat d'une moto</option></select></div>
+        <div><label for="eContrat">Contrat souhaité</label>
+          <select id="eContrat"><option value="">À définir</option><option value="journee_payee">Journée payée</option><option value="droit_usage">Droit d'usage</option></select></div>
+        <div><label for="eMoto">Moto souhaitée (facultatif)</label><input type="text" id="eMoto" maxlength="100" autocomplete="off"></div>
+        <div class="full"><label for="eMsg">Message / précisions (facultatif)</label><textarea id="eMsg" maxlength="1000"></textarea></div>
+      </div>
+      <p class="dem-err" id="eErr" role="alert"></p>
+      <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn ghost" id="eCancel">Annuler</button>
+        <button type="button" class="btn" id="eSave">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
 <script src="serveur-check.js"></script>
 <script src="theme.js"></script>
 <script>
@@ -438,9 +458,11 @@
       let actions = '';
       if(d.statut === 'en_attente'){
         actions = '<a class="btn sm" href="conducteurs.html?demande=' + d.id + '">Créer le conducteur</a>' +
+          '<button type="button" class="btn ghost sm" data-act="edit">Modifier</button>' +
           '<button type="button" class="btn ghost sm" data-act="refuse">Refuser</button>';
       } else {
         actions = (d.code_client ? '<a class="btn ghost sm" href="fiche-conducteur.html?code=' + encodeURIComponent(d.code_client) + '">Fiche ' + esc(d.code_client) + '</a>' : '') +
+          '<button type="button" class="btn ghost sm" data-act="edit">Modifier</button>' +
           '<button type="button" class="btn ghost sm" data-act="reopen">Remettre en attente</button>';
       }
       actions += '<button type="button" class="btn ghost sm" data-act="del">Supprimer</button>';
@@ -477,7 +499,45 @@
       .finally(function(){ btn.disabled = false; });
   });
 
-  // Refuser / remettre en attente / supprimer
+  // Édition / refuser / remettre en attente / supprimer
+  let editId = null;
+  function ouvrirEdition(d){
+    editId = d.id;
+    $('editDemSub').textContent = 'Demande de ' + d.nom + (d.cree_le ? ' · enregistrée le ' + dateFR(d.cree_le) : '');
+    $('eNom').value = d.nom || '';
+    $('eTel').value = d.telephone || '';
+    $('eAdr').value = d.adresse || '';
+    $('eType').value = d.type || 'contrat';
+    $('eContrat').value = d.type_contrat || '';
+    $('eMoto').value = d.moto_souhaitee || '';
+    $('eMsg').value = d.message || '';
+    $('eErr').textContent = '';
+    $('editDemModal').classList.add('show');
+    setTimeout(function(){ $('eNom').focus(); }, 40);
+  }
+  function fermerEdition(){ $('editDemModal').classList.remove('show'); editId = null; }
+  $('eCancel').addEventListener('click', fermerEdition);
+  $('editDemModal').addEventListener('click', function(e){ if(e.target === $('editDemModal')) fermerEdition(); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && $('editDemModal').classList.contains('show')) fermerEdition(); });
+  $('eSave').addEventListener('click', function(){
+    if(!editId) return;
+    const btn = this; $('eErr').textContent = ''; btn.disabled = true;
+    const body = {
+      nom: $('eNom').value, telephone: $('eTel').value, adresse: $('eAdr').value,
+      type: $('eType').value, type_contrat: $('eContrat').value,
+      moto_souhaitee: $('eMoto').value, message: $('eMsg').value
+    };
+    api('/api/demandes/' + editId, json('PATCH', body))
+      .then(function(m){
+        const i = demandes.findIndex(function(x){ return x.id === editId; });
+        if(i >= 0) demandes[i] = m;
+        fermerEdition(); render();
+        if(window.smToast) smToast('Demande mise à jour.');
+      })
+      .catch(function(err){ $('eErr').textContent = smMessage(err); })
+      .finally(function(){ btn.disabled = false; });
+  });
+
   $('demList').addEventListener('click', function(e){
     const b = e.target.closest('button[data-act]'); if(!b) return;
     const ligne = b.closest('.dem-row'), id = Number(ligne.dataset.id), d = demandes.find(function(x){ return x.id === id; }); if(!d) return;
@@ -485,13 +545,15 @@
       api('/api/demandes/' + id, json('PATCH', o)).then(function(m){ demandes[demandes.indexOf(d)] = m; render(); if(window.smToast) smToast(msg); })
         .catch(function(err){ alert(smMessage(err)); });
     }
-    if(b.dataset.act === 'refuse'){
+    if(b.dataset.act === 'edit'){
+      ouvrirEdition(d);
+    } else if(b.dataset.act === 'refuse'){
       const motif = window.prompt('Refuser la demande de ' + d.nom + ' ?\nMotif (facultatif) :', '');
       if(motif === null) return;
       maj({ statut: 'refusee', reponse: motif }, 'Demande refusée.');
     } else if(b.dataset.act === 'reopen'){
       maj({ statut: 'en_attente' }, 'Demande remise en attente.');
-    } else {
+    } else if(b.dataset.act === 'del'){
       if(!window.confirm('Supprimer définitivement la demande de ' + d.nom + ' ?')) return;
       api('/api/demandes/' + id, { method: 'DELETE' }).then(function(){ demandes = demandes.filter(function(x){ return x.id !== id; }); render(); })
         .catch(function(err){ alert(smMessage(err)); });
