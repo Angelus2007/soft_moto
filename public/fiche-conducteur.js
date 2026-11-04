@@ -502,14 +502,14 @@
   }
   $('modalSaveBtn').addEventListener('click', enregistrer);
 
-  // Annuler le paiement enregistré pour ce jour (le jour redevient non payé ; l'opération reste tracée côté serveur)
+  // Annuler le paiement (jour + tous les jours liés par le même lot / surplus)
   $('modalVoidBtn').addEventListener('click', function () {
     var c = ctx; if (!c) return;
-    if (!window.confirm('Annuler le paiement enregistré pour ce jour ? Le jour redeviendra non payé.')) return;
+    if (!window.confirm('Annuler ce paiement ?\n\nSi un surplus avait rempli d\'autres jours, ces jours seront aussi annulés automatiquement. Vous n\'avez rien à cocher manuellement.')) return;
     var btn = this; btn.disabled = true;
     api('/api/paiements?code_client=' + encodeURIComponent(client.code) + '&date=' + encodeURIComponent(c.date), { method: 'DELETE' })
       .then(function (r) {
-        // L'annulation peut toucher plusieurs jours (surplus réparti sur d'autres jours) : on met à jour chacun d'eux
+        // L'annulation touche automatiquement tous les jours du même lot (surplus compris)
         (r.jours || [{ date: c.date, supprime: true }]).forEach(function (x) {
           if (x.supprime) delete paiements[x.date]; else paiements[x.date] = Object.assign({}, paiements[x.date] || {}, { montant: x.montant, paye: x.paye });
         });
