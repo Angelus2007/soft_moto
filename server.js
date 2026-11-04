@@ -1087,6 +1087,30 @@ app.patch('/api/demandes/:id', exigerRole('admin'), h(async (req, res) => {
     if (code && !(await db.get('SELECT 1 FROM clients WHERE code = ?', [code]))) return res.status(400).json({ erreur: 'Aucun conducteur avec ce code.' });
     champs.code_client = code || null;
   }
+  // Modification des informations saisies à la création de la demande
+  if (req.body.nom !== undefined) {
+    const nom = texte(req.body.nom, 100);
+    if (nom.length < 2) return res.status(400).json({ erreur: 'Entrez le nom du demandeur.' });
+    champs.nom = nom;
+  }
+  if (req.body.telephone !== undefined) {
+    const telephone = texte(req.body.telephone, 30);
+    if (!telephone) return res.status(400).json({ erreur: 'Entrez le numéro de téléphone du demandeur.' });
+    champs.telephone = telephone;
+  }
+  if (req.body.adresse !== undefined) champs.adresse = texte(req.body.adresse, 200) || null;
+  if (req.body.type !== undefined) {
+    const type = texte(req.body.type, 10);
+    if (!TYPES_DEMANDE.includes(type)) return res.status(400).json({ erreur: "Choisissez le type de demande (début de contrat ou achat d'une moto)." });
+    champs.type = type;
+  }
+  if (req.body.type_contrat !== undefined) {
+    const typeContrat = texte(req.body.type_contrat, 20) || null;
+    if (typeContrat && !TYPES_CONTRAT.includes(typeContrat)) return res.status(400).json({ erreur: 'Type de contrat invalide.' });
+    champs.type_contrat = typeContrat;
+  }
+  if (req.body.moto_souhaitee !== undefined) champs.moto_souhaitee = texte(req.body.moto_souhaitee, 100) || null;
+  if (req.body.message !== undefined) champs.message = texte(req.body.message, 1000) || null;
   const cles = Object.keys(champs);
   if (!cles.length) return res.status(400).json({ erreur: 'Aucune modification fournie.' });
   await db.run(`UPDATE demandes SET ${cles.map((c) => c + ' = ?').join(', ')} WHERE id = ?`, [...cles.map((c) => champs[c]), d.id]);
