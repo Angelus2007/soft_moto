@@ -772,7 +772,18 @@
       avance: !(t.frequence && t.frequence !== 'jour'), arrieres: t.montant_du || 0,
       noteAvance: t.regle_le && t.regle_le < aujourdhuiISO() ? 'Ce jour est déjà payé d\'avance (versé le ' + jjmm(t.regle_le) + ').' : '',
       peutAnnuler: (t.montant || 0) > 0,
-      onCancelled: function(){ t.paye = false; t.montant = 0; t.moyen = null; t.numero_momo = null; chargerTournee(); },
+      onCancelled: function(r){
+        // Recharge la tournée + met à jour le calendrier si le même conducteur est ouvert
+        if (r && r.jours && currentClient && currentClient.code === t.code) {
+          (r.jours || []).forEach(function(j){
+            if (j.supprime) delete paiementsParJour[j.date];
+            else paiementsParJour[j.date] = Object.assign({}, paiementsParJour[j.date] || {}, { montant: j.montant, paye: j.paye });
+          });
+          renderCalendar();
+          recomputeTotals();
+        }
+        chargerTournee();
+      },
       onSaved: function(p){
         t.paye = p.paye; t.montant = p.montant; t.moyen = p.moyen; t.numero_momo = p.numero_momo;
         if (p.periode) t.verse_periode = p.periode.verse;
@@ -915,7 +926,7 @@
   // Annuler le paiement enregistré pour ce jour (le jour redevient non payé ; l'opération reste tracée)
   $void.addEventListener('click', function(){
     const ctx = contexteEnCours; if(!ctx) return;
-    if(!window.confirm('Annuler le paiement enregistré pour ce jour ? Le jour redeviendra non payé.')) return;
+    if(!window.confirm('Annuler ce paiement ?\n\nSi un surplus avait rempli d\'autres jours, ces jours seront aussi annulés automatiquement. Vous n\'avez rien à cocher manuellement.')) return;
     $void.disabled = true;
     api('/api/paiements?code_client=' + encodeURIComponent(ctx.code) + '&date=' + encodeURIComponent(ctx.date), { method: 'DELETE' })
       .then(function(r){
