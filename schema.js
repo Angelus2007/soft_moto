@@ -161,6 +161,36 @@ CREATE INDEX IF NOT EXISTS idx_observations_client ON observations (code_client)
 CREATE INDEX IF NOT EXISTS idx_vidange_paiements_date ON vidange_paiements (date_paiement);
 `);
 
+  // ---------- Tontine personnelle (chacun épargne son propre argent) ----------
+  // Chaque conducteur a un compte d'épargne personnel : il verse, on suit son solde, il peut retirer.
+  await db.exec(`
+CREATE TABLE IF NOT EXISTS tontine_comptes (
+  id ${pk},
+  code_client TEXT NOT NULL UNIQUE,
+  objectif INTEGER,
+  cotisation_cible INTEGER,
+  frequence TEXT DEFAULT 'semaine' CHECK (frequence IN ('jour','semaine','mois') OR frequence IS NULL),
+  statut TEXT NOT NULL DEFAULT 'actif' CHECK (statut IN ('actif','cloture','suspendu')),
+  notes TEXT,
+  compte_id INTEGER,
+  cree_le TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tontine_mouvements (
+  id ${pk},
+  code_client TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('depot','retrait')),
+  montant INTEGER NOT NULL,
+  moyen TEXT,
+  numero_momo TEXT,
+  motif TEXT,
+  compte_id INTEGER,
+  date_mvt TEXT NOT NULL,
+  cree_le TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tontine_mvt_client ON tontine_mouvements (code_client);
+CREATE INDEX IF NOT EXISTS idx_tontine_mvt_date ON tontine_mouvements (date_mvt);
+`);
+
   // Anciennes vidanges (périodes fixes de 14 jours) : reprises une seule fois, à la date où elles ont été cochées.
   // (L'ancienne table « vidanges » n'est pas supprimée : elle reste comme sauvegarde.)
   const dejaRepris = (await db.get('SELECT COUNT(*) AS n FROM vidange_paiements')).n;
