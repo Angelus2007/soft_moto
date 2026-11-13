@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tontine personnelle – Soft Moto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,450&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-dark:#0B1B33; --bg-dark-2:#16305A; --bg-light:#F1F4F9; --panel:#FFFFFF;
+  --accent:#1D4ED8; --accent-dark:#1E3A8A; --accent-soft:#DBE6FD;
+  --amber:#C77D0A; --amber-soft:#FCEBC8; --ink:#0F172A; --ink-soft:#526074; --ink-faint:#8793A5;
+  --cream:#F1F4F9; --cream-soft:#AEBBD0; --error:#B42318; --error-soft:#FDE7E5;
+  --border:#DDE3EC; --radius:10px;
+  --serif:"Fraunces", Georgia, serif; --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", Menlo, monospace;
+  --paye:#15803D; --paye-soft:#DCFCE7; --paye-dark:#166534;
+  --impaye:#B91C1C; --impaye-soft:#FEE2E2; --impaye-dark:#991B1B;
+}
+*{box-sizing:border-box;}
+html{height:100%;}
+body{min-height:100%; margin:0; font-family:var(--sans); color:var(--ink); background:var(--bg-light); -webkit-font-smoothing:antialiased;}
+a{color:inherit;}
+.app{display:grid; grid-template-columns:250px 1fr; min-height:100vh;}
+.sidebar{background:radial-gradient(130% 110% at 10% 0%, var(--bg-dark-2) 0%, var(--bg-dark) 60%); color:var(--cream); display:flex; flex-direction:column; padding:26px 20px 20px; position:relative; overflow:hidden; z-index:20;}
+.logotype{display:flex; align-items:center; gap:9px; font-family:var(--serif); font-style:italic; font-weight:500; font-size:18px; color:var(--cream); padding:2px 8px 26px;}
+nav.nav{display:flex; flex-direction:column; gap:3px; margin-top:6px;}
+.nav a{display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:8px; text-decoration:none; font-size:14.5px; font-weight:500; color:var(--cream-soft); transition:background .15s,color .15s;}
+.nav a svg{flex-shrink:0; opacity:.85;}
+.nav a:hover{background:rgba(241,244,249,.07); color:var(--cream);}
+.nav a.active{background:var(--accent); color:var(--cream);}
+.sidebar-spacer{flex:1;}
+.sidebar-profile{display:flex; align-items:center; gap:10px; padding:12px 10px; border-top:1px solid rgba(241,244,249,.12);}
+.avatar{width:34px; height:34px; border-radius:50%; background:var(--accent); color:var(--cream); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:13px; font-weight:600; flex-shrink:0;}
+.sidebar-profile .who .name{font-size:13.5px; font-weight:600; color:var(--cream);}
+.sidebar-profile .who .role{font-size:12px; color:var(--ink-faint);}
+.logout-link{margin-left:auto; display:flex; padding:6px; border-radius:7px; color:var(--ink-faint); text-decoration:none;}
+.logout-link:hover{color:var(--cream); background:rgba(241,244,249,.08);}
+main.main{padding:28px 34px 60px; min-width:0;}
+.menu-toggle{display:none; background:var(--panel); border:1.5px solid var(--border); border-radius:8px; padding:8px; margin-bottom:14px; cursor:pointer;}
+.topbar{display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:20px; flex-wrap:wrap;}
+.topbar h1{font-family:var(--serif); font-weight:600; font-size:26px; margin:0 0 6px;}
+.topbar .sub{margin:0; color:var(--ink-soft); font-size:14.5px;}
+.btn{display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border-radius:9px; border:1.5px solid var(--border); background:var(--panel); color:var(--ink); font:600 14px var(--sans); cursor:pointer;}
+.btn:hover{border-color:var(--accent); color:var(--accent-dark);}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+.btn.primary:hover{background:var(--accent-dark);}
+.btn.sm{padding:7px 12px; font-size:13px;}
+.btn.danger{border-color:var(--impaye); color:var(--impaye-dark);}
+.btn.danger:hover{background:var(--impaye); color:#fff;}
+.btn.ok{border-color:var(--paye); color:var(--paye-dark);}
+.btn.ok:hover{background:var(--paye); color:#fff;}
+.btn:disabled{opacity:.55; cursor:default;}
+.kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px;}
+.kpi{background:var(--panel); border:1.5px solid var(--border); border-left:3.5px solid var(--accent); border-radius:12px; padding:16px 18px;}
+.kpi .label{font-size:13px; color:var(--ink-soft); margin:0 0 8px;}
+.kpi .value{font-family:var(--mono); font-size:22px; font-weight:600;}
+.grid-2{display:grid; grid-template-columns:1fr 1.15fr; gap:18px; align-items:start;}
+.panel{background:var(--panel); border:1.5px solid var(--border); border-radius:12px; padding:20px;}
+.panel-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; gap:12px; flex-wrap:wrap;}
+.panel-head h2{font-family:var(--serif); font-weight:600; font-size:17px; margin:0;}
+.panel-head .meta{font-size:12.5px; color:var(--ink-faint);}
+.search{display:flex; align-items:center; gap:8px; background:var(--panel); border:1.5px solid var(--border); border-radius:9px; padding:9px 12px; color:var(--ink-faint); margin-bottom:14px;}
+.search input{border:none; outline:none; background:none; font:400 14px var(--sans); color:var(--ink); width:100%;}
+.card{border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:10px; cursor:pointer; transition:border-color .15s,box-shadow .15s;}
+.card:hover{border-color:var(--accent); box-shadow:0 6px 18px -10px rgba(15,23,42,.2);}
+.card.on{border-color:var(--accent); background:var(--accent-soft);}
+.card .title{font-weight:700; font-size:14.5px; margin-bottom:4px;}
+.card .meta-row{display:flex; flex-wrap:wrap; gap:8px 14px; font-size:12.5px; color:var(--ink-soft);}
+.amount{font-family:var(--mono); font-weight:600;}
+.badge{display:inline-flex; align-items:center; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600;}
+.badge.actif{background:var(--paye-soft); color:var(--paye-dark);}
+.badge.cloture,.badge.suspendu{background:#E6EAF1; color:var(--ink-soft);}
+.badge.depot{background:var(--paye-soft); color:var(--paye-dark);}
+.badge.retrait{background:var(--amber-soft); color:var(--amber);}
+.empty{color:var(--ink-faint); font-size:13.5px; padding:8px 0;}
+.hint{font-size:13px; color:var(--ink-soft); margin:0 0 16px; line-height:1.45;}
+.form-row{display:grid; gap:6px; margin-bottom:12px;}
+.form-row label{font-size:12.5px; font-weight:600; color:var(--ink-soft);}
+.form-row input,.form-row select,.form-row textarea{
+  width:100%; padding:10px 12px; border-radius:9px; border:1.5px solid var(--border);
+  font:400 14px var(--sans); color:var(--ink); background:#fff; outline:none;
+}
+.form-row input:focus,.form-row select:focus{border-color:var(--accent);}
+.form-actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;}
+.progress-line{height:8px; border-radius:999px; background:var(--border); overflow:hidden; margin:8px 0 4px;}
+.progress-line > span{display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--accent-dark)); border-radius:999px;}
+table{width:100%; border-collapse:collapse;}
+thead th{text-align:left; font-size:12px; font-weight:500; color:var(--ink-faint); padding:0 8px 10px; border-bottom:1px solid var(--border);}
+tbody td{padding:10px 8px; border-bottom:1px solid var(--border); font-size:13.5px; vertical-align:middle;}
+tbody tr:last-child td{border-bottom:none;}
+.modal-bg{position:fixed; inset:0; background:rgba(11,27,51,.45); display:none; align-items:center; justify-content:center; z-index:100; padding:20px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--panel); border-radius:14px; width:100%; max-width:440px; padding:22px; border:1.5px solid var(--border); max-height:90vh; overflow:auto;}
+.modal h3{font-family:var(--serif); margin:0 0 14px; font-size:18px;}
+.solde-big{font-family:var(--mono); font-size:28px; font-weight:700; color:var(--accent-dark); margin:4px 0 12px;}
+@media (max-width:980px){.grid-2{grid-template-columns:1fr;}.kpis{grid-template-columns:1fr;}}
+@media (max-width:780px){
+  .app{grid-template-columns:1fr;}
+  .sidebar{position:fixed; inset:0 30% 0 0; transform:translateX(-100%); transition:transform .2s; width:100%; max-width:270px;}
+  .sidebar.open{transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,.3);}
+  .menu-toggle{display:inline-flex;}
+  main.main{padding:20px 16px 50px;}
+}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="app" id="app">
+<aside class="sidebar" id="sidebar">
+  <div class="logotype">
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/>
+      <circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+    </svg>
+    Soft Moto
+  </div>
+  <nav class="nav">
+    <a href="admin.html">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+      Tableau de bord
+    </a>
+    <a href="conducteurs.html">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      Conducteurs
+    </a>
+    <a href="caissiere.html">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      Paiements
+    </a>
+    <a href="tontine.html" class="active">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10h6M9 14h6"/></svg>
+      Tontine
+    </a>
+    <a href="demandes.html">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+      Demandes
+    </a>
+    <a href="parametres.html">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/></svg>
+      Paramètres
+    </a>
+  </nav>
+  <div class="sidebar-spacer"></div>
+  <div class="sidebar-profile">
+    <div class="avatar">AD</div>
+    <div class="who"><div class="name">Admin</div><div class="role">Soft Moto</div></div>
+    <a class="logout-link" id="logoutLink" href="login.html" aria-label="Déconnexion">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </a>
+  </div>
+</aside>
+
+<main class="main">
+  <button class="menu-toggle" id="menuToggle" aria-label="Menu">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+
+  <div class="topbar">
+    <div>
+      <h1>Tontine personnelle</h1>
+      <p class="sub">Chacun verse son argent et suit son propre solde</p>
+    </div>
+    <button type="button" class="btn primary" id="btnOuvrirCompte">+ Ouvrir un compte</button>
+  </div>
+
+  <p class="hint">Ce n’est pas une tontine de groupe où l’argent est redistribué. Ici, chaque conducteur dépose <strong>son</strong> argent. On enregistre les dépôts et les retraits ; le solde affiché est uniquement le sien.</p>
+
+  <div class="kpis">
+    <div class="kpi"><p class="label">Total des soldes</p><div class="value" id="kpiSolde">—</div></div>
+    <div class="kpi" style="border-left-color:var(--paye);"><p class="label">Total déposé</p><div class="value" id="kpiDepots">—</div></div>
+    <div class="kpi" style="border-left-color:var(--amber);"><p class="label">Total retiré</p><div class="value" id="kpiRetraits">—</div></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Comptes</h2>
+        <span class="meta" id="listeMeta"></span>
+      </div>
+      <div class="search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Nom ou code…">
+      </div>
+      <div id="listeComptes"></div>
+      <p class="empty" id="listeEmpty" style="display:none;">Aucun compte tontine. Ouvrez-en un pour un conducteur.</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="detailTitre">Détail</h2>
+        <span class="meta" id="detailMeta"></span>
+      </div>
+      <div id="detailEmpty" class="empty">Sélectionnez un compte à gauche.</div>
+      <div id="detailBody" style="display:none;">
+        <div class="solde-big" id="detailSolde">0 F</div>
+        <div class="meta-row" id="detailStats" style="display:flex; flex-wrap:wrap; gap:10px 16px; font-size:13px; color:var(--ink-soft); margin-bottom:12px;"></div>
+        <div id="detailObjectif" style="display:none; margin-bottom:14px;">
+          <div style="font-size:12.5px; color:var(--ink-soft);">Progression vers l’objectif</div>
+          <div class="progress-line"><span id="objBar" style="width:0%"></span></div>
+          <div style="font-size:12px; color:var(--ink-faint);" id="objTxt"></div>
+        </div>
+        <div class="form-actions" style="margin-bottom:16px;">
+          <button type="button" class="btn ok sm" id="btnDepot">+ Dépôt</button>
+          <button type="button" class="btn sm" id="btnRetrait">− Retrait</button>
+        </div>
+        <div class="panel-head"><h2 style="font-size:15px;">Historique</h2></div>
+        <div class="table-scroll" style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Montant</th><th>Moyen</th><th></th></tr></thead>
+            <tbody id="mvtBody"></tbody>
+          </table>
+        </div>
+        <p class="empty" id="mvtEmpty" style="display:none;">Aucun mouvement.</p>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<div class="modal-bg" id="modalCompte">
+  <div class="modal">
+    <h3>Ouvrir un compte tontine</h3>
+    <p class="hint">Le compte est personnel : l’argent déposé appartient à ce conducteur.</p>
+    <div class="form-row"><label>Code conducteur</label><input type="text" id="cptCode" placeholder="SM-000001" maxlength="20" style="text-transform:uppercase;"></div>
+    <div class="form-row"><label>Cotisation habituelle (optionnel, F CFA)</label><input type="number" id="cptCible" min="0" step="100" placeholder="Ex. 2000"></div>
+    <div class="form-row"><label>Fréquence prévue</label>
+      <select id="cptFreq">
+        <option value="">—</option>
+        <option value="jour">Chaque jour</option>
+        <option value="semaine">Chaque semaine</option>
+        <option value="mois">Chaque mois</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Objectif d’épargne (optionnel, F CFA)</label><input type="number" id="cptObjectif" min="0" step="500" placeholder="Ex. 100000"></div>
+    <div class="form-row"><label>Notes</label><textarea id="cptNotes" rows="2" maxlength="500"></textarea></div>
+    <div class="form-actions">
+      <button type="button" class="btn primary" id="btnSauverCompte">Enregistrer</button>
+      <button type="button" class="btn" data-close="modalCompte">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalMvt">
+  <div class="modal">
+    <h3 id="mvtTitre">Dépôt</h3>
+    <p class="hint" id="mvtHint"></p>
+    <div class="form-row"><label>Montant (F CFA)</label><input type="number" id="mvtMontant" min="1" step="100"></div>
+    <div class="form-row"><label>Date</label><input type="date" id="mvtDate"></div>
+    <div class="form-row"><label>Moyen</label>
+      <select id="mvtMoyen">
+        <option value="especes">Espèces</option>
+        <option value="momo">MOMO</option>
+        <option value="momo_regulateur">MOMO régularisation</option>
+      </select>
+    </div>
+    <div class="form-row"><label>N° MOMO (si besoin)</label><input type="text" id="mvtMomo" maxlength="30"></div>
+    <div class="form-row"><label>Motif (optionnel)</label><input type="text" id="mvtMotif" maxlength="200"></div>
+    <div class="form-actions">
+      <button type="button" class="btn primary" id="btnSauverMvt">Valider</button>
+      <button type="button" class="btn" data-close="modalMvt">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<script src="serveur-check.js"></script>
+<script src="theme.js"></script>
+<script>
+(function(){
+  const $ = function(id){ return document.getElementById(id); };
+  const fmtF = function(n){ return Math.round(n || 0).toLocaleString('fr-FR') + ' F'; };
+  const esc = function(v){
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  };
+  const jjmm = function(iso){
+    if(!iso) return '—';
+    const a = String(iso).slice(0,10).split('-');
+    return a.length === 3 ? a[2] + '/' + a[1] + '/' + a[0] : iso;
+  };
+  function api(url, opts){
+    return fetch(url, opts).then(async function(r){
+      const data = await r.json().catch(function(){ return {}; });
+      if(r.status === 401){ window.location.href = 'login.html'; throw new Error('Session expirée.'); }
+      if(!r.ok) throw new Error(data.erreur || 'Erreur serveur.');
+      return data;
+    });
+  }
+  function toast(msg){ if(window.smToast) smToast(msg); else alert(msg); }
+  function openModal(id){ $(id).classList.add('open'); }
+  function closeModal(id){ $(id).classList.remove('open'); }
+
+  $('menuToggle').addEventListener('click', function(){ $('sidebar').classList.toggle('open'); });
+  $('logoutLink').addEventListener('click', function(e){
+    e.preventDefault();
+    fetch('/api/deconnexion', { method:'POST' }).finally(function(){ window.location.href = 'login.html'; });
+  });
+  document.querySelectorAll('[data-close]').forEach(function(b){
+    b.addEventListener('click', function(){ closeModal(b.getAttribute('data-close')); });
+  });
+  document.querySelectorAll('.modal-bg').forEach(function(bg){
+    bg.addEventListener('click', function(e){ if(e.target === bg) bg.classList.remove('open'); });
+  });
+
+  api('/api/moi').then(function(moi){
+    document.querySelectorAll('.sidebar-profile').forEach(function(bloc){
+      const av = bloc.querySelector('.avatar');
+      if(av){
+        const parts = (moi.nom || 'A').trim().split(/\s+/).slice(0,2);
+        av.textContent = parts.map(function(w){ return w[0].toUpperCase(); }).join('');
+      }
+      const nm = bloc.querySelector('.name'); if(nm) nm.textContent = moi.nom;
+      const rl = bloc.querySelector('.role'); if(rl) rl.textContent = moi.role === 'admin' ? 'Administrateur' : 'Caissière';
+    });
+  }).catch(function(){});
+
+  let comptes = [];
+  let selectedCode = null;
+  let detail = null;
+  let mvtType = 'depot';
+  const MOYENS = { especes:'Espèces', momo:'MOMO', momo_regulateur:'MOMO régul.' };
+
+  function renderListe(){
+    const q = ($('searchInput').value || '').trim().toLowerCase();
+    const filtered = !q ? comptes : comptes.filter(function(c){
+      return ((c.nom || '') + ' ' + (c.code_client || '')).toLowerCase().indexOf(q) !== -1;
+    });
+    $('listeMeta').textContent = filtered.length ? filtered.length + ' compte' + (filtered.length > 1 ? 's' : '') : '';
+    $('listeEmpty').style.display = filtered.length ? 'none' : 'block';
+    $('listeComptes').innerHTML = filtered.map(function(c){
+      const on = selectedCode === c.code_client ? ' on' : '';
+      return '<div class="card' + on + '" data-code="' + esc(c.code_client) + '">' +
+        '<div class="title">' + esc(c.nom || c.code_client) +
+          ' <span class="badge ' + esc(c.statut || 'actif') + '">' + esc(c.statut || 'actif') + '</span></div>' +
+        '<div class="meta-row">' +
+          '<span class="amount">' + fmtF(c.solde) + '</span>' +
+          '<span>' + esc(c.code_client) + '</span>' +
+          (c.cotisation_cible ? '<span>cible ' + fmtF(c.cotisation_cible) + '</span>' : '') +
+        '</div></div>';
+    }).join('');
+  }
+
+  function renderDetail(){
+    if(!detail){
+      $('detailEmpty').style.display = 'block';
+      $('detailBody').style.display = 'none';
+      return;
+    }
+    $('detailEmpty').style.display = 'none';
+    $('detailBody').style.display = 'block';
+    const nom = (detail.client && detail.client.nom) || detail.client.code;
+    $('detailTitre').textContent = nom;
+    $('detailMeta').textContent = detail.client.code;
+    $('detailSolde').textContent = fmtF(detail.solde);
+    $('detailStats').innerHTML =
+      '<span>Dépôts : <strong class="amount">' + fmtF(detail.depots) + '</strong></span>' +
+      '<span>Retraits : <strong class="amount">' + fmtF(detail.retraits) + '</strong></span>';
+
+    const obj = detail.compte && detail.compte.objectif;
+    if(obj && obj > 0){
+      $('detailObjectif').style.display = 'block';
+      const pct = Math.min(100, Math.round(detail.solde / obj * 100));
+      $('objBar').style.width = pct + '%';
+      $('objTxt').textContent = pct + ' % · objectif ' + fmtF(obj);
+    } else {
+      $('detailObjectif').style.display = 'none';
+    }
+
+    const mvts = detail.mouvements || [];
+    $('mvtEmpty').style.display = mvts.length ? 'none' : 'block';
+    $('mvtBody').innerHTML = mvts.map(function(m){
+      const signe = m.type === 'depot' ? '+' : '−';
+      return '<tr>' +
+        '<td>' + esc(jjmm(m.date_mvt)) + '</td>' +
+        '<td><span class="badge ' + esc(m.type) + '">' + (m.type === 'depot' ? 'Dépôt' : 'Retrait') + '</span></td>' +
+        '<td class="amount">' + signe + ' ' + fmtF(m.montant) + '</td>' +
+        '<td>' + esc(MOYENS[m.moyen] || m.moyen || '—') + (m.motif ? '<div style="font-size:11.5px;color:var(--ink-faint);">' + esc(m.motif) + '</div>' : '') + '</td>' +
+        '<td><button type="button" class="btn sm danger" data-del-mvt="' + m.id + '" title="Annuler ce mouvement">×</button></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function chargerListe(){
+    const q = ($('searchInput').value || '').trim();
+    const url = '/api/tontine' + (q ? ('?q=' + encodeURIComponent(q)) : '');
+    return api(url).then(function(d){
+      comptes = d.comptes || [];
+      const t = d.totaux || {};
+      $('kpiSolde').textContent = fmtF(t.solde);
+      $('kpiDepots').textContent = fmtF(t.depots);
+      $('kpiRetraits').textContent = fmtF(t.retraits);
+      renderListe();
+    }).catch(function(err){
+      $('listeEmpty').style.display = 'block';
+      $('listeEmpty').textContent = err.message || 'Erreur de chargement.';
+    });
+  }
+
+  function chargerDetail(code){
+    selectedCode = code;
+    renderListe();
+    return api('/api/tontine/' + encodeURIComponent(code)).then(function(d){
+      detail = d;
+      renderDetail();
+    }).catch(function(err){
+      detail = null;
+      renderDetail();
+      toast(err.message);
+    });
+  }
+
+  $('searchInput').addEventListener('input', function(){ renderListe(); });
+  $('listeComptes').addEventListener('click', function(e){
+    const card = e.target.closest('[data-code]');
+    if(!card) return;
+    chargerDetail(card.getAttribute('data-code'));
+  });
+
+  $('btnOuvrirCompte').addEventListener('click', function(){
+    $('cptCode').value = '';
+    $('cptCible').value = '';
+    $('cptFreq').value = '';
+    $('cptObjectif').value = '';
+    $('cptNotes').value = '';
+    openModal('modalCompte');
+  });
+
+  $('btnSauverCompte').addEventListener('click', function(){
+    const body = {
+      code_client: $('cptCode').value.trim(),
+      cotisation_cible: $('cptCible').value !== '' ? Number($('cptCible').value) : null,
+      frequence: $('cptFreq').value || null,
+      objectif: $('cptObjectif').value !== '' ? Number($('cptObjectif').value) : null,
+      notes: $('cptNotes').value.trim() || null
+    };
+    $('btnSauverCompte').disabled = true;
+    api('/api/tontine', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
+      .then(function(r){
+        closeModal('modalCompte');
+        toast(r.action === 'maj' ? 'Compte mis à jour.' : 'Compte ouvert pour ' + (r.nom || r.code) + '.');
+        return chargerListe().then(function(){ return chargerDetail(r.code); });
+      })
+      .catch(function(err){ toast(err.message); })
+      .finally(function(){ $('btnSauverCompte').disabled = false; });
+  });
+
+  function ouvrirMvt(type){
+    if(!selectedCode || !detail) return;
+    mvtType = type;
+    $('mvtTitre').textContent = type === 'depot' ? 'Dépôt personnel' : 'Retrait personnel';
+    $('mvtHint').textContent = type === 'depot'
+      ? (detail.client.nom || selectedCode) + ' verse son argent. Solde actuel : ' + fmtF(detail.solde)
+      : (detail.client.nom || selectedCode) + ' récupère son argent. Disponible : ' + fmtF(detail.solde);
+    $('mvtMontant').value = (detail.compte && detail.compte.cotisation_cible) ? detail.compte.cotisation_cible : '';
+    $('mvtDate').value = new Date().toISOString().slice(0,10);
+    $('mvtMoyen').value = 'especes';
+    $('mvtMomo').value = '';
+    $('mvtMotif').value = '';
+    openModal('modalMvt');
+  }
+  $('btnDepot').addEventListener('click', function(){ ouvrirMvt('depot'); });
+  $('btnRetrait').addEventListener('click', function(){ ouvrirMvt('retrait'); });
+
+  $('btnSauverMvt').addEventListener('click', function(){
+    if(!selectedCode) return;
+    const body = {
+      type: mvtType,
+      montant: Number($('mvtMontant').value),
+      date: $('mvtDate').value,
+      moyen: $('mvtMoyen').value,
+      numero_momo: $('mvtMomo').value.trim() || undefined,
+      motif: $('mvtMotif').value.trim() || undefined
+    };
+    $('btnSauverMvt').disabled = true;
+    api('/api/tontine/' + encodeURIComponent(selectedCode) + '/mouvements', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    })
+      .then(function(r){
+        closeModal('modalMvt');
+        toast(r.message || 'Mouvement enregistré.');
+        return chargerDetail(selectedCode).then(chargerListe);
+      })
+      .catch(function(err){ toast(err.message); })
+      .finally(function(){ $('btnSauverMvt').disabled = false; });
+  });
+
+  $('mvtBody').addEventListener('click', function(e){
+    const b = e.target.closest('[data-del-mvt]');
+    if(!b) return;
+    if(!confirm('Annuler ce mouvement ? Le solde sera recalculé.')) return;
+    api('/api/tontine/mouvements/' + b.getAttribute('data-del-mvt'), { method:'DELETE' })
+      .then(function(){
+        toast('Mouvement annulé.');
+        return chargerDetail(selectedCode).then(chargerListe);
+      })
+      .catch(function(err){ toast(err.message); });
+  });
+
+  chargerListe();
+})();
+</script>
+</body>
+</html>
