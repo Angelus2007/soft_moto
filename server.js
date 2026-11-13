@@ -1606,6 +1606,208 @@ app.get('/api/collectes', exigerRole('admin'), h(async (req, res) => {
 }));
 
 /* ------------------------------------------------------------------ */
+/* Tontine personnelle : chacun verse et suit SON propre argent        */
+/* Solde = somme des dépôts − somme des retraits                       */
+/* ------------------------------------------------------------------ */
+
+async function tontineSolde(code) {
+  const r = await db.get(
+    `SELECT
+       COALESCE(SUM(CASE WHEN type = 'depot' THEN montant ELSE 0 END), 0) AS depots,
+       COALESCE(SUM(CASE WHEN type = 'retrait' THEN montant ELSE 0 END), 0) AS retraits
+     FROM tontine_mouvements WHERE code_client = ?`,
+    [code]
+  );
+  return {
+    depots: r.depots || 0,
+    retraits: r.retraits || 0,
+    solde: (r.depots || 0) - (r.retraits || 0)
+  };
+}
+
+app.get('/api/tontine', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const q = texte(req.query.q, 80).toLowerCase();
+  const comptes = await db.all(
+    `SELECT tc.*, c.nom, c.telephone, c.statut AS client_statut
+     FROM tontine_comptes tc
+     LEFT JOIN clients c ON c.code = tc.code_client
+     ORDER BY tc.cree_le DESC`
+  );
+  const out = [];
+  for (const tc of comptes) {
+    const s = await tontineSolde(tc.code_client);
+    if (q) {
+      const hay = ((tc.nom || '') + ' ' + (tc.code_client || '') + ' ' + (tc.telephone || '')).toLowerCase();
+      if (!hay.includes(q)) continue;
+    }
+    out.push({ ...tc, ...s });
+  }
+  // Totaux globaux
+  const tot = await db.get(
+    `SELECT
+       COALESCE(SUM(CASE WHEN type = 'depot' THEN montant ELSE 0 END), 0) AS depots,
+       COALESCE(SUM(CASE WHEN type = 'retrait' THEN montant ELSE 0 END), 0) AS retraits
+     FROM tontine_mouvements`
+  );
+  res.json({
+    comptes: out,
+    totaux: {
+      depots: tot.depots || 0,
+      retraits: tot.retraits || 0,
+      solde: (tot.depots || 0) - (tot.retraits || 0),
+      nb_comptes: out.length
+    }
+  });
+}));
+
+app.get('/api/tontine/:code', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const code = String(req.params.code || '').toUpperCase();
+  const client = await db.get('SELECT code, nom, telephone, statut FROM clients WHERE code = ?', [code]);
+  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  let compte = await db.get('SELECT * FROM tontine_comptes WHERE code_client = ?', [code]);
+  const solde = await tontineSolde(code);
+  const mouvements = await db.all(
+    `SELECT * FROM tontine_mouvements WHERE code_client = ? ORDER BY date_mvt DESC, id DESC LIMIT 200`,
+    [code]
+  );
+  res.json({
+    client,
+    compte: compte || null,
+    ...solde,
+    mouvements
+  });
+}));
+
+/** Ouvre (ou met à jour) le compte tontine personnel d’un conducteur. */
+app.post('/api/tontine', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const code = texte(req.body.code_client, 20).toUpperCase();
+  if (!code) return res.status(400).json({ erreur: 'Code conducteur obligatoire.' });
+  const client = await db.get('SELECT code, nom, statut FROM clients WHERE code = ?', [code]);
+  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  if (client.statut === 'suspendu') return res.status(409).json({ erreur: 'Ce conducteur est suspendu.' });
+
+  const objectif = req.body.objectif != null && req.body.objectif !== ''
+    ? Math.round(Number(req.body.objectif)) : null;
+  const cotisation_cible = req.body.cotisation_cible != null && req.body.cotisation_cible !== ''
+    ? Math.round(Number(req.body.cotisation_cible)) : null;
+  const frequence = ['jour', 'semaine', 'mois'].includes(req.body.frequence) ? req.body.frequence : null;
+  const notes = texte(req.body.notes, 500) || null;
+
+  if (objectif != null && (!Number.isFinite(objectif) || objectif < 0)) {
+    return res.status(400).json({ erreur: 'Objectif invalide.' });
+  }
+  if (cotisation_cible != null && (!Number.isFinite(cotisation_cible) || cotisation_cible < 0)) {
+    return res.status(400).json({ erreur: 'Cotisation cible invalide.' });
+  }
+
+  const exist = await db.get('SELECT id FROM tontine_comptes WHERE code_client = ?', [code]);
+  if (exist) {
+    await db.run(
+      `UPDATE tontine_comptes SET objectif = ?, cotisation_cible = ?, frequence = ?, notes = ?, statut = 'actif'
+       WHERE code_client = ?`,
+      [objectif, cotisation_cible, frequence, notes, code]
+    );
+    return res.json({ ok: true, action: 'maj', code, nom: client.nom });
+  }
+  await db.run(
+    `INSERT INTO tontine_comptes (code_client, objectif, cotisation_cible, frequence, statut, notes, compte_id, cree_le)
+     VALUES (?, ?, ?, ?, 'actif', ?, ?, ?)`,
+    [code, objectif, cotisation_cible, frequence, notes, req.user.id, now()]
+  );
+  res.status(201).json({ ok: true, action: 'cree', code, nom: client.nom });
+}));
+
+app.patch('/api/tontine/:code', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const code = String(req.params.code || '').toUpperCase();
+  const compte = await db.get('SELECT * FROM tontine_comptes WHERE code_client = ?', [code]);
+  if (!compte) return res.status(404).json({ erreur: 'Compte tontine introuvable. Ouvrez d’abord le compte.' });
+
+  const objectif = req.body.objectif !== undefined
+    ? (req.body.objectif === null || req.body.objectif === '' ? null : Math.round(Number(req.body.objectif)))
+    : compte.objectif;
+  const cotisation_cible = req.body.cotisation_cible !== undefined
+    ? (req.body.cotisation_cible === null || req.body.cotisation_cible === '' ? null : Math.round(Number(req.body.cotisation_cible)))
+    : compte.cotisation_cible;
+  const frequence = req.body.frequence !== undefined
+    ? (['jour', 'semaine', 'mois'].includes(req.body.frequence) ? req.body.frequence : null)
+    : compte.frequence;
+  const statut = ['actif', 'cloture', 'suspendu'].includes(req.body.statut) ? req.body.statut : compte.statut;
+  const notes = req.body.notes !== undefined ? (texte(req.body.notes, 500) || null) : compte.notes;
+
+  await db.run(
+    `UPDATE tontine_comptes SET objectif = ?, cotisation_cible = ?, frequence = ?, statut = ?, notes = ?
+     WHERE code_client = ?`,
+    [objectif, cotisation_cible, frequence, statut, notes, code]
+  );
+  res.json({ ok: true });
+}));
+
+/** Dépôt (la personne verse SON argent) ou retrait (elle récupère SON argent). */
+app.post('/api/tontine/:code/mouvements', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const code = String(req.params.code || '').toUpperCase();
+  const client = await db.get('SELECT code, nom, statut FROM clients WHERE code = ?', [code]);
+  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+
+  // Ouvre automatiquement le compte s’il n’existe pas encore
+  let compte = await db.get('SELECT * FROM tontine_comptes WHERE code_client = ?', [code]);
+  if (!compte) {
+    await db.run(
+      `INSERT INTO tontine_comptes (code_client, statut, compte_id, cree_le) VALUES (?, 'actif', ?, ?)`,
+      [code, req.user.id, now()]
+    );
+    compte = await db.get('SELECT * FROM tontine_comptes WHERE code_client = ?', [code]);
+  }
+  if (compte.statut === 'cloture') {
+    return res.status(409).json({ erreur: 'Ce compte tontine est clôturé.' });
+  }
+
+  const type = req.body.type === 'retrait' ? 'retrait' : 'depot';
+  const montant = Math.round(Number(req.body.montant));
+  if (!Number.isFinite(montant) || montant <= 0 || montant > 10000000) {
+    return res.status(400).json({ erreur: 'Montant invalide.' });
+  }
+  const moyen = ['especes', 'momo', 'momo_regulateur'].includes(req.body.moyen) ? req.body.moyen : 'especes';
+  const numero_momo = texte(req.body.numero_momo, 30) || null;
+  const motif = texte(req.body.motif, 200) || null;
+  const date_mvt = texte(req.body.date, 10) || jourLocal(new Date());
+  if (!dateValide(date_mvt)) return res.status(400).json({ erreur: 'Date invalide.' });
+
+  if (type === 'retrait') {
+    const s = await tontineSolde(code);
+    if (montant > s.solde) {
+      return res.status(400).json({
+        erreur: 'Solde insuffisant. Disponible : ' + s.solde + ' F (dépôts ' + s.depots + ' − retraits ' + s.retraits + ').'
+      });
+    }
+  }
+
+  await db.run(
+    `INSERT INTO tontine_mouvements (code_client, type, montant, moyen, numero_momo, motif, compte_id, date_mvt, cree_le)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [code, type, montant, moyen, numero_momo, motif, req.user.id, date_mvt, now()]
+  );
+  const solde = await tontineSolde(code);
+  res.status(201).json({
+    ok: true,
+    type,
+    montant,
+    ...solde,
+    message: type === 'depot'
+      ? 'Dépôt de ' + montant + ' F enregistré. Nouveau solde : ' + solde.solde + ' F.'
+      : 'Retrait de ' + montant + ' F enregistré. Nouveau solde : ' + solde.solde + ' F.'
+  });
+}));
+
+app.delete('/api/tontine/mouvements/:id', exigerRole('admin'), h(async (req, res) => {
+  const id = Number(req.params.id);
+  const m = await db.get('SELECT * FROM tontine_mouvements WHERE id = ?', [id]);
+  if (!m) return res.status(404).json({ erreur: 'Mouvement introuvable.' });
+  await db.run('DELETE FROM tontine_mouvements WHERE id = ?', [id]);
+  const solde = await tontineSolde(m.code_client);
+  res.json({ ok: true, code_client: m.code_client, ...solde });
+}));
+
+/* ------------------------------------------------------------------ */
 /* Pages statiques (uniquement le dossier public/) et erreurs          */
 /* ------------------------------------------------------------------ */
 // Contrôle de santé pour Render (sans connexion requise) : le site répond et la base aussi.
