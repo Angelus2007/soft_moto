@@ -436,7 +436,7 @@
 
         const compte = data.compte;
         let destination = 'login.html';
-        if (compte.role === 'admin') destination = 'admin.html';
+        if (compte.role === 'admin') destination = 'espace.html'; // choix : Soft Moto ou Tontine
         else if (compte.role === 'caissiere') destination = 'caissiere.html?email=' + encodeURIComponent(compte.email) + '&name=' + encodeURIComponent(compte.nom);
 
         setTimeout(function(){ if(window.smGo) window.smGo(destination); else window.location.href = destination; }, 900);
