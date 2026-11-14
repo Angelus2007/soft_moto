@@ -1917,7 +1917,9 @@ app.use((err, req, res, next) => {
   if (/tontine_/i.test(String(err && err.message)) && /does not exist|no such (table|column)/i.test(String(err && err.message))) {
     return res.status(500).json({ erreur: "La base de données de la tontine n'est pas à jour : redéployez server.js puis redémarrez le serveur." });
   }
-  res.status(500).json({ erreur: 'Erreur interne du serveur.' });
+  // Espace Tontine (réservé à l'administrateur) : on joint le détail technique pour pouvoir diagnostiquer un problème de base de données.
+  const detail = /^\/api\/tontine/.test(req.path || '') ? String((err && err.message) || err).slice(0, 300) : null;
+  res.status(500).json(detail ? { erreur: 'Erreur interne du serveur.', detail } : { erreur: 'Erreur interne du serveur.' });
 });
 
 let serveur = null;
