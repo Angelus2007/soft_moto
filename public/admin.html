@@ -514,6 +514,10 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         Paramètres
       </a>
+      <a href="espace.html">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        Changer d'espace
+      </a>
     </nav>
 
     <div class="sidebar-spacer"></div>
@@ -744,28 +748,16 @@
   }
 
   function renderCollectes(){
-    const searchEl = $('searchInput');
-    const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
-    // Recherche par nom ou code (insensible à la casse, tolère accents absents côté données)
-    const ok = function(x){
-      if (!q) return true;
-      const n = String(x.nom || '').toLowerCase();
-      const c = String(x.code || '').toLowerCase();
-      return n.indexOf(q) !== -1 || c.indexOf(q) !== -1;
-    };
-    const payes = jourDuJour.payes || [];
+    const q = $('searchInput').value.trim().toLowerCase();
+    const ok = function(x){ return x.nom.toLowerCase().includes(q) || x.code.toLowerCase().includes(q); };
+    const payes = jourDuJour.payes;
     const impayes = collectes.filter(function(c){ return c.statut !== 'paye' && !c.sursis; });
     const attente = collectes.filter(function(c){ return c.statut !== 'paye' && c.sursis; }); // visiteurs en sursis (13 premiers jours)
 
-    // Pendant une recherche, on affiche tous les résultats correspondants (pas seulement l'onglet actif)
-    const modeAffiche = q ? 'tous' : modeJour;
-
     $('collectesChips').querySelectorAll('button').forEach(function(b){
-      const m = b.dataset.mode;
-      const base = m === 'payes' ? payes : m === 'impayes' ? impayes : payes.concat(impayes, attente);
-      const n = q ? base.filter(ok).length : base.length;
+      const m = b.dataset.mode, n = m === 'payes' ? payes.length : m === 'impayes' ? impayes.length : payes.length + impayes.length + attente.length;
       b.textContent = (m === 'payes' ? 'Payés' : m === 'impayes' ? 'Impayés' : 'Tous') + ' (' + n + ')';
-      b.classList.toggle('on', m === (q ? 'tous' : modeJour));
+      b.classList.toggle('on', m === modeJour);
     });
 
     const rowsPayes = payes.filter(ok).map(function(p){
@@ -790,7 +782,7 @@
         '<td><span class="badge ' + b[0] + '">' + b[1] + '</span>' + cumul + '</td></tr>';
     };
     const rowsImpayes = impayes.filter(ok).map(ligneImp), rowsAttente = attente.filter(ok).map(ligneImp);
-    const rows = modeAffiche === 'payes' ? rowsPayes : modeAffiche === 'impayes' ? rowsImpayes : rowsPayes.concat(rowsImpayes, rowsAttente);
+    const rows = modeJour === 'payes' ? rowsPayes : modeJour === 'impayes' ? rowsImpayes : rowsPayes.concat(rowsImpayes, rowsAttente);
     const shown = rows.slice(0, 40);
     $('collectesBody').innerHTML = shown.join('');
 
@@ -876,7 +868,7 @@
   // Vidanges à payer aujourd'hui (14 jours atteints) ou en retard
   api('/api/vidanges/suivi').then(function(d){
     const a = d.compteurs.aujourdhui, r = d.compteurs.retard; if(!a && !r) return;
-    const el = $('noticeVidanges'); if(!el) return; el.style.display = 'block';
+    const el = $('noticeVidanges'); el.style.display = 'block';
     el.textContent = '💧 Vidanges : ' + (a ? a + ' à payer aujourd\'hui' : '') + (a && r ? ' · ' : '') + (r ? r + ' en retard' : '') + '. Ouvrir la page Vidanges →';
   }).catch(function(){});
 
@@ -988,11 +980,7 @@
   load();
   chargerImpayes();
   setInterval(function(){ load(); chargerImpayes(); }, 60000);
-  if ($('searchInput')) {
-    $('searchInput').addEventListener('input', renderCollectes);
-    $('searchInput').addEventListener('keyup', renderCollectes);
-    $('searchInput').addEventListener('search', renderCollectes); // bouton clear sur mobile
-  }
+  $('searchInput').addEventListener('input', renderCollectes);
 })();
 </script>
 
