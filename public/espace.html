@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Choisir un espace – Soft Moto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,450&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-dark:#0B1B33;
+    --bg-dark-2:#16305A;
+    --bg-light:#F1F4F9;
+    --panel:#FFFFFF;
+    --accent:#1D4ED8;
+    --accent-dark:#1E3A8A;
+    --accent-soft:#DBE6FD;
+    --amber:#C77D0A;
+    --amber-soft:#FCEBC8;
+    --ink:#0F172A;
+    --ink-soft:#526074;
+    --ink-faint:#8793A5;
+    --cream:#F1F4F9;
+    --cream-soft:#AEBBD0;
+    --error:#B42318;
+    --error-soft:#FDE7E5;
+    --border:#DDE3EC;
+    --radius:10px;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:"IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; min-height:100%; }
+  body{
+    font-family:'Inter',system-ui,sans-serif; color:#F1F4F9; min-height:100vh;
+    background:radial-gradient(1200px 600px at 20% -10%, #1F3F73 0%, transparent 60%), linear-gradient(160deg, var(--bg-dark) 0%, var(--bg-dark-2) 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 18px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; font-family:'Fraunces',serif; font-size:24px; font-weight:600; margin-bottom:26px; }
+  h1{ font-family:'Fraunces',serif; font-weight:600; font-size:clamp(26px,4vw,36px); margin:0 0 6px; text-align:center; }
+  .sub{ color:#B8C4D8; margin:0 0 30px; text-align:center; font-size:15px; }
+  .cards{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:20px; width:100%; max-width:760px; }
+  .espace{
+    display:flex; flex-direction:column; gap:12px; text-decoration:none; color:#0F172A; background:#fff; border-radius:20px; padding:28px 26px 24px;
+    box-shadow:0 24px 60px -18px rgba(0,0,0,.5); border:2px solid transparent; transition:transform .18s, border-color .18s, box-shadow .18s;
+  }
+  .espace:hover,.espace:focus-visible{ transform:translateY(-4px); border-color:var(--accent); box-shadow:0 30px 70px -18px rgba(0,0,0,.6); outline:none; }
+  .ico{ width:54px; height:54px; border-radius:15px; display:flex; align-items:center; justify-content:center; background:#E8EEFB; color:var(--accent); }
+  .espace.tontine .ico{ background:#FEF3E2; color:#B45309; }
+  .espace h2{ font-family:'Fraunces',serif; font-size:24px; margin:4px 0 0; }
+  .espace p{ margin:0; color:#475569; font-size:14px; line-height:1.5; }
+  .espace .go{ margin-top:auto; padding-top:8px; font-weight:600; font-size:14px; color:var(--accent); }
+  .espace.tontine .go{ color:#B45309; }
+  .note{ color:#8FA0BC; font-size:12.5px; margin:22px 0 0; text-align:center; max-width:560px; line-height:1.5; }
+  .out{ margin-top:16px; color:#B8C4D8; font-size:13.5px; text-decoration:underline; }
+  @media(max-width:640px){ .cards{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="9.3" stroke="#F1F4F9" stroke-width="1.3"/><circle cx="11" cy="11" r="2.6" fill="#1D4ED8"/>
+      <line x1="11" y1="2.6" x2="11" y2="6" stroke="#F1F4F9" stroke-width="1.1"/><line x1="11" y1="16" x2="11" y2="19.4" stroke="#F1F4F9" stroke-width="1.1"/>
+      <line x1="2.6" y1="11" x2="6" y2="11" stroke="#F1F4F9" stroke-width="1.1"/><line x1="16" y1="11" x2="19.4" y2="11" stroke="#F1F4F9" stroke-width="1.1"/>
+    </svg>
+    Soft Moto
+  </div>
+  <h1 id="salut">Bienvenue</h1>
+  <p class="sub">Choisissez l'espace dans lequel vous voulez travailler.</p>
+
+  <div class="cards">
+    <a class="espace" href="admin.html" id="goMoto">
+      <span class="ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M8.5 17h5l3-7h-4l-2-3H7"/><path d="M13.5 17l2.5-7"/></svg></span>
+      <h2>Soft Moto</h2>
+      <p>Les conducteurs, les paiements, les vidanges, les contrats, les motos et le financement.</p>
+      <span class="go">Entrer dans Soft Moto →</span>
+    </a>
+    <a class="espace tontine" href="tontine.html" id="goTontine">
+      <span class="ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/><path d="M13 13.5l1.5 1.5 3-3"/></svg></span>
+      <h2>Tontine</h2>
+      <p>L'épargne personnelle : chaque personne verse son propre argent, case après case, et le récupère à la fin du cycle.</p>
+      <span class="go">Entrer dans la Tontine →</span>
+    </a>
+  </div>
+  <p class="note">Les deux espaces sont séparés : leurs données ne se mélangent pas. Vous pouvez changer d'espace à tout moment depuis le menu.</p>
+  <a class="out" id="logoutLink" href="login.html">Se déconnecter</a>
+
+<script src="serveur-check.js"></script>
+<script src="theme.js"></script>
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  fetch('/api/moi').then(function(r){
+    if(r.status === 401){ window.location.href = 'login.html'; throw new Error('session'); }
+    return r.json();
+  }).then(function(moi){
+    // Les caissières n'ont qu'un espace : leur page de paiements
+    if(moi.role !== 'admin'){ window.location.href = moi.role === 'caissiere' ? 'caissiere.html' : 'login.html'; return; }
+    $('salut').textContent = 'Bonjour, ' + (moi.nom || '').split(' ')[0];
+  }).catch(function(){});
+  $('logoutLink').addEventListener('click', function(e){
+    e.preventDefault();
+    fetch('/api/deconnexion', { method: 'POST' }).finally(function(){ window.location.href = 'login.html'; });
+  });
+})();
+</script>
+</body>
+</html>
