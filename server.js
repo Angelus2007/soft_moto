@@ -1217,6 +1217,18 @@ CREATE TABLE IF NOT EXISTS tontine_versements (
 CREATE INDEX IF NOT EXISTS idx_tontine_versements ON tontine_versements (tontine_id);
 `);
   for (const [table, cols] of Object.entries(COLONNES_TONTINE)) for (const [col, def] of cols) await db.ajouterColonne(table, col, def);
+  // Ancienne version : colonne code_client NOT NULL (lien avec Soft Moto). La tontine est désormais autonome.
+  // On retire la contrainte pour que les INSERT actuels (sans code_client) fonctionnent sur une base déjà déployée.
+  try {
+    if (db.dialect === 'postgres') {
+      await db.exec('ALTER TABLE tontine_comptes ALTER COLUMN code_client DROP NOT NULL');
+    } else if (db.dialect === 'sqlite') {
+      // SQLite ne permet pas facilement de retirer NOT NULL : on s'assure qu'une valeur par défaut existe.
+      await db.exec("UPDATE tontine_comptes SET code_client = '' WHERE code_client IS NULL");
+    }
+  } catch (e) {
+    // Colonne absente ou déjà nullable : rien à faire
+  }
 }
 
 const FREQ_TONTINE = ['jour', 'semaine', 'mois'];
