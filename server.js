@@ -624,6 +624,27 @@ app.patch('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
   res.json(avecCible(await db.get(`SELECT ${COLS_CLIENT} FROM clients WHERE id = ?`, [existant.id])));
 }));
 
+// Suppression DÉFINITIVE d'un conducteur archivé (administrateur). Seuls les conducteurs suspendus (archivés) peuvent être supprimés, et
+// il faut confirmer en renvoyant son code (?confirmer=CODE). On efface sa fiche (signatures comprises), ses paiements, ses vidanges et ses
+// observations ; les notes et demandes qui le mentionnaient gardent leur texte mais perdent le lien. Le journal des versements (comptabilité
+// des encaissements passés) est conservé sous un code « SUPPRIME-… » : les totaux des jours passés ne changent pas et un nouveau conducteur
+// qui réutiliserait le même code ne récupère rien de l'ancien.
+app.delete('/api/clients/:id', exigerRole('admin'), h(async (req, res) => {
+  const c = await db.get('SELECT id, code, nom, statut FROM clients WHERE id = ?', [idParam(req.params.id)]);
+  if (!c) return res.status(404).json({ erreur: 'Conducteur introuvable.' });
+  if (c.statut !== 'suspendu') return res.status(409).json({ erreur: "Seul un conducteur archivé (suspendu) peut être supprimé. Archivez-le d'abord." });
+  if (texte(req.query.confirmer, 20).toUpperCase() !== String(c.code).toUpperCase()) return res.status(400).json({ erreur: 'Confirmation manquante : tapez le code du conducteur pour le supprimer.' });
+  const efface = {};
+  await db.tx(async (tx) => {
+    for (const t of ['paiements', 'vidange_paiements', 'vidanges', 'observations']) efface[t] = (await tx.run(`DELETE FROM ${t} WHERE code_client = ?`, [c.code])).changes;
+    await tx.run('UPDATE notes SET code_client = NULL WHERE code_client = ?', [c.code]);
+    await tx.run('UPDATE demandes SET code_client = NULL WHERE code_client = ?', [c.code]);
+    await tx.run('UPDATE versements SET code_client = ? WHERE code_client = ?', ['SUPPRIME-' + c.code, c.code]);
+    await tx.run('DELETE FROM clients WHERE id = ?', [c.id]);
+  });
+  res.json({ supprime: true, code: c.code, nom: c.nom, efface });
+}));
+
 // Archives : conducteurs suspendus, avec ce qu'ils ont versé.
 app.get('/api/archives', exigerRole('admin'), h(async (req, res) => {
   res.json(await db.all(`SELECT c.id, c.code, c.nom, c.telephone, c.adresse, c.immatriculation, c.marque, c.etat_moto, c.date_creation, c.date_archivage,
@@ -698,8 +719,8 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
               SET paye = excluded.paye, montant = excluded.montant, compte_id = excluded.compte_id, maj_le = excluded.maj_le, moyen = excluded.moyen, regle_le = excluded.regle_le, numero_momo = excluded.numero_momo`,
       [c, d, paye, m, req.user.id, now(), moy, regle, num]);
     const journal = (jourConcerne, mt, moy, num) => tx.run(
-      'INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo, lot) VALUES (?,?,?,?,?,?,?,?,?)',
-      [code, jourSaisie, jourConcerne, mt, moy, req.user.id, now(), num, lot]);
+      'INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo, lot, jour_origine) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      [code, jourSaisie, jourConcerne, mt, moy, req.user.id, now(), num, lot, date]);
 
     let garde = montant; // ce qui reste inscrit sur le jour saisi
     const surplus = montant - cible;
@@ -800,11 +821,85 @@ app.post('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) 
   res.json({ ...paiement, paye: periodeInfo ? periodeInfo.complete : !!paiement.paye, cible: periodeInfo ? periodeInfo.cible : cible, frequence: freq, periode: periodeInfo, reporte, avance, ajustements, avances });
 }));
 
-// Annule le paiement d'un jour EN ENTIER : le montant du jour, et aussi les surplus que cette saisie a répartis sur d'autres jours
-// (jours antérieurs comblés ou jours payés d'avance). Exemple : 5 200 F saisis pour 2 jours de 2 600 F => les 2 jours redeviennent non payés.
-// Chaque saisie est repérée par son « lot » dans le journal des versements ; les anciennes saisies (sans lot) sont regroupées par
-// compte et par heure (quelques secondes). L'opération reste tracée par des lignes négatives (au nom de la personne qui annule).
-// L'administrateur peut tout annuler ; une caissière seulement les paiements saisis aujourd'hui.
+/* ------------------------------------------------------------------ */
+/* Annulation d'un paiement : le jour demandé ET tous les jours que ce paiement a remplis (surplus) */
+/* ------------------------------------------------------------------ */
+// Quand une personne paie plus que le montant du jour (ex. 5 200 F pour 2 jours de 2 600 F), le surplus remplit d'autres jours
+// (arriérés ou jours d'avance). Annuler le paiement remet TOUS ces jours en « non payé » automatiquement : personne n'a à les décocher un par un.
+// Les jours liés à un paiement sont retrouvés de trois façons, qui se complètent :
+//  1. le marqueur « regle_le » : chaque jour rempli par un surplus garde la date du paiement qui l'a réglé (marche aussi pour les anciens paiements) ;
+//  2. le journal des versements : chaque saisie a un « lot » et un « jour_origine » (les jours remplis, même partiellement, y figurent) ;
+//  3. pour les très anciennes lignes sans lot : les lignes du même compte créées à quelques secondes d'écart.
+// Annuler un jour rempli par surplus annule aussi le paiement qui l'a rempli (et donc ses autres jours).
+async function planifierAnnulation(q, code, date, cible) {
+  const p = await q.get('SELECT montant, moyen, numero_momo, maj_le, regle_le FROM paiements WHERE code_client = ? AND date = ?', [code, date]);
+  if (!p) throw new ErreurHttp(404, 'Aucun paiement enregistré à cette date.');
+  const pivots = new Set([date]);
+  if (p.regle_le && p.regle_le !== date) pivots.add(p.regle_le);
+
+  const COLS_V = 'id, lot, compte_id, cree_le, jour_saisie, jour_concerne, jour_origine, montant, moyen, numero_momo';
+  const lignes = new Map();
+  let anciens = null; // lignes sans lot (chargées seulement si nécessaire)
+  for (const P of pivots) {
+    const base = await q.all(`SELECT ${COLS_V} FROM versements WHERE code_client = ? AND montant > 0 AND annule = 0 AND (jour_concerne = ? OR jour_origine = ?)`, [code, P, P]);
+    for (const r of base) {
+      lignes.set(r.id, r);
+      if (r.lot) {
+        (await q.all(`SELECT ${COLS_V} FROM versements WHERE code_client = ? AND lot = ? AND montant > 0 AND annule = 0`, [code, r.lot])).forEach((x) => lignes.set(x.id, x));
+      } else {
+        if (anciens === null) anciens = await q.all(`SELECT ${COLS_V} FROM versements WHERE code_client = ? AND lot IS NULL AND montant > 0 AND annule = 0`, [code]);
+        anciens.filter((x) => String(x.compte_id) === String(r.compte_id) && Math.abs(new Date(x.cree_le) - new Date(r.cree_le)) <= 5000).forEach((x) => lignes.set(x.id, x));
+      }
+    }
+  }
+  // Jours remplis par le surplus d'un de ces paiements (marqueur regle_le), qu'ils soient ou non dans le journal
+  const remplis = new Map();
+  for (const P of pivots) {
+    (await q.all('SELECT date, montant, maj_le FROM paiements WHERE code_client = ? AND regle_le = ? AND date <> ?', [code, P, P])).forEach((r) => remplis.set(r.date, r));
+  }
+
+  const parJour = new Map();
+  for (const r of lignes.values()) { if (!parJour.has(r.jour_concerne)) parJour.set(r.jour_concerne, []); parJour.get(r.jour_concerne).push(r); }
+  const dates = new Set([...parJour.keys(), ...remplis.keys(), ...pivots]);
+  const jours = [];
+  for (const k of [...dates].sort()) {
+    const cur = await q.get('SELECT montant, moyen, numero_momo, regle_le, maj_le FROM paiements WHERE code_client = ? AND date = ?', [code, k]);
+    if (!cur) continue;
+    const rows = parJour.get(k) || [];
+    let reste = cur.montant;
+    const retraits = [];
+    for (const r of rows) {
+      const retire = Math.min(r.montant, reste);
+      if (retire > 0) { retraits.push({ montant: retire, moyen: r.moyen, numero: r.numero_momo }); reste -= retire; }
+    }
+    // Jour du paiement annulé, ou jour marqué « réglé par ce paiement » mais sans trace dans le journal : vidé complètement
+    if ((pivots.has(k) || (remplis.has(k) && !rows.length)) && reste > 0) { retraits.push({ montant: reste, moyen: cur.moyen, numero: cur.numero_momo }); reste = 0; }
+    jours.push({ date: k, avant: cur.montant, retire: cur.montant - reste, reste, retraits, cur, sansJournal: remplis.has(k) && !rows.length });
+  }
+  return { p, jours, lignes: [...lignes.values()] };
+}
+const decisionAnnulation = (plan, user, aujourdhui) => {
+  if (user.role === 'admin') return { ok: true };
+  const tousAujourdhui = plan.lignes.every((r) => r.jour_saisie === aujourdhui)
+    && plan.jours.filter((j) => j.sansJournal).every((j) => jourLocal(new Date(j.cur.maj_le)) === aujourdhui)
+    && jourLocal(new Date(plan.p.maj_le)) === aujourdhui;
+  return tousAujourdhui ? { ok: true } : { ok: false, message: "Ce paiement (ou une partie des jours qu'il a remplis) a été enregistré un autre jour : seul l'administrateur peut l'annuler." };
+};
+
+// Aperçu : quels jours seront annulés (pour l'afficher avant de confirmer)
+app.get('/api/paiements/annulation', exigerRole('admin', 'caissiere'), h(async (req, res) => {
+  const code = texte(req.query.code_client, 20).toUpperCase();
+  const date = texte(req.query.date, 10);
+  if (!dateValide(date)) return res.status(400).json({ erreur: 'date doit être au format AAAA-MM-JJ.' });
+  const client = await db.get('SELECT statut, montant_journalier, frequence FROM clients WHERE code = ?', [code]);
+  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
+  const plan = await planifierAnnulation(db, code, date, cibleJourniere(client));
+  const d = decisionAnnulation(plan, req.user, jourLocal(new Date()));
+  const touches = plan.jours.filter((j) => j.retire > 0 || j.reste === 0);
+  res.json({ date, autorise: d.ok, message: d.message || null, montant: touches.reduce((t, j) => t + j.retire, 0),
+    jours: touches.map((j) => ({ date: j.date, retire: j.retire, supprime: j.reste === 0 })) });
+}));
+
 app.delete('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res) => {
   const code = texte(req.query.code_client, 20).toUpperCase();
   const date = texte(req.query.date, 10);
@@ -819,57 +914,25 @@ app.delete('/api/paiements', exigerRole('admin', 'caissiere'), h(async (req, res
 
   await db.tx(async (tx) => {
     await tx.lock('clients', 'code', code);
-    const p = await tx.get('SELECT montant, moyen, numero_momo, maj_le FROM paiements WHERE code_client = ? AND date = ?', [code, date]);
-    if (!p) throw new ErreurHttp(404, 'Aucun paiement enregistré à cette date.');
-
-    // Versements qui ont alimenté ce jour + tout ce que leurs saisies ont réparti ailleurs
-    const COLS_V = 'id, lot, compte_id, cree_le, jour_saisie, jour_concerne, montant, moyen, numero_momo';
-    const aRetirer = new Map();
-    for (const r of await tx.all(`SELECT ${COLS_V} FROM versements WHERE code_client = ? AND jour_concerne = ? AND montant > 0 AND annule = 0`, [code, date])) {
-      aRetirer.set(r.id, r);
-      let memeSaisie;
-      if (r.lot) memeSaisie = await tx.all(`SELECT ${COLS_V} FROM versements WHERE code_client = ? AND lot = ? AND montant > 0 AND annule = 0`, [code, r.lot]);
-      else {
-        const anciens = await tx.all(`SELECT ${COLS_V} FROM versements WHERE code_client = ? AND lot IS NULL AND montant > 0 AND annule = 0`, [code]);
-        memeSaisie = anciens.filter((x) => String(x.compte_id) === String(r.compte_id) && Math.abs(new Date(x.cree_le) - new Date(r.cree_le)) <= 5000);
-      }
-      memeSaisie.forEach((x) => aRetirer.set(x.id, x));
-    }
-    if (req.user.role !== 'admin') {
-      const tousAujourdhui = [...aRetirer.values()].every((r) => r.jour_saisie === aujourdhui);
-      if (!tousAujourdhui || jourLocal(new Date(p.maj_le)) !== aujourdhui) {
-        throw new ErreurHttp(403, "Ce paiement (ou une partie de ses surplus) a été enregistré un autre jour : seul l'administrateur peut l'annuler.");
-      }
-    }
-
-    const parJour = new Map();
-    for (const r of aRetirer.values()) { if (!parJour.has(r.jour_concerne)) parJour.set(r.jour_concerne, []); parJour.get(r.jour_concerne).push(r); }
-    if (!parJour.has(date)) parJour.set(date, []); // ancien paiement sans journal : on retire quand même le montant du jour
-
+    const plan = await planifierAnnulation(tx, code, date, cible);
+    const d = decisionAnnulation(plan, req.user, aujourdhui);
+    if (!d.ok) throw new ErreurHttp(403, d.message);
     const journalNeg = (jour, montant, moyen, numero) => tx.run(
-      'INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo, annule) VALUES (?,?,?,?,?,?,?,?,1)',
-      [code, aujourdhui, jour, -montant, moyen, req.user.id, now(), numero || null]);
-
-    for (const [k, rows] of parJour) {
-      const cur = await tx.get('SELECT montant, regle_le FROM paiements WHERE code_client = ? AND date = ?', [code, k]);
-      let reste = cur ? cur.montant : 0;
-      for (const r of rows) {
-        const retire = Math.min(r.montant, reste);
-        if (retire > 0) { await journalNeg(k, retire, r.moyen, r.numero_momo); reste -= retire; totalAnnule += retire; }
-      }
-      if (k === date && reste > 0) { await journalNeg(k, reste, p.moyen, p.numero_momo); totalAnnule += reste; reste = 0; } // le jour demandé est vidé complètement
-      if (!cur) continue;
-      if (reste <= 0) {
-        await tx.run('DELETE FROM paiements WHERE code_client = ? AND date = ?', [code, k]);
-        jours.push({ date: k, montant: 0, paye: false, supprime: true });
+      'INSERT INTO versements (code_client, jour_saisie, jour_concerne, montant, moyen, compte_id, cree_le, numero_momo, annule, jour_origine) VALUES (?,?,?,?,?,?,?,?,1,?)',
+      [code, aujourdhui, jour, -montant, moyen, req.user.id, now(), numero || null, date]);
+    for (const j of plan.jours) {
+      for (const t of j.retraits) { await journalNeg(j.date, t.montant, t.moyen, t.numero); totalAnnule += t.montant; }
+      if (j.reste <= 0) {
+        await tx.run('DELETE FROM paiements WHERE code_client = ? AND date = ?', [code, j.date]);
+        jours.push({ date: j.date, montant: 0, paye: false, supprime: true });
       } else {
-        const paye = freq === 'jour' ? reste >= cible : true;
+        const paye = freq === 'jour' ? j.reste >= cible : true;
         await tx.run('UPDATE paiements SET montant = ?, paye = ?, regle_le = ?, maj_le = ?, compte_id = ? WHERE code_client = ? AND date = ?',
-          [reste, paye ? 1 : 0, reste >= cible ? cur.regle_le : null, now(), req.user.id, code, k]);
-        jours.push({ date: k, montant: reste, paye, supprime: false });
+          [j.reste, paye ? 1 : 0, j.reste >= cible ? j.cur.regle_le : null, now(), req.user.id, code, j.date]);
+        jours.push({ date: j.date, montant: j.reste, paye, supprime: false });
       }
     }
-    for (const r of aRetirer.values()) await tx.run('UPDATE versements SET annule = 1 WHERE id = ?', [r.id]);
+    for (const r of plan.lignes) await tx.run('UPDATE versements SET annule = 1 WHERE id = ?', [r.id]);
   });
   jours.sort((a, b) => (a.date < b.date ? -1 : 1));
   res.json({ annule: true, date, montant: totalAnnule, jours });
@@ -1087,30 +1150,6 @@ app.patch('/api/demandes/:id', exigerRole('admin'), h(async (req, res) => {
     if (code && !(await db.get('SELECT 1 FROM clients WHERE code = ?', [code]))) return res.status(400).json({ erreur: 'Aucun conducteur avec ce code.' });
     champs.code_client = code || null;
   }
-  // Modification des informations saisies à la création de la demande
-  if (req.body.nom !== undefined) {
-    const nom = texte(req.body.nom, 100);
-    if (nom.length < 2) return res.status(400).json({ erreur: 'Entrez le nom du demandeur.' });
-    champs.nom = nom;
-  }
-  if (req.body.telephone !== undefined) {
-    const telephone = texte(req.body.telephone, 30);
-    if (!telephone) return res.status(400).json({ erreur: 'Entrez le numéro de téléphone du demandeur.' });
-    champs.telephone = telephone;
-  }
-  if (req.body.adresse !== undefined) champs.adresse = texte(req.body.adresse, 200) || null;
-  if (req.body.type !== undefined) {
-    const type = texte(req.body.type, 10);
-    if (!TYPES_DEMANDE.includes(type)) return res.status(400).json({ erreur: "Choisissez le type de demande (début de contrat ou achat d'une moto)." });
-    champs.type = type;
-  }
-  if (req.body.type_contrat !== undefined) {
-    const typeContrat = texte(req.body.type_contrat, 20) || null;
-    if (typeContrat && !TYPES_CONTRAT.includes(typeContrat)) return res.status(400).json({ erreur: 'Type de contrat invalide.' });
-    champs.type_contrat = typeContrat;
-  }
-  if (req.body.moto_souhaitee !== undefined) champs.moto_souhaitee = texte(req.body.moto_souhaitee, 100) || null;
-  if (req.body.message !== undefined) champs.message = texte(req.body.message, 1000) || null;
   const cles = Object.keys(champs);
   if (!cles.length) return res.status(400).json({ erreur: 'Aucune modification fournie.' });
   await db.run(`UPDATE demandes SET ${cles.map((c) => c + ' = ?').join(', ')} WHERE id = ?`, [...cles.map((c) => champs[c]), d.id]);
@@ -1122,6 +1161,212 @@ app.delete('/api/demandes/:id', exigerRole('admin'), h(async (req, res) => {
   if (!d) return res.status(404).json({ erreur: 'Demande introuvable.' });
   await db.run('DELETE FROM demandes WHERE id = ?', [d.id]);
   res.json({ ok: true });
+}));
+
+/* ------------------------------------------------------------------ */
+/* Tontine personnelle : chaque personne épargne SON argent                */
+/* ------------------------------------------------------------------ */
+// Principe : une personne ouvre une tontine (ex. 500 F par jour pendant 31 jours). Elle verse son propre argent, case après case, à son rythme.
+// À la fin du cycle, elle récupère tout ce qu'elle a versé, moins les frais de gestion (par défaut 1 versement). Un cycle terminé et retiré
+// est clos ; pour continuer, on ouvre un nouveau cycle. La tontine est un ESPACE À PART : ses données (tables tontine_*) ne sont liées ni aux
+// conducteurs, ni aux paiements, ni aux totaux de Soft Moto.
+const FREQ_TONTINE = ['jour', 'semaine', 'mois'];
+const MOYENS_TONTINE = ['especes', 'momo'];
+function ajouterMois(s, n) {
+  const [y, m, d] = s.split('-').map(Number), t = (m - 1) + n;
+  const an = y + Math.floor(t / 12), mo = ((t % 12) + 12) % 12, dernier = new Date(Date.UTC(an, mo + 1, 0)).getUTCDate();
+  return `${an}-${String(mo + 1).padStart(2, '0')}-${String(Math.min(d, dernier)).padStart(2, '0')}`;
+}
+const dateCaseTontine = (c, i) => (c.frequence === 'semaine' ? addJours(c.date_debut, 7 * (i - 1)) : c.frequence === 'mois' ? ajouterMois(c.date_debut, i - 1) : addJours(c.date_debut, i - 1));
+
+// Calculs d'une tontine à partir de ses versements (les versements annulés ne comptent pas)
+function calculerTontine(c, versements, aujourdhui) {
+  const actifs = versements.filter((x) => !x.annule);
+  const total = actifs.reduce((t, x) => t + x.montant, 0);
+  const casesPayees = Math.min(c.nb_cases, Math.floor(total / c.montant));
+  let echues = 0, echuesAvant = 0;
+  for (let i = 1; i <= c.nb_cases; i++) { const d = dateCaseTontine(c, i); if (d <= aujourdhui) echues++; if (d < aujourdhui) echuesAvant++; }
+  const retard = c.statut === 'en_cours' ? Math.max(0, echuesAvant - casesPayees) : 0;
+  const complet = casesPayees >= c.nb_cases;
+  const frais = Math.min(total, (c.frais_cases || 0) * c.montant);
+  const situation = c.statut === 'payee' ? 'payee' : complet ? 'a_payer' : retard > 0 ? 'retard' : (echues - casesPayees > 0 ? 'aujourdhui' : 'a_jour');
+  return {
+    total, cases_payees: casesPayees, reste_partiel: total - casesPayees * c.montant, retard_cases: retard,
+    complet, frais, a_remettre: Math.max(0, total - frais), objectif: c.nb_cases * c.montant,
+    fin_prevue: dateCaseTontine(c, c.nb_cases), situation,
+    verse_aujourdhui: actifs.filter((x) => x.date_versement === aujourdhui).reduce((t, x) => t + x.montant, 0)
+  };
+}
+const COLS_TONTINE = 'id, nom, telephone, montant, frequence, nb_cases, frais_cases, date_debut, note, statut, date_retrait, montant_retire, frais_retenus, retrait_moyen, retrait_compte_id, compte_id, cree_le';
+async function detailTontine(q, id) {
+  const c = await q.get(`SELECT ${COLS_TONTINE} FROM tontine_comptes WHERE id = ?`, [id]);
+  if (!c) return null;
+  const versements = await q.all(`SELECT v.id, v.date_versement, v.montant, v.moyen, v.cree_le, v.annule, v.annule_le, u.nom AS par, a.nom AS annule_par_nom
+    FROM tontine_versements v LEFT JOIN comptes u ON u.id = v.compte_id LEFT JOIN comptes a ON a.id = v.annule_par
+    WHERE v.tontine_id = ? ORDER BY v.date_versement DESC, v.id DESC`, [id]);
+  const aujourdhui = jourLocal(new Date());
+  const calc = calculerTontine(c, versements, aujourdhui);
+  const grille = [];
+  for (let i = 1; i <= c.nb_cases; i++) {
+    const d = dateCaseTontine(c, i);
+    grille.push({ numero: i, date: d, etat: i <= calc.cases_payees ? 'payee' : d < aujourdhui ? 'retard' : d === aujourdhui ? 'aujourdhui' : 'avenir' });
+  }
+  return { ...c, ...calc, grille, versements, aujourdhui };
+}
+
+app.get('/api/tontine', exigerRole('admin'), h(async (req, res) => {
+  const comptes = await db.all(`SELECT ${COLS_TONTINE} FROM tontine_comptes ORDER BY cree_le DESC, id DESC`);
+  const versements = await db.all('SELECT tontine_id, date_versement, montant, annule FROM tontine_versements');
+  const aujourdhui = jourLocal(new Date());
+  const parCompte = new Map();
+  versements.forEach((x) => { if (!parCompte.has(x.tontine_id)) parCompte.set(x.tontine_id, []); parCompte.get(x.tontine_id).push(x); });
+  const liste = comptes.map((c) => ({ ...c, ...calculerTontine(c, parCompte.get(c.id) || [], aujourdhui) }));
+  const enCours = liste.filter((c) => c.statut === 'en_cours');
+  res.json({
+    date: aujourdhui,
+    totaux: {
+      en_cours: enCours.length,
+      en_depot: enCours.reduce((t, c) => t + c.total, 0),
+      a_payer: liste.filter((c) => c.situation === 'a_payer').length,
+      a_remettre: liste.filter((c) => c.situation === 'a_payer').reduce((t, c) => t + c.a_remettre, 0),
+      en_retard: liste.filter((c) => c.situation === 'retard').length,
+      collecte_aujourdhui: liste.reduce((t, c) => t + c.verse_aujourdhui, 0),
+      payees: liste.filter((c) => c.statut === 'payee').length
+    },
+    tontines: liste
+  });
+}));
+
+app.get('/api/tontine/:id', exigerRole('admin'), h(async (req, res) => {
+  const d = await detailTontine(db, idParam(req.params.id));
+  if (!d) return res.status(404).json({ erreur: 'Tontine introuvable.' });
+  res.json(d);
+}));
+
+app.post('/api/tontine', exigerRole('admin'), h(async (req, res) => {
+  const nom = texte(req.body.nom, 100), telephone = texte(req.body.telephone, 30) || null;
+  const montant = Number(req.body.montant), nbCases = Number(req.body.nb_cases), fraisCases = req.body.frais_cases === undefined || req.body.frais_cases === '' ? 1 : Number(req.body.frais_cases);
+  const frequence = texte(req.body.frequence, 10) || 'jour';
+  const debut = texte(req.body.date_debut, 10) || jourLocal(new Date());
+  if (nom.length < 2) return res.status(400).json({ erreur: 'Entrez le nom de la personne.' });
+  if (!Number.isInteger(montant) || montant < 50 || montant > 10000000) return res.status(400).json({ erreur: 'Le montant de chaque versement doit être un nombre entier de F CFA (50 au minimum).' });
+  if (!FREQ_TONTINE.includes(frequence)) return res.status(400).json({ erreur: 'Rythme invalide (jour, semaine ou mois).' });
+  if (!Number.isInteger(nbCases) || nbCases < 1 || nbCases > 366) return res.status(400).json({ erreur: 'Le nombre de cases doit être compris entre 1 et 366.' });
+  if (!Number.isInteger(fraisCases) || fraisCases < 0 || fraisCases > nbCases) return res.status(400).json({ erreur: 'Les frais (en nombre de versements retenus) doivent être compris entre 0 et le nombre de cases.' });
+  if (!dateValide(debut)) return res.status(400).json({ erreur: 'Date de début invalide.' });
+  const id = await db.insertId('INSERT INTO tontine_comptes (nom, telephone, montant, frequence, nb_cases, frais_cases, date_debut, statut, compte_id, cree_le) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [nom, telephone, montant, frequence, nbCases, fraisCases, debut, 'en_cours', req.user.id, now()]);
+  res.status(201).json(await detailTontine(db, id));
+}));
+
+app.patch('/api/tontine/:id', exigerRole('admin'), h(async (req, res) => {
+  const id = idParam(req.params.id);
+  const c = await db.get(`SELECT ${COLS_TONTINE} FROM tontine_comptes WHERE id = ?`, [id]);
+  if (!c) return res.status(404).json({ erreur: 'Tontine introuvable.' });
+  const champs = {};
+  if (req.body.nom !== undefined) { const n = texte(req.body.nom, 100); if (n.length < 2) return res.status(400).json({ erreur: 'Entrez le nom de la personne.' }); champs.nom = n; }
+  if (req.body.telephone !== undefined) champs.telephone = texte(req.body.telephone, 30) || null;
+  if (req.body.note !== undefined) champs.note = texte(req.body.note, 500) || null;
+  // Les règles du cycle ne changent plus dès qu'un versement a été enregistré
+  const regles = ['montant', 'frequence', 'nb_cases', 'frais_cases', 'date_debut'].filter((k) => req.body[k] !== undefined);
+  if (regles.length) {
+    const nbV = (await db.get('SELECT COUNT(*) AS n FROM tontine_versements WHERE tontine_id = ? AND annule = 0', [id])).n;
+    if (nbV > 0 || c.statut !== 'en_cours') return res.status(409).json({ erreur: 'Les règles du cycle (montant, rythme, nombre de cases, frais, début) ne se modifient plus une fois un versement enregistré.' });
+    const montant = req.body.montant !== undefined ? Number(req.body.montant) : c.montant;
+    const nbCases = req.body.nb_cases !== undefined ? Number(req.body.nb_cases) : c.nb_cases;
+    const fraisCases = req.body.frais_cases !== undefined ? Number(req.body.frais_cases) : c.frais_cases;
+    const frequence = req.body.frequence !== undefined ? texte(req.body.frequence, 10) : c.frequence;
+    const debut = req.body.date_debut !== undefined ? texte(req.body.date_debut, 10) : c.date_debut;
+    if (!Number.isInteger(montant) || montant < 50 || montant > 10000000) return res.status(400).json({ erreur: 'Montant de versement invalide.' });
+    if (!FREQ_TONTINE.includes(frequence)) return res.status(400).json({ erreur: 'Rythme invalide.' });
+    if (!Number.isInteger(nbCases) || nbCases < 1 || nbCases > 366) return res.status(400).json({ erreur: 'Le nombre de cases doit être compris entre 1 et 366.' });
+    if (!Number.isInteger(fraisCases) || fraisCases < 0 || fraisCases > nbCases) return res.status(400).json({ erreur: 'Frais invalides.' });
+    if (!dateValide(debut)) return res.status(400).json({ erreur: 'Date de début invalide.' });
+    Object.assign(champs, { montant, nb_cases: nbCases, frais_cases: fraisCases, frequence, date_debut: debut });
+  }
+  const cles = Object.keys(champs);
+  if (!cles.length) return res.status(400).json({ erreur: 'Aucune modification fournie.' });
+  await db.run(`UPDATE tontine_comptes SET ${cles.map((k) => k + ' = ?').join(', ')} WHERE id = ?`, [...cles.map((k) => champs[k]), id]);
+  res.json(await detailTontine(db, id));
+}));
+
+// Suppression : seulement si aucun versement n'est enregistré (sinon, il faut annuler les versements ou clore la tontine par un retrait)
+app.delete('/api/tontine/:id', exigerRole('admin'), h(async (req, res) => {
+  const id = idParam(req.params.id);
+  const c = await db.get('SELECT id FROM tontine_comptes WHERE id = ?', [id]);
+  if (!c) return res.status(404).json({ erreur: 'Tontine introuvable.' });
+  const nbV = (await db.get('SELECT COUNT(*) AS n FROM tontine_versements WHERE tontine_id = ? AND annule = 0', [id])).n;
+  if (nbV > 0) return res.status(409).json({ erreur: "Cette tontine contient des versements : elle ne peut pas être supprimée. Annulez d'abord les versements, ou clôturez-la par un retrait." });
+  await db.tx(async (tx) => { await tx.run('DELETE FROM tontine_versements WHERE tontine_id = ?', [id]); await tx.run('DELETE FROM tontine_comptes WHERE id = ?', [id]); });
+  res.json({ ok: true });
+}));
+
+// Enregistrer un versement : par défaut le montant d'une case, à la date du jour. Un versement plus grand remplit plusieurs cases.
+app.post('/api/tontine/:id/versements', exigerRole('admin'), h(async (req, res) => {
+  const id = idParam(req.params.id);
+  const aujourdhui = jourLocal(new Date());
+  let ajoute = null;
+  await db.tx(async (tx) => {
+    const c = await tx.get(`SELECT ${COLS_TONTINE} FROM tontine_comptes WHERE id = ?`, [id]);
+    if (!c) throw new ErreurHttp(404, 'Tontine introuvable.');
+    if (c.statut !== 'en_cours') throw new ErreurHttp(409, 'Cette tontine est clôturée : ouvrez un nouveau cycle pour continuer à épargner.');
+    const montant = req.body.montant === undefined || req.body.montant === '' ? c.montant : Number(req.body.montant);
+    const date = texte(req.body.date, 10) || aujourdhui;
+    const moyen = texte(req.body.moyen, 20) || 'especes';
+    if (!Number.isInteger(montant) || montant < 1 || montant > 100000000) throw new ErreurHttp(400, 'Le montant du versement doit être un nombre entier de F CFA.');
+    if (!dateValide(date) || date > aujourdhui) throw new ErreurHttp(400, 'La date du versement ne peut pas être dans le futur.');
+    if (date < c.date_debut) throw new ErreurHttp(400, 'La date du versement est avant le début de la tontine (' + c.date_debut.split('-').reverse().join('/') + ').');
+    if (!MOYENS_TONTINE.includes(moyen)) throw new ErreurHttp(400, 'Moyen de paiement invalide (espèces ou MOMO).');
+    const total = (await tx.get('SELECT COALESCE(SUM(montant), 0) AS t FROM tontine_versements WHERE tontine_id = ? AND annule = 0', [id])).t;
+    if (total + montant > c.nb_cases * c.montant) {
+      throw new ErreurHttp(400, 'Ce versement dépasse l\'objectif de la tontine (' + (c.nb_cases * c.montant).toLocaleString('fr-FR') + ' F). Il reste ' + (c.nb_cases * c.montant - total).toLocaleString('fr-FR') + ' F à verser.');
+    }
+    ajoute = await tx.insertId('INSERT INTO tontine_versements (tontine_id, date_versement, montant, moyen, compte_id, cree_le) VALUES (?,?,?,?,?,?)', [id, date, montant, moyen, req.user.id, now()]);
+  });
+  res.status(201).json(await detailTontine(db, id));
+}));
+
+// Annuler un versement saisi par erreur (il reste visible dans l'historique, marqué « annulé », mais ne compte plus)
+app.delete('/api/tontine/:id/versements/:vid', exigerRole('admin'), h(async (req, res) => {
+  const id = idParam(req.params.id), vid = idParam(req.params.vid);
+  const c = await db.get('SELECT statut FROM tontine_comptes WHERE id = ?', [id]);
+  if (!c) return res.status(404).json({ erreur: 'Tontine introuvable.' });
+  if (c.statut !== 'en_cours') return res.status(409).json({ erreur: 'Cette tontine est clôturée : annulez d\'abord le retrait pour modifier ses versements.' });
+  const x = await db.get('SELECT id, annule FROM tontine_versements WHERE id = ? AND tontine_id = ?', [vid, id]);
+  if (!x) return res.status(404).json({ erreur: 'Versement introuvable.' });
+  if (x.annule) return res.status(409).json({ erreur: 'Ce versement est déjà annulé.' });
+  await db.run('UPDATE tontine_versements SET annule = 1, annule_par = ?, annule_le = ? WHERE id = ?', [req.user.id, now(), vid]);
+  res.json(await detailTontine(db, id));
+}));
+
+// Retrait : la personne récupère ce qu'elle a versé, moins les frais. Hors fin de cycle, il faut confirmer un retrait anticipé (anticipe: true).
+app.post('/api/tontine/:id/retrait', exigerRole('admin'), h(async (req, res) => {
+  const id = idParam(req.params.id);
+  const aujourdhui = jourLocal(new Date());
+  await db.tx(async (tx) => {
+    const c = await tx.get(`SELECT ${COLS_TONTINE} FROM tontine_comptes WHERE id = ?`, [id]);
+    if (!c) throw new ErreurHttp(404, 'Tontine introuvable.');
+    if (c.statut !== 'en_cours') throw new ErreurHttp(409, 'Cette tontine est déjà clôturée.');
+    const versements = await tx.all('SELECT date_versement, montant, annule FROM tontine_versements WHERE tontine_id = ?', [id]);
+    const calc = calculerTontine(c, versements, aujourdhui);
+    if (calc.total <= 0) throw new ErreurHttp(409, 'Aucun versement : il n\'y a rien à retirer.');
+    if (!calc.complet && req.body.anticipe !== true) throw new ErreurHttp(409, 'Le cycle n\'est pas terminé (' + calc.cases_payees + ' / ' + c.nb_cases + ' cases). Confirmez le retrait anticipé pour continuer.');
+    const moyen = texte(req.body.moyen, 20) || 'especes';
+    if (!MOYENS_TONTINE.includes(moyen)) throw new ErreurHttp(400, 'Moyen de paiement invalide (espèces ou MOMO).');
+    await tx.run('UPDATE tontine_comptes SET statut = ?, date_retrait = ?, montant_retire = ?, frais_retenus = ?, retrait_moyen = ?, retrait_compte_id = ? WHERE id = ?',
+      ['payee', aujourdhui, calc.a_remettre, calc.frais, moyen, req.user.id, id]);
+  });
+  res.json(await detailTontine(db, id));
+}));
+
+// Annuler un retrait enregistré par erreur : la tontine redevient « en cours »
+app.delete('/api/tontine/:id/retrait', exigerRole('admin'), h(async (req, res) => {
+  const id = idParam(req.params.id);
+  const c = await db.get('SELECT statut FROM tontine_comptes WHERE id = ?', [id]);
+  if (!c) return res.status(404).json({ erreur: 'Tontine introuvable.' });
+  if (c.statut !== 'payee') return res.status(409).json({ erreur: "Aucun retrait n'a été enregistré pour cette tontine." });
+  await db.run("UPDATE tontine_comptes SET statut = 'en_cours', date_retrait = NULL, montant_retire = NULL, frais_retenus = NULL, retrait_moyen = NULL, retrait_compte_id = NULL WHERE id = ?", [id]);
+  res.json(await detailTontine(db, id));
 }));
 
 /* ------------------------------------------------------------------ */
@@ -1603,208 +1848,6 @@ app.get('/api/collectes', exigerRole('admin'), h(async (req, res) => {
     nb_versements: rows.filter((r) => r.montant > 0).length,
     lignes: rows.map((r) => ({ ...r, paye: !!r.paye, statut: statutDe(r) }))
   });
-}));
-
-/* ------------------------------------------------------------------ */
-/* Tontine personnelle : chacun verse et suit SON propre argent        */
-/* Solde = somme des dépôts − somme des retraits                       */
-/* ------------------------------------------------------------------ */
-
-async function tontineSolde(code) {
-  const r = await db.get(
-    `SELECT
-       COALESCE(SUM(CASE WHEN type = 'depot' THEN montant ELSE 0 END), 0) AS depots,
-       COALESCE(SUM(CASE WHEN type = 'retrait' THEN montant ELSE 0 END), 0) AS retraits
-     FROM tontine_mouvements WHERE code_client = ?`,
-    [code]
-  );
-  return {
-    depots: r.depots || 0,
-    retraits: r.retraits || 0,
-    solde: (r.depots || 0) - (r.retraits || 0)
-  };
-}
-
-app.get('/api/tontine', exigerRole('admin', 'caissiere'), h(async (req, res) => {
-  const q = texte(req.query.q, 80).toLowerCase();
-  const comptes = await db.all(
-    `SELECT tc.*, c.nom, c.telephone, c.statut AS client_statut
-     FROM tontine_comptes tc
-     LEFT JOIN clients c ON c.code = tc.code_client
-     ORDER BY tc.cree_le DESC`
-  );
-  const out = [];
-  for (const tc of comptes) {
-    const s = await tontineSolde(tc.code_client);
-    if (q) {
-      const hay = ((tc.nom || '') + ' ' + (tc.code_client || '') + ' ' + (tc.telephone || '')).toLowerCase();
-      if (!hay.includes(q)) continue;
-    }
-    out.push({ ...tc, ...s });
-  }
-  // Totaux globaux
-  const tot = await db.get(
-    `SELECT
-       COALESCE(SUM(CASE WHEN type = 'depot' THEN montant ELSE 0 END), 0) AS depots,
-       COALESCE(SUM(CASE WHEN type = 'retrait' THEN montant ELSE 0 END), 0) AS retraits
-     FROM tontine_mouvements`
-  );
-  res.json({
-    comptes: out,
-    totaux: {
-      depots: tot.depots || 0,
-      retraits: tot.retraits || 0,
-      solde: (tot.depots || 0) - (tot.retraits || 0),
-      nb_comptes: out.length
-    }
-  });
-}));
-
-app.get('/api/tontine/:code', exigerRole('admin', 'caissiere'), h(async (req, res) => {
-  const code = String(req.params.code || '').toUpperCase();
-  const client = await db.get('SELECT code, nom, telephone, statut FROM clients WHERE code = ?', [code]);
-  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
-  let compte = await db.get('SELECT * FROM tontine_comptes WHERE code_client = ?', [code]);
-  const solde = await tontineSolde(code);
-  const mouvements = await db.all(
-    `SELECT * FROM tontine_mouvements WHERE code_client = ? ORDER BY date_mvt DESC, id DESC LIMIT 200`,
-    [code]
-  );
-  res.json({
-    client,
-    compte: compte || null,
-    ...solde,
-    mouvements
-  });
-}));
-
-/** Ouvre (ou met à jour) le compte tontine personnel d’un conducteur. */
-app.post('/api/tontine', exigerRole('admin', 'caissiere'), h(async (req, res) => {
-  const code = texte(req.body.code_client, 20).toUpperCase();
-  if (!code) return res.status(400).json({ erreur: 'Code conducteur obligatoire.' });
-  const client = await db.get('SELECT code, nom, statut FROM clients WHERE code = ?', [code]);
-  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
-  if (client.statut === 'suspendu') return res.status(409).json({ erreur: 'Ce conducteur est suspendu.' });
-
-  const objectif = req.body.objectif != null && req.body.objectif !== ''
-    ? Math.round(Number(req.body.objectif)) : null;
-  const cotisation_cible = req.body.cotisation_cible != null && req.body.cotisation_cible !== ''
-    ? Math.round(Number(req.body.cotisation_cible)) : null;
-  const frequence = ['jour', 'semaine', 'mois'].includes(req.body.frequence) ? req.body.frequence : null;
-  const notes = texte(req.body.notes, 500) || null;
-
-  if (objectif != null && (!Number.isFinite(objectif) || objectif < 0)) {
-    return res.status(400).json({ erreur: 'Objectif invalide.' });
-  }
-  if (cotisation_cible != null && (!Number.isFinite(cotisation_cible) || cotisation_cible < 0)) {
-    return res.status(400).json({ erreur: 'Cotisation cible invalide.' });
-  }
-
-  const exist = await db.get('SELECT id FROM tontine_comptes WHERE code_client = ?', [code]);
-  if (exist) {
-    await db.run(
-      `UPDATE tontine_comptes SET objectif = ?, cotisation_cible = ?, frequence = ?, notes = ?, statut = 'actif'
-       WHERE code_client = ?`,
-      [objectif, cotisation_cible, frequence, notes, code]
-    );
-    return res.json({ ok: true, action: 'maj', code, nom: client.nom });
-  }
-  await db.run(
-    `INSERT INTO tontine_comptes (code_client, objectif, cotisation_cible, frequence, statut, notes, compte_id, cree_le)
-     VALUES (?, ?, ?, ?, 'actif', ?, ?, ?)`,
-    [code, objectif, cotisation_cible, frequence, notes, req.user.id, now()]
-  );
-  res.status(201).json({ ok: true, action: 'cree', code, nom: client.nom });
-}));
-
-app.patch('/api/tontine/:code', exigerRole('admin', 'caissiere'), h(async (req, res) => {
-  const code = String(req.params.code || '').toUpperCase();
-  const compte = await db.get('SELECT * FROM tontine_comptes WHERE code_client = ?', [code]);
-  if (!compte) return res.status(404).json({ erreur: 'Compte tontine introuvable. Ouvrez d’abord le compte.' });
-
-  const objectif = req.body.objectif !== undefined
-    ? (req.body.objectif === null || req.body.objectif === '' ? null : Math.round(Number(req.body.objectif)))
-    : compte.objectif;
-  const cotisation_cible = req.body.cotisation_cible !== undefined
-    ? (req.body.cotisation_cible === null || req.body.cotisation_cible === '' ? null : Math.round(Number(req.body.cotisation_cible)))
-    : compte.cotisation_cible;
-  const frequence = req.body.frequence !== undefined
-    ? (['jour', 'semaine', 'mois'].includes(req.body.frequence) ? req.body.frequence : null)
-    : compte.frequence;
-  const statut = ['actif', 'cloture', 'suspendu'].includes(req.body.statut) ? req.body.statut : compte.statut;
-  const notes = req.body.notes !== undefined ? (texte(req.body.notes, 500) || null) : compte.notes;
-
-  await db.run(
-    `UPDATE tontine_comptes SET objectif = ?, cotisation_cible = ?, frequence = ?, statut = ?, notes = ?
-     WHERE code_client = ?`,
-    [objectif, cotisation_cible, frequence, statut, notes, code]
-  );
-  res.json({ ok: true });
-}));
-
-/** Dépôt (la personne verse SON argent) ou retrait (elle récupère SON argent). */
-app.post('/api/tontine/:code/mouvements', exigerRole('admin', 'caissiere'), h(async (req, res) => {
-  const code = String(req.params.code || '').toUpperCase();
-  const client = await db.get('SELECT code, nom, statut FROM clients WHERE code = ?', [code]);
-  if (!client) return res.status(404).json({ erreur: 'Aucun conducteur avec ce code.' });
-
-  // Ouvre automatiquement le compte s’il n’existe pas encore
-  let compte = await db.get('SELECT * FROM tontine_comptes WHERE code_client = ?', [code]);
-  if (!compte) {
-    await db.run(
-      `INSERT INTO tontine_comptes (code_client, statut, compte_id, cree_le) VALUES (?, 'actif', ?, ?)`,
-      [code, req.user.id, now()]
-    );
-    compte = await db.get('SELECT * FROM tontine_comptes WHERE code_client = ?', [code]);
-  }
-  if (compte.statut === 'cloture') {
-    return res.status(409).json({ erreur: 'Ce compte tontine est clôturé.' });
-  }
-
-  const type = req.body.type === 'retrait' ? 'retrait' : 'depot';
-  const montant = Math.round(Number(req.body.montant));
-  if (!Number.isFinite(montant) || montant <= 0 || montant > 10000000) {
-    return res.status(400).json({ erreur: 'Montant invalide.' });
-  }
-  const moyen = ['especes', 'momo', 'momo_regulateur'].includes(req.body.moyen) ? req.body.moyen : 'especes';
-  const numero_momo = texte(req.body.numero_momo, 30) || null;
-  const motif = texte(req.body.motif, 200) || null;
-  const date_mvt = texte(req.body.date, 10) || jourLocal(new Date());
-  if (!dateValide(date_mvt)) return res.status(400).json({ erreur: 'Date invalide.' });
-
-  if (type === 'retrait') {
-    const s = await tontineSolde(code);
-    if (montant > s.solde) {
-      return res.status(400).json({
-        erreur: 'Solde insuffisant. Disponible : ' + s.solde + ' F (dépôts ' + s.depots + ' − retraits ' + s.retraits + ').'
-      });
-    }
-  }
-
-  await db.run(
-    `INSERT INTO tontine_mouvements (code_client, type, montant, moyen, numero_momo, motif, compte_id, date_mvt, cree_le)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [code, type, montant, moyen, numero_momo, motif, req.user.id, date_mvt, now()]
-  );
-  const solde = await tontineSolde(code);
-  res.status(201).json({
-    ok: true,
-    type,
-    montant,
-    ...solde,
-    message: type === 'depot'
-      ? 'Dépôt de ' + montant + ' F enregistré. Nouveau solde : ' + solde.solde + ' F.'
-      : 'Retrait de ' + montant + ' F enregistré. Nouveau solde : ' + solde.solde + ' F.'
-  });
-}));
-
-app.delete('/api/tontine/mouvements/:id', exigerRole('admin'), h(async (req, res) => {
-  const id = Number(req.params.id);
-  const m = await db.get('SELECT * FROM tontine_mouvements WHERE id = ?', [id]);
-  if (!m) return res.status(404).json({ erreur: 'Mouvement introuvable.' });
-  await db.run('DELETE FROM tontine_mouvements WHERE id = ?', [id]);
-  const solde = await tontineSolde(m.code_client);
-  res.json({ ok: true, code_client: m.code_client, ...solde });
 }));
 
 /* ------------------------------------------------------------------ */
