@@ -131,37 +131,6 @@ CREATE TABLE IF NOT EXISTS demandes (
   cree_le TEXT NOT NULL,
   traitee_le TEXT
 );
-CREATE TABLE IF NOT EXISTS tontine_comptes (
-  id ${pk},
-  nom TEXT NOT NULL,
-  telephone TEXT,
-  montant INTEGER NOT NULL,
-  frequence TEXT NOT NULL,
-  nb_cases INTEGER NOT NULL,
-  frais_cases INTEGER NOT NULL DEFAULT 1,
-  date_debut TEXT NOT NULL,
-  note TEXT,
-  statut TEXT NOT NULL DEFAULT 'en_cours',
-  date_retrait TEXT,
-  montant_retire INTEGER,
-  frais_retenus INTEGER,
-  retrait_moyen TEXT,
-  retrait_compte_id INTEGER,
-  compte_id INTEGER,
-  cree_le TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS tontine_versements (
-  id ${pk},
-  tontine_id INTEGER NOT NULL,
-  date_versement TEXT NOT NULL,
-  montant INTEGER NOT NULL,
-  moyen TEXT,
-  compte_id INTEGER,
-  cree_le TEXT NOT NULL,
-  annule INTEGER NOT NULL DEFAULT 0,
-  annule_par INTEGER,
-  annule_le TEXT
-);
 CREATE TABLE IF NOT EXISTS parametres (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 `);
 
@@ -189,7 +158,6 @@ CREATE INDEX IF NOT EXISTS idx_paiements_date ON paiements (date);
 CREATE INDEX IF NOT EXISTS idx_sessions_compte ON sessions (compte_id);
 CREATE INDEX IF NOT EXISTS idx_notes_compte ON notes (compte_id);
 CREATE INDEX IF NOT EXISTS idx_demandes_statut ON demandes (statut);
-CREATE INDEX IF NOT EXISTS idx_tontine_versements ON tontine_versements (tontine_id);
 CREATE INDEX IF NOT EXISTS idx_observations_client ON observations (code_client);
 CREATE INDEX IF NOT EXISTS idx_vidange_paiements_date ON vidange_paiements (date_paiement);
 `);
