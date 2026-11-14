@@ -141,6 +141,7 @@ async function genererCode() {
 /* Démarrage : tables, migrations, premier administrateur, réglages par défaut. */
 async function demarrer() {
   await creerSchema(db);
+  await creerTablesTontine(); // espace Tontine (mêmes base de données, tables à part)
 
   // Anciens conducteurs créés sans code
   for (const r of await db.all('SELECT id FROM clients WHERE code IS NULL')) {
@@ -1170,6 +1171,54 @@ app.delete('/api/demandes/:id', exigerRole('admin'), h(async (req, res) => {
 // À la fin du cycle, elle récupère tout ce qu'elle a versé, moins les frais de gestion (par défaut 1 versement). Un cycle terminé et retiré
 // est clos ; pour continuer, on ouvre un nouveau cycle. La tontine est un ESPACE À PART : ses données (tables tontine_*) ne sont liées ni aux
 // conducteurs, ni aux paiements, ni aux totaux de Soft Moto.
+// Tables de la tontine : créées (ou complétées) par server.js lui-même au démarrage, dans la même base que Soft Moto. Ainsi la tontine
+// fonctionne même si schema.js n'a pas été redéployé en même temps, et une table créée par une ancienne version reçoit ses colonnes manquantes.
+const COLONNES_TONTINE = {
+  tontine_comptes: [['nom', 'TEXT'], ['telephone', 'TEXT'], ['montant', 'INTEGER'], ['frequence', "TEXT DEFAULT 'jour'"], ['nb_cases', 'INTEGER'], ['frais_cases', 'INTEGER DEFAULT 1'],
+    ['date_debut', 'TEXT'], ['note', 'TEXT'], ['statut', "TEXT DEFAULT 'en_cours'"], ['date_retrait', 'TEXT'], ['montant_retire', 'INTEGER'], ['frais_retenus', 'INTEGER'],
+    ['retrait_moyen', 'TEXT'], ['retrait_compte_id', 'INTEGER'], ['compte_id', 'INTEGER'], ['cree_le', 'TEXT']],
+  tontine_versements: [['tontine_id', 'INTEGER'], ['date_versement', 'TEXT'], ['montant', 'INTEGER'], ['moyen', 'TEXT'], ['compte_id', 'INTEGER'], ['cree_le', 'TEXT'],
+    ['annule', 'INTEGER DEFAULT 0'], ['annule_par', 'INTEGER'], ['annule_le', 'TEXT']]
+};
+async function creerTablesTontine() {
+  const { pk } = db.types;
+  await db.exec(`
+CREATE TABLE IF NOT EXISTS tontine_comptes (
+  id ${pk},
+  nom TEXT NOT NULL,
+  telephone TEXT,
+  montant INTEGER NOT NULL,
+  frequence TEXT NOT NULL,
+  nb_cases INTEGER NOT NULL,
+  frais_cases INTEGER NOT NULL DEFAULT 1,
+  date_debut TEXT NOT NULL,
+  note TEXT,
+  statut TEXT NOT NULL DEFAULT 'en_cours',
+  date_retrait TEXT,
+  montant_retire INTEGER,
+  frais_retenus INTEGER,
+  retrait_moyen TEXT,
+  retrait_compte_id INTEGER,
+  compte_id INTEGER,
+  cree_le TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tontine_versements (
+  id ${pk},
+  tontine_id INTEGER NOT NULL,
+  date_versement TEXT NOT NULL,
+  montant INTEGER NOT NULL,
+  moyen TEXT,
+  compte_id INTEGER,
+  cree_le TEXT NOT NULL,
+  annule INTEGER NOT NULL DEFAULT 0,
+  annule_par INTEGER,
+  annule_le TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tontine_versements ON tontine_versements (tontine_id);
+`);
+  for (const [table, cols] of Object.entries(COLONNES_TONTINE)) for (const [col, def] of cols) await db.ajouterColonne(table, col, def);
+}
+
 const FREQ_TONTINE = ['jour', 'semaine', 'mois'];
 const MOYENS_TONTINE = ['especes', 'momo'];
 function ajouterMois(s, n) {
@@ -1865,6 +1914,9 @@ app.use('/api', (req, res) => res.status(404).json({ erreur: 'Route introuvable.
 app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') return res.status(400).json({ erreur: 'Requête invalide.' });
   console.error(err);
+  if (/tontine_/i.test(String(err && err.message)) && /does not exist|no such (table|column)/i.test(String(err && err.message))) {
+    return res.status(500).json({ erreur: "La base de données de la tontine n'est pas à jour : redéployez server.js puis redémarrez le serveur." });
+  }
   res.status(500).json({ erreur: 'Erreur interne du serveur.' });
 });
 
