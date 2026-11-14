@@ -1217,18 +1217,31 @@ CREATE TABLE IF NOT EXISTS tontine_versements (
 CREATE INDEX IF NOT EXISTS idx_tontine_versements ON tontine_versements (tontine_id);
 `);
   for (const [table, cols] of Object.entries(COLONNES_TONTINE)) for (const [col, def] of cols) await db.ajouterColonne(table, col, def);
-  // Ancienne version : colonne code_client NOT NULL (lien avec Soft Moto). La tontine est désormais autonome.
-  // On retire la contrainte pour que les INSERT actuels (sans code_client) fonctionnent sur une base déjà déployée.
+  // Migrations pour une base tontine déjà créée par une ancienne version du schéma.
+  // - code_client NOT NULL : la tontine est désormais autonome (plus de lien Soft Moto).
+  // - CHECK sur statut : anciennes valeurs possibles ≠ 'en_cours' / 'payee'.
   try {
     if (db.dialect === 'postgres') {
       await db.exec('ALTER TABLE tontine_comptes ALTER COLUMN code_client DROP NOT NULL');
     } else if (db.dialect === 'sqlite') {
-      // SQLite ne permet pas facilement de retirer NOT NULL : on s'assure qu'une valeur par défaut existe.
       await db.exec("UPDATE tontine_comptes SET code_client = '' WHERE code_client IS NULL");
     }
-  } catch (e) {
-    // Colonne absente ou déjà nullable : rien à faire
-  }
+  } catch (e) { /* colonne absente ou déjà nullable */ }
+  try {
+    if (db.dialect === 'postgres') {
+      // Nom automatique Postgres : table_colonne_check
+      await db.exec('ALTER TABLE tontine_comptes DROP CONSTRAINT IF EXISTS tontine_comptes_statut_check');
+      // Au cas où le nom différerait (créé manuellement ou autre version)
+      await db.exec(`DO $$ DECLARE r record; BEGIN
+        FOR r IN SELECT conname FROM pg_constraint
+          WHERE conrelid = 'tontine_comptes'::regclass AND contype = 'c'
+            AND pg_get_constraintdef(oid) ILIKE '%statut%'
+        LOOP
+          EXECUTE 'ALTER TABLE tontine_comptes DROP CONSTRAINT ' || quote_ident(r.conname);
+        END LOOP;
+      END $$`);
+    }
+  } catch (e) { /* contrainte absente */ }
 }
 
 const FREQ_TONTINE = ['jour', 'semaine', 'mois'];
