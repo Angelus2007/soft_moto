@@ -381,9 +381,9 @@
 
     <div class="stats" style="grid-template-columns:repeat(4, minmax(0,1fr));">
       <div class="stat"><p class="label">Tontines en cours</p><div class="value" id="sCours">—</div></div>
-      <div class="stat s2"><p class="label">Argent en dépôt</p><div class="value" id="sDepot" style="font-size:22px;">—</div></div>
+      <div class="stat s2"><p class="label">Argent en dépôt</p><div class="value" id="sDepot" style="font-size:22px;">—</div><p class="tt-hint" id="sDepotPrets"></p></div>
       <div class="stat s3"><p class="label">Cycles terminés à payer</p><div class="value" id="sPayer">—</div><p class="tt-hint" id="sPayerMontant"></p></div>
-      <div class="stat"><p class="label">En retard</p><div class="value" id="sRetard">—</div></div>
+      <div class="stat"><p class="label">En retard</p><div class="value" id="sRetard">—</div><p class="tt-hint" id="sRetardPrets"></p></div>
     </div>
 
     <div class="panel">
@@ -451,6 +451,8 @@
     $('sCours').textContent = tt.en_cours; $('sDepot').textContent = fmtF(tt.en_depot);
     $('sPayer').textContent = tt.a_payer; $('sPayerMontant').textContent = tt.a_payer ? fmtF(tt.a_remettre) + ' à remettre' : '';
     $('sRetard').textContent = tt.en_retard;
+    $('sDepotPrets').textContent = tt.prets_en_cours ? 'dont ' + fmtF(tt.prets_en_cours) + ' prêtés (à rembourser)' : '';
+    $('sRetardPrets').textContent = tt.prets_en_retard ? '+ ' + tt.prets_en_retard + ' prêt' + (tt.prets_en_retard > 1 ? 's' : '') + ' échu' + (tt.prets_en_retard > 1 ? 's' : '') + ' non remboursé' + (tt.prets_en_retard > 1 ? 's' : '') : '';
     $('collecteJour').textContent = tt.collecte_aujourdhui ? 'Versé aujourd\'hui : ' + fmtF(tt.collecte_aujourdhui) : '';
     $('onglets').innerHTML = ONGLETS.map(function(o){
       const n = data.tontines.filter(function(t){ return filtreOk(t, o[0]); }).length;
@@ -467,7 +469,7 @@
         '<div class="d-phone">' + esc(t.telephone || '—') + '</div></div></div></td>' +
         '<td data-label="Versement"><strong>' + fmtF(t.montant) + '</strong> ' + RYTHME[t.frequence] + '<span class="sub-note">' + t.nb_cases + ' cases · du ' + dFR(t.date_debut) + ' au ' + dFR(t.fin_prevue) + '</span></td>' +
         '<td data-label="Progression">' + t.cases_payees + ' / ' + t.nb_cases + ' cases<div class="ct-bar"><i style="width:' + pct + '%"></i></div></td>' +
-        '<td data-label="Déposé"><strong>' + fmtF(t.total) + '</strong><span class="sub-note">sur ' + fmtF(t.objectif) + '</span></td>' +
+        '<td data-label="Déposé"><strong>' + fmtF(t.total) + '</strong><span class="sub-note">sur ' + fmtF(t.objectif) + '</span>' + (t.prets_en_cours ? '<span class="sub-note" style="color:var(--impaye-dark);">prêt en cours : ' + fmtF(t.prets_en_cours) + '</span>' : '') + '</td>' +
         '<td data-label="Situation">' + SITUATION[t.situation](t) + (t.statut === 'payee' ? '<span class="sub-note">retiré le ' + dFR(t.date_retrait) + ' : ' + fmtF(t.montant_retire) + '</span>' : '') + '</td>' +
         '<td data-label="Actions"><div class="row-actions">' + (t.statut === 'en_cours' ? '<button type="button" class="primaire" data-open="' + t.id + '">Verser</button>' : '') +
         '<button type="button" data-open="' + t.id + '">Ouvrir</button></div></td></tr>';
@@ -522,6 +524,47 @@
   }
   function maj(d){ ouverte = d; dessiner(); charger(); }
 
+  const ETAT_PRET = { en_cours: ['bientot', 'En cours'], retard: ['retard', 'En retard'], rembourse: ['a_jour', 'Remboursé'], annule: ['payee', 'Annulé'] };
+  function blocPrets(t){
+    const enCours = t.statut === 'en_cours';
+    let h = '<h3 style="margin:18px 0 6px; font-size:15px;">Prêts sur l\'épargne</h3>';
+    if(enCours){
+      h += '<div class="tt-box">Cette personne peut emprunter <strong>' + fmtF(t.disponible_pret) + '</strong> au maximum (capital + intérêt) : épargne versée ' + fmtF(t.total) + ' − frais ' + fmtF(t.frais) + ' − prêts en cours ' + fmtF(t.prets_en_cours) +
+        '. Le prêt est pris sur <strong>son propre argent</strong> ; ce qui reste dû sera retenu au moment du retrait.</div>';
+      if(t.disponible_pret > 0){
+        h += '<div class="tt-inline"><div><label for="pMontant">Montant du prêt (F)</label><input type="number" id="pMontant" min="1" step="50" max="' + t.disponible_pret + '" placeholder="ex. 2000"></div>' +
+          '<div><label for="pTaux">Intérêt (%)</label><input type="number" id="pTaux" min="0" max="100" step="0.5" value="0"></div>' +
+          '<div><label for="pEcheance">Remboursement avant le</label><input type="date" id="pEcheance" min="' + t.aujourdhui + '"></div>' +
+          '<div><label for="pMoyen">Moyen</label><select id="pMoyen"><option value="especes">Espèces</option><option value="momo">MOMO</option></select></div></div>' +
+          '<div class="tt-inline"><div style="flex:2 1 260px;"><label for="pNote">Motif (facultatif)</label><input type="text" id="pNote" maxlength="300"></div>' +
+          '<div style="flex:0 0 auto;"><button type="button" class="btn" data-a="nouveau-pret">Accorder le prêt</button></div></div><p class="tt-hint" id="pResume"></p>';
+      }
+      h += '<p class="tt-err" id="pErr" role="alert"></p>';
+    }
+    const liste = t.prets;
+    if(!liste.length) return h + '<p class="tt-hint">Aucun prêt pour le moment.</p>';
+    h += liste.map(function(p){
+      const e = ETAT_PRET[p.etat] || ETAT_PRET.en_cours, actifs = p.remboursements.filter(function(r){ return !r.annule; });
+      let b = '<div class="tt-box"' + (p.annule ? ' style="opacity:.6;"' : '') + '><div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;"><strong>Prêt du ' + dFR(p.date_pret) + ' : ' + fmtF(p.montant) + '</strong>' +
+        (p.interet ? '<span>+ ' + fmtF(p.interet) + ' d\'intérêt (' + p.taux_pct + ' %) = <strong>' + fmtF(p.total_du) + '</strong></span>' : '') +
+        '<span class="ct-badge ' + e[0] + '" style="margin-left:auto;">' + e[1] + '</span></div>' +
+        '<div class="tt-hint">' + (p.echeance ? 'À rembourser avant le ' + dFR(p.echeance) + ' · ' : '') + 'Remboursé : ' + fmtF(p.rembourse) + ' · <strong>Reste dû : ' + fmtF(p.reste) + '</strong>' + (p.note ? ' · ' + esc(p.note) : '') + ' · saisi par ' + esc(p.par || '—') + '</div>';
+      if(p.remboursements.length) b += '<ul style="margin:6px 0 0; padding-left:18px; font-size:13px;">' + p.remboursements.map(function(r){
+        return '<li' + (r.annule ? ' style="text-decoration:line-through; color:var(--ink-faint);"' : '') + '>' + dFR(r.date_remboursement) + ' : ' + fmtF(r.montant) + ' (' + (r.retenue ? 'retenu sur le retrait' : esc(MOYEN[r.moyen] || '')) + ')' +
+          (!r.annule && !r.retenue && enCours ? ' <button type="button" class="btn ghost sm" data-a="annuler-remb" data-p="' + p.id + '" data-r="' + r.id + '">Annuler</button>' : '') + (r.annule ? ' — annulé' : '') + '</li>';
+      }).join('') + '</ul>';
+      if(enCours && !p.annule && p.reste > 0){
+        b += '<div class="tt-inline"><div><label>Montant remboursé (F)</label><input type="number" id="rbM' + p.id + '" min="1" max="' + p.reste + '" value="' + p.reste + '"></div>' +
+          '<div><label>Date</label><input type="date" id="rbD' + p.id + '" value="' + t.aujourdhui + '" min="' + p.date_pret + '" max="' + t.aujourdhui + '"></div>' +
+          '<div><label>Moyen</label><select id="rbY' + p.id + '"><option value="especes">Espèces</option><option value="momo">MOMO</option></select></div>' +
+          '<div style="flex:0 0 auto;"><button type="button" class="btn" data-a="rembourser" data-p="' + p.id + '">Rembourser</button></div></div>';
+      }
+      if(enCours && !p.annule && !actifs.length) b += '<div style="margin-top:6px;"><button type="button" class="btn ghost sm" data-a="annuler-pret" data-p="' + p.id + '">Annuler ce prêt</button></div>';
+      return b + '</div>';
+    }).join('');
+    return h;
+  }
+
   function dessiner(){
     const t = ouverte; if(!t) return;
     const enCours = t.statut === 'en_cours', pct = Math.round(t.cases_payees / t.nb_cases * 100);
@@ -535,7 +578,7 @@
       '<div class="tt-kpi"><div class="l">Déposé</div><div class="v">' + fmtF(t.total) + '</div></div>' +
       '<div class="tt-kpi"><div class="l">Cases payées</div><div class="v">' + t.cases_payees + ' / ' + t.nb_cases + '</div></div>' +
       '<div class="tt-kpi"><div class="l">Frais retenus</div><div class="v">' + fmtF(t.frais) + '</div></div>' +
-      '<div class="tt-kpi"><div class="l">À remettre</div><div class="v">' + fmtF(t.a_remettre) + '</div></div></div>' +
+      '<div class="tt-kpi"><div class="l">À remettre</div><div class="v">' + fmtF(t.statut === 'payee' ? t.montant_retire : t.a_remettre_net) + '</div>' + (t.prets_en_cours && t.statut !== 'payee' ? '<div class="tt-hint">après retenue des prêts (' + fmtF(t.prets_en_cours) + ')</div>' : '') + '</div></div>' +
       '<div class="ct-bar" style="margin:0 0 4px;"><i style="width:' + pct + '%"></i></div>' +
       '<p class="tt-hint">Du ' + dFR(t.date_debut) + ' au ' + dFR(t.fin_prevue) + (t.reste_partiel ? ' · ' + fmtF(t.reste_partiel) + ' versés pour la case suivante (il manque ' + fmtF(t.montant - t.reste_partiel) + ')' : '') + '</p>';
 
@@ -544,7 +587,7 @@
     }).join('') + '</div>';
 
     if(t.statut === 'payee'){
-      h += '<div class="tt-box"><strong>Retrait effectué le ' + dFR(t.date_retrait) + '</strong> : ' + fmtF(t.montant_retire) + ' remis à ' + esc(t.nom) + ' (' + esc(MOYEN[t.retrait_moyen] || '') + '), frais retenus : ' + fmtF(t.frais_retenus) + '.</div>' +
+      h += '<div class="tt-box"><strong>Retrait effectué le ' + dFR(t.date_retrait) + '</strong> : ' + fmtF(t.montant_retire) + ' remis à ' + esc(t.nom) + ' (' + esc(MOYEN[t.retrait_moyen] || '') + '), frais retenus : ' + fmtF(t.frais_retenus) + (t.prets_retenus ? ', prêts retenus : ' + fmtF(t.prets_retenus) : '') + '.</div>' +
         '<div class="tt-actions"><button type="button" class="btn" data-a="cycle">Ouvrir un nouveau cycle</button><button type="button" class="btn ghost" data-a="annuler-retrait">Annuler le retrait</button></div>';
     } else {
       h += '<div class="tt-inline"><div><label for="vMontant">Montant versé (F)</label><input type="number" id="vMontant" min="1" step="50" value="' + t.montant + '"></div>' +
@@ -565,6 +608,7 @@
         '<div style="margin-top:10px;"><button type="button" class="btn" data-a="enregistrer-modif">Enregistrer</button></div></div>';
     }
 
+    h += blocPrets(t);
     h += '<h3 style="margin:18px 0 6px; font-size:15px;">Historique des versements</h3>';
     h += t.versements.length ? '<table class="tt-hist"><thead><tr><th>Date</th><th>Montant</th><th>Moyen</th><th>Saisi par</th><th></th></tr></thead><tbody>' +
       t.versements.map(function(v){
@@ -574,10 +618,16 @@
     $('modalCard').innerHTML = h;
   }
 
+  $('modalCard').addEventListener('input', function(e){
+    if(!ouverte || !$('pResume') || !['pMontant', 'pTaux'].includes(e.target.id)) return;
+    const m = Number($('pMontant').value) || 0, taux = Number($('pTaux').value) || 0, interet = Math.round(m * taux / 100);
+    $('pResume').textContent = m ? 'À rembourser : ' + fmtF(m + interet) + (interet ? ' (dont ' + fmtF(interet) + ' d\'intérêt)' : '') + (m + interet > ouverte.disponible_pret ? ' — dépasse le maximum possible (' + fmtF(ouverte.disponible_pret) + ').' : '') : '';
+  });
   $('modalCard').addEventListener('click', function(e){
     const b = e.target.closest('[data-a]'); if(!b || !ouverte) return;
     const t = ouverte, act = b.dataset.a, id = t.id;
-    const erreurModal = (err) => { const z = $('dErr') || $('eErr'); if(z) z.textContent = smMessage(err); else alert(smMessage(err)); };
+    const duPret = ['nouveau-pret', 'rembourser', 'annuler-pret', 'annuler-remb'].includes(act);
+    const erreurModal = (err) => { const z = (duPret && $('pErr')) || $('dErr') || $('eErr'); if(z) z.textContent = smMessage(err); else alert(smMessage(err)); };
     if(act === 'fermer') return fermer();
     if(act === 'verser'){
       b.disabled = true; if($('dErr')) $('dErr').textContent = '';
@@ -590,7 +640,7 @@
     } else if(act === 'retrait'){
       const moyen = $('rMoyen').value, anticipe = !t.complet;
       const texte = (anticipe ? 'RETRAIT ANTICIPÉ : le cycle n\'est pas terminé (' + t.cases_payees + ' / ' + t.nb_cases + ' cases).\n\n' : 'Fin de cycle : ' + t.cases_payees + ' / ' + t.nb_cases + ' cases payées.\n\n') +
-        'Déposé : ' + fmtF(t.total) + '\nFrais retenus : ' + fmtF(t.frais) + '\n\nRemettre ' + fmtF(t.a_remettre) + ' à ' + t.nom + ' ? La tontine sera clôturée.';
+        'Déposé : ' + fmtF(t.total) + '\nFrais retenus : ' + fmtF(t.frais) + (t.prets_en_cours ? '\nPrêts non remboursés (retenus) : ' + fmtF(t.prets_en_cours) : '') + '\n\nRemettre ' + fmtF(t.a_remettre_net) + ' à ' + t.nom + ' ? La tontine sera clôturée.';
       if(!window.confirm(texte)) return;
       b.disabled = true;
       api('/api/tontine/' + id + '/retrait', json('POST', { moyen: moyen, anticipe: anticipe }))
@@ -608,6 +658,24 @@
       if($('eMontant')) Object.assign(corps, { montant: Number($('eMontant').value), frequence: $('eFreq').value, nb_cases: Number($('eCases').value), frais_cases: Number($('eFrais').value), date_debut: $('eDebut').value });
       b.disabled = true;
       api('/api/tontine/' + id, json('PATCH', corps)).then(function(d){ maj(d); if(window.smToast) smToast('Tontine modifiée.'); }).catch(function(err){ b.disabled = false; erreurModal(err); });
+    } else if(act === 'nouveau-pret'){
+      const m = Number($('pMontant').value), taux = Number($('pTaux').value) || 0;
+      if(!m){ $('pErr').textContent = 'Entrez le montant du prêt.'; return; }
+      const interet = Math.round(m * taux / 100);
+      if(!window.confirm('Accorder un prêt de ' + fmtF(m) + ' à ' + t.nom + (interet ? ' (+ ' + fmtF(interet) + ' d\'intérêt = ' + fmtF(m + interet) + ' à rembourser)' : '') + ' ?\n\nIl est pris sur son propre argent ; ce qui reste dû sera retenu à son retrait.')) return;
+      b.disabled = true; $('pErr').textContent = '';
+      api('/api/tontine/' + id + '/prets', json('POST', { montant: m, taux_pct: taux, echeance: $('pEcheance').value || null, moyen: $('pMoyen').value, note: $('pNote').value }))
+        .then(function(d){ maj(d); if(window.smToast) smToast('Prêt accordé : ' + fmtF(m) + '.'); }).catch(function(err){ b.disabled = false; erreurModal(err); });
+    } else if(act === 'rembourser'){
+      const pid = b.dataset.p; b.disabled = true; $('pErr').textContent = '';
+      api('/api/tontine/' + id + '/prets/' + pid + '/remboursements', json('POST', { montant: Number($('rbM' + pid).value), date: $('rbD' + pid).value, moyen: $('rbY' + pid).value }))
+        .then(function(d){ maj(d); if(window.smToast) smToast('Remboursement enregistré.'); }).catch(function(err){ b.disabled = false; erreurModal(err); });
+    } else if(act === 'annuler-remb'){
+      if(!window.confirm('Annuler ce remboursement ? Le prêt redeviendra dû pour ce montant.')) return;
+      api('/api/tontine/' + id + '/prets/' + b.dataset.p + '/remboursements/' + b.dataset.r, { method: 'DELETE' }).then(maj).catch(erreurModal);
+    } else if(act === 'annuler-pret'){
+      if(!window.confirm('Annuler ce prêt saisi par erreur ? Il restera visible, marqué « annulé ».')) return;
+      api('/api/tontine/' + id + '/prets/' + b.dataset.p, { method: 'DELETE' }).then(maj).catch(erreurModal);
     } else if(act === 'supprimer'){
       if(!window.confirm('Supprimer cette tontine de ' + t.nom + ' ? Elle ne contient aucun versement.')) return;
       api('/api/tontine/' + id, { method: 'DELETE' }).then(function(){ fermer(); charger(); if(window.smToast) smToast('Tontine supprimée.'); }).catch(erreurModal);
