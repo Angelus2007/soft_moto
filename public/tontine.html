@@ -372,7 +372,7 @@
         <div><label for="nFreq">Rythme</label><select id="nFreq"><option value="jour">Par jour</option><option value="semaine">Par semaine</option><option value="mois">Par mois</option></select></div>
         <div><label for="nCases">Nombre de cases (durée du cycle)</label><input type="number" id="nCases" min="1" max="366" value="31"></div>
         <div><label for="nFrais">Frais retenus (en nombre de versements)</label><input type="number" id="nFrais" min="0" max="366" value="1"><p class="tt-hint" id="nFraisHint"></p></div>
-        <div><label for="nDebut">Date de début</label><input type="date" id="nDebut"></div>
+        <div><label for="nDebut">Date de début</label><input type="date" id="nDebut"><p class="tt-hint">Aujourd&apos;hui ou une date passée (rattrapage). Les cases déjà échues compteront comme en retard jusqu&apos;au versement.</p></div>
         <div class="full"><p class="tt-hint" id="nResume"></p></div>
       </div>
       <p class="tt-err" id="nErr" role="alert"></p>
@@ -488,12 +488,42 @@
   /* ---------------- Nouvelle tontine ---------------- */
   const DEFAUT_CASES = { jour: 31, semaine: 12, mois: 12 };
   const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  function addJoursIso(s, n) {
+    const d = new Date(s + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function addMoisIso(s, n) {
+    const [y, m, d] = s.split('-').map(Number), t = (m - 1) + n;
+    const an = y + Math.floor(t / 12), mo = ((t % 12) + 12) % 12;
+    const dernier = new Date(Date.UTC(an, mo + 1, 0)).getUTCDate();
+    return an + '-' + String(mo + 1).padStart(2, '0') + '-' + String(Math.min(d, dernier)).padStart(2, '0');
+  }
+  function dateCaseForm(debut, freq, i) {
+    if (freq === 'semaine') return addJoursIso(debut, 7 * (i - 1));
+    if (freq === 'mois') return addMoisIso(debut, i - 1);
+    return addJoursIso(debut, i - 1);
+  }
   function resume(){
     const m = Number($('nMontant').value) || 0, n = Number($('nCases').value) || 0, f = Number($('nFrais').value) || 0;
-    $('nResume').textContent = (m && n) ? 'À la fin du cycle : ' + fmtF(m * n) + ' versés au total. Frais retenus : ' + fmtF(f * m) + '. La personne récupère ' + fmtF(Math.max(0, m * (n - f))) + '.' : '';
+    const freq = $('nFreq').value || 'jour', debut = $('nDebut').value, auj = today();
     $('nFraisHint').textContent = f ? '= ' + fmtF(f * m) : 'aucun frais';
+    if (!(m && n && debut)) { $('nResume').textContent = ''; return; }
+    const fin = dateCaseForm(debut, freq, n);
+    let echeues = 0;
+    for (let i = 1; i <= n; i++) { if (dateCaseForm(debut, freq, i) <= auj) echeues++; }
+    let msg = 'Cycle du ' + dFR(debut) + ' au ' + dFR(fin) + ' · ' + n + ' cases. À la fin : ' + fmtF(m * n) + ' versés, frais ' + fmtF(f * m) + ', récupère ' + fmtF(Math.max(0, m * (n - f))) + '.';
+    if (debut < auj) {
+      let avant = 0;
+      for (let i = 1; i <= n; i++) { if (dateCaseForm(debut, freq, i) < auj) avant++; }
+      if (avant > 0) msg += ' Début antérieur : ' + avant + ' case' + (avant > 1 ? 's' : '') + ' déjà échue' + (avant > 1 ? 's' : '') + ' (en retard jusqu’au versement).';
+      else if (echeues > 0) msg += ' La 1re case est due aujourd’hui.';
+    } else if (debut > auj) {
+      msg += ' Début futur : aucune case due tant que la date de début n’est pas atteinte.';
+    }
+    $('nResume').textContent = msg;
   }
-  ['nMontant', 'nCases', 'nFrais'].forEach(function(i){ $(i).addEventListener('input', resume); });
+  ['nMontant', 'nCases', 'nFrais', 'nDebut'].forEach(function(i){ $(i).addEventListener('input', resume); });
   $('nFreq').addEventListener('change', function(){ $('nCases').value = DEFAUT_CASES[$('nFreq').value]; resume(); });
   function ouvrirFormulaire(pre){
     pre = pre || {};
