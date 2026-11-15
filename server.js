@@ -1259,6 +1259,17 @@ CREATE INDEX IF NOT EXISTS idx_tontine_remb ON tontine_remboursements (pret_id);
 
 const FREQ_TONTINE = ['jour', 'semaine', 'mois'];
 const MOYENS_TONTINE = ['especes', 'momo'];
+// Date de début : aujourd'hui, passée (rattrapage des cases) ou légèrement future. Rejet si trop lointaine.
+function validerDebutTontine(debut) {
+  if (!dateValide(debut)) return 'Date de début invalide.';
+  const auj = jourLocal(new Date());
+  const min = addJours(auj, -5 * 366); // ~5 ans en arrière
+  const max = addJours(auj, 366);      // jusqu'à 1 an dans le futur
+  if (debut < min) return 'La date de début ne peut pas remonter à plus de 5 ans.';
+  if (debut > max) return "La date de début ne peut pas être à plus d'un an dans le futur.";
+  return null;
+}
+
 function ajouterMois(s, n) {
   const [y, m, d] = s.split('-').map(Number), t = (m - 1) + n;
   const an = y + Math.floor(t / 12), mo = ((t % 12) + 12) % 12, dernier = new Date(Date.UTC(an, mo + 1, 0)).getUTCDate();
@@ -1370,7 +1381,8 @@ app.post('/api/tontine', exigerRole('admin'), h(async (req, res) => {
   if (!FREQ_TONTINE.includes(frequence)) return res.status(400).json({ erreur: 'Rythme invalide (jour, semaine ou mois).' });
   if (!Number.isInteger(nbCases) || nbCases < 1 || nbCases > 366) return res.status(400).json({ erreur: 'Le nombre de cases doit être compris entre 1 et 366.' });
   if (!Number.isInteger(fraisCases) || fraisCases < 0 || fraisCases > nbCases) return res.status(400).json({ erreur: 'Les frais (en nombre de versements retenus) doivent être compris entre 0 et le nombre de cases.' });
-  if (!dateValide(debut)) return res.status(400).json({ erreur: 'Date de début invalide.' });
+  const errDebut = validerDebutTontine(debut);
+  if (errDebut) return res.status(400).json({ erreur: errDebut });
   const id = await db.insertId('INSERT INTO tontine_comptes (nom, telephone, montant, frequence, nb_cases, frais_cases, date_debut, statut, compte_id, cree_le) VALUES (?,?,?,?,?,?,?,?,?,?)',
     [nom, telephone, montant, frequence, nbCases, fraisCases, debut, 'en_cours', req.user.id, now()]);
   res.status(201).json(await detailTontine(db, id));
@@ -1398,7 +1410,8 @@ app.patch('/api/tontine/:id', exigerRole('admin'), h(async (req, res) => {
     if (!FREQ_TONTINE.includes(frequence)) return res.status(400).json({ erreur: 'Rythme invalide.' });
     if (!Number.isInteger(nbCases) || nbCases < 1 || nbCases > 366) return res.status(400).json({ erreur: 'Le nombre de cases doit être compris entre 1 et 366.' });
     if (!Number.isInteger(fraisCases) || fraisCases < 0 || fraisCases > nbCases) return res.status(400).json({ erreur: 'Frais invalides.' });
-    if (!dateValide(debut)) return res.status(400).json({ erreur: 'Date de début invalide.' });
+    const errDebut = validerDebutTontine(debut);
+    if (errDebut) return res.status(400).json({ erreur: errDebut });
     Object.assign(champs, { montant, nb_cases: nbCases, frais_cases: fraisCases, frequence, date_debut: debut });
   }
   const cles = Object.keys(champs);
