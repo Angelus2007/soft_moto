@@ -1176,9 +1176,13 @@ app.delete('/api/demandes/:id', exigerRole('admin'), h(async (req, res) => {
 const COLONNES_TONTINE = {
   tontine_comptes: [['nom', 'TEXT'], ['telephone', 'TEXT'], ['montant', 'INTEGER'], ['frequence', "TEXT DEFAULT 'jour'"], ['nb_cases', 'INTEGER'], ['frais_cases', 'INTEGER DEFAULT 1'],
     ['date_debut', 'TEXT'], ['note', 'TEXT'], ['statut', "TEXT DEFAULT 'en_cours'"], ['date_retrait', 'TEXT'], ['montant_retire', 'INTEGER'], ['frais_retenus', 'INTEGER'],
-    ['retrait_moyen', 'TEXT'], ['retrait_compte_id', 'INTEGER'], ['compte_id', 'INTEGER'], ['cree_le', 'TEXT']],
+    ['retrait_moyen', 'TEXT'], ['retrait_compte_id', 'INTEGER'], ['prets_retenus', 'INTEGER'], ['compte_id', 'INTEGER'], ['cree_le', 'TEXT']],
   tontine_versements: [['tontine_id', 'INTEGER'], ['date_versement', 'TEXT'], ['montant', 'INTEGER'], ['moyen', 'TEXT'], ['compte_id', 'INTEGER'], ['cree_le', 'TEXT'],
-    ['annule', 'INTEGER DEFAULT 0'], ['annule_par', 'INTEGER'], ['annule_le', 'TEXT']]
+    ['annule', 'INTEGER DEFAULT 0'], ['annule_par', 'INTEGER'], ['annule_le', 'TEXT']],
+  tontine_prets: [['tontine_id', 'INTEGER'], ['montant', 'INTEGER'], ['taux_pct', 'REAL DEFAULT 0'], ['interet', 'INTEGER DEFAULT 0'], ['total_du', 'INTEGER'], ['date_pret', 'TEXT'],
+    ['echeance', 'TEXT'], ['moyen', 'TEXT'], ['note', 'TEXT'], ['compte_id', 'INTEGER'], ['cree_le', 'TEXT'], ['annule', 'INTEGER DEFAULT 0'], ['annule_par', 'INTEGER'], ['annule_le', 'TEXT']],
+  tontine_remboursements: [['pret_id', 'INTEGER'], ['tontine_id', 'INTEGER'], ['montant', 'INTEGER'], ['date_remboursement', 'TEXT'], ['moyen', 'TEXT'], ['retenue', 'INTEGER DEFAULT 0'],
+    ['compte_id', 'INTEGER'], ['cree_le', 'TEXT'], ['annule', 'INTEGER DEFAULT 0'], ['annule_par', 'INTEGER'], ['annule_le', 'TEXT']]
 };
 async function creerTablesTontine() {
   const { pk } = db.types;
@@ -1199,6 +1203,7 @@ CREATE TABLE IF NOT EXISTS tontine_comptes (
   frais_retenus INTEGER,
   retrait_moyen TEXT,
   retrait_compte_id INTEGER,
+  prets_retenus INTEGER,
   compte_id INTEGER,
   cree_le TEXT NOT NULL
 );
@@ -1215,33 +1220,41 @@ CREATE TABLE IF NOT EXISTS tontine_versements (
   annule_le TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tontine_versements ON tontine_versements (tontine_id);
+CREATE TABLE IF NOT EXISTS tontine_prets (
+  id ${pk},
+  tontine_id INTEGER NOT NULL,
+  montant INTEGER NOT NULL,
+  taux_pct REAL NOT NULL DEFAULT 0,
+  interet INTEGER NOT NULL DEFAULT 0,
+  total_du INTEGER NOT NULL,
+  date_pret TEXT NOT NULL,
+  echeance TEXT,
+  moyen TEXT,
+  note TEXT,
+  compte_id INTEGER,
+  cree_le TEXT NOT NULL,
+  annule INTEGER NOT NULL DEFAULT 0,
+  annule_par INTEGER,
+  annule_le TEXT
+);
+CREATE TABLE IF NOT EXISTS tontine_remboursements (
+  id ${pk},
+  pret_id INTEGER NOT NULL,
+  tontine_id INTEGER NOT NULL,
+  montant INTEGER NOT NULL,
+  date_remboursement TEXT NOT NULL,
+  moyen TEXT,
+  retenue INTEGER NOT NULL DEFAULT 0,
+  compte_id INTEGER,
+  cree_le TEXT NOT NULL,
+  annule INTEGER NOT NULL DEFAULT 0,
+  annule_par INTEGER,
+  annule_le TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tontine_prets ON tontine_prets (tontine_id);
+CREATE INDEX IF NOT EXISTS idx_tontine_remb ON tontine_remboursements (pret_id);
 `);
   for (const [table, cols] of Object.entries(COLONNES_TONTINE)) for (const [col, def] of cols) await db.ajouterColonne(table, col, def);
-  // Migrations pour une base tontine déjà créée par une ancienne version du schéma.
-  // - code_client NOT NULL : la tontine est désormais autonome (plus de lien Soft Moto).
-  // - CHECK sur statut : anciennes valeurs possibles ≠ 'en_cours' / 'payee'.
-  try {
-    if (db.dialect === 'postgres') {
-      await db.exec('ALTER TABLE tontine_comptes ALTER COLUMN code_client DROP NOT NULL');
-    } else if (db.dialect === 'sqlite') {
-      await db.exec("UPDATE tontine_comptes SET code_client = '' WHERE code_client IS NULL");
-    }
-  } catch (e) { /* colonne absente ou déjà nullable */ }
-  try {
-    if (db.dialect === 'postgres') {
-      // Nom automatique Postgres : table_colonne_check
-      await db.exec('ALTER TABLE tontine_comptes DROP CONSTRAINT IF EXISTS tontine_comptes_statut_check');
-      // Au cas où le nom différerait (créé manuellement ou autre version)
-      await db.exec(`DO $$ DECLARE r record; BEGIN
-        FOR r IN SELECT conname FROM pg_constraint
-          WHERE conrelid = 'tontine_comptes'::regclass AND contype = 'c'
-            AND pg_get_constraintdef(oid) ILIKE '%statut%'
-        LOOP
-          EXECUTE 'ALTER TABLE tontine_comptes DROP CONSTRAINT ' || quote_ident(r.conname);
-        END LOOP;
-      END $$`);
-    }
-  } catch (e) { /* contrainte absente */ }
 }
 
 const FREQ_TONTINE = ['jour', 'semaine', 'mois'];
@@ -1254,7 +1267,7 @@ function ajouterMois(s, n) {
 const dateCaseTontine = (c, i) => (c.frequence === 'semaine' ? addJours(c.date_debut, 7 * (i - 1)) : c.frequence === 'mois' ? ajouterMois(c.date_debut, i - 1) : addJours(c.date_debut, i - 1));
 
 // Calculs d'une tontine à partir de ses versements (les versements annulés ne comptent pas)
-function calculerTontine(c, versements, aujourdhui) {
+function calculerTontine(c, versements, aujourdhui, prets = []) {
   const actifs = versements.filter((x) => !x.annule);
   const total = actifs.reduce((t, x) => t + x.montant, 0);
   const casesPayees = Math.min(c.nb_cases, Math.floor(total / c.montant));
@@ -1263,15 +1276,41 @@ function calculerTontine(c, versements, aujourdhui) {
   const retard = c.statut === 'en_cours' ? Math.max(0, echuesAvant - casesPayees) : 0;
   const complet = casesPayees >= c.nb_cases;
   const frais = Math.min(total, (c.frais_cases || 0) * c.montant);
+  // Prêts pris sur l'épargne de la personne : ce qui reste dû (capital + intérêt) est garanti par son épargne nette de frais
+  const encours = prets.reduce((t, p) => t + (p.annule ? 0 : Math.max(0, p.total_du - (p.rembourse || 0))), 0);
+  const garantie = Math.max(0, total - frais);
   const situation = c.statut === 'payee' ? 'payee' : complet ? 'a_payer' : retard > 0 ? 'retard' : (echues - casesPayees > 0 ? 'aujourdhui' : 'a_jour');
   return {
     total, cases_payees: casesPayees, reste_partiel: total - casesPayees * c.montant, retard_cases: retard,
     complet, frais, a_remettre: Math.max(0, total - frais), objectif: c.nb_cases * c.montant,
+    prets_en_cours: encours, garantie, disponible_pret: Math.max(0, garantie - encours), a_remettre_net: Math.max(0, garantie - encours),
     fin_prevue: dateCaseTontine(c, c.nb_cases), situation,
     verse_aujourdhui: actifs.filter((x) => x.date_versement === aujourdhui).reduce((t, x) => t + x.montant, 0)
   };
 }
-const COLS_TONTINE = 'id, nom, telephone, montant, frequence, nb_cases, frais_cases, date_debut, note, statut, date_retrait, montant_retire, frais_retenus, retrait_moyen, retrait_compte_id, compte_id, cree_le';
+const COLS_TONTINE = 'id, nom, telephone, montant, frequence, nb_cases, frais_cases, date_debut, note, statut, date_retrait, montant_retire, frais_retenus, retrait_moyen, retrait_compte_id, prets_retenus, compte_id, cree_le';
+// Prêts (avec leurs remboursements) : Map tontine_id -> liste de prêts, chacun avec ce qui est remboursé, ce qui reste dû et son état
+async function pretsDe(q, tontineId) {
+  const filtre = tontineId ? ' WHERE p.tontine_id = ?' : '', args = tontineId ? [tontineId] : [];
+  const prets = await q.all(`SELECT p.id, p.tontine_id, p.montant, p.taux_pct, p.interet, p.total_du, p.date_pret, p.echeance, p.moyen, p.note, p.cree_le, p.annule, u.nom AS par
+    FROM tontine_prets p LEFT JOIN comptes u ON u.id = p.compte_id${filtre} ORDER BY p.date_pret DESC, p.id DESC`, args);
+  const rembs = await q.all(`SELECT r.id, r.pret_id, r.tontine_id, r.montant, r.date_remboursement, r.moyen, r.retenue, r.cree_le, r.annule, u.nom AS par
+    FROM tontine_remboursements r LEFT JOIN comptes u ON u.id = r.compte_id${filtre.replace('p.', 'r.')} ORDER BY r.date_remboursement DESC, r.id DESC`, args);
+  const aujourdhui = jourLocal(new Date());
+  const parPret = new Map();
+  rembs.forEach((r) => { if (!parPret.has(r.pret_id)) parPret.set(r.pret_id, []); parPret.get(r.pret_id).push(r); });
+  const out = new Map();
+  for (const p of prets) {
+    const rl = parPret.get(p.id) || [];
+    const rembourse = rl.filter((r) => !r.annule).reduce((t, r) => t + r.montant, 0);
+    const reste = p.annule ? 0 : Math.max(0, p.total_du - rembourse);
+    const etat = p.annule ? 'annule' : reste <= 0 ? 'rembourse' : (p.echeance && p.echeance < aujourdhui ? 'retard' : 'en_cours');
+    if (!out.has(p.tontine_id)) out.set(p.tontine_id, []);
+    out.get(p.tontine_id).push({ ...p, rembourse, reste, etat, remboursements: rl });
+  }
+  return out;
+}
+
 async function detailTontine(q, id) {
   const c = await q.get(`SELECT ${COLS_TONTINE} FROM tontine_comptes WHERE id = ?`, [id]);
   if (!c) return null;
@@ -1279,13 +1318,14 @@ async function detailTontine(q, id) {
     FROM tontine_versements v LEFT JOIN comptes u ON u.id = v.compte_id LEFT JOIN comptes a ON a.id = v.annule_par
     WHERE v.tontine_id = ? ORDER BY v.date_versement DESC, v.id DESC`, [id]);
   const aujourdhui = jourLocal(new Date());
-  const calc = calculerTontine(c, versements, aujourdhui);
+  const prets = (await pretsDe(q, id)).get(id) || [];
+  const calc = calculerTontine(c, versements, aujourdhui, prets);
   const grille = [];
   for (let i = 1; i <= c.nb_cases; i++) {
     const d = dateCaseTontine(c, i);
     grille.push({ numero: i, date: d, etat: i <= calc.cases_payees ? 'payee' : d < aujourdhui ? 'retard' : d === aujourdhui ? 'aujourdhui' : 'avenir' });
   }
-  return { ...c, ...calc, grille, versements, aujourdhui };
+  return { ...c, ...calc, grille, versements, prets, aujourdhui };
 }
 
 app.get('/api/tontine', exigerRole('admin'), h(async (req, res) => {
@@ -1294,7 +1334,8 @@ app.get('/api/tontine', exigerRole('admin'), h(async (req, res) => {
   const aujourdhui = jourLocal(new Date());
   const parCompte = new Map();
   versements.forEach((x) => { if (!parCompte.has(x.tontine_id)) parCompte.set(x.tontine_id, []); parCompte.get(x.tontine_id).push(x); });
-  const liste = comptes.map((c) => ({ ...c, ...calculerTontine(c, parCompte.get(c.id) || [], aujourdhui) }));
+  const pretsParCompte = await pretsDe(db, null);
+  const liste = comptes.map((c) => ({ ...c, ...calculerTontine(c, parCompte.get(c.id) || [], aujourdhui, pretsParCompte.get(c.id) || []) }));
   const enCours = liste.filter((c) => c.statut === 'en_cours');
   res.json({
     date: aujourdhui,
@@ -1305,7 +1346,9 @@ app.get('/api/tontine', exigerRole('admin'), h(async (req, res) => {
       a_remettre: liste.filter((c) => c.situation === 'a_payer').reduce((t, c) => t + c.a_remettre, 0),
       en_retard: liste.filter((c) => c.situation === 'retard').length,
       collecte_aujourdhui: liste.reduce((t, c) => t + c.verse_aujourdhui, 0),
-      payees: liste.filter((c) => c.statut === 'payee').length
+      payees: liste.filter((c) => c.statut === 'payee').length,
+      prets_en_cours: enCours.reduce((t, c) => t + c.prets_en_cours, 0),
+      prets_en_retard: [...pretsParCompte.values()].flat().filter((p) => p.etat === 'retard').length
     },
     tontines: liste
   });
@@ -1371,7 +1414,10 @@ app.delete('/api/tontine/:id', exigerRole('admin'), h(async (req, res) => {
   if (!c) return res.status(404).json({ erreur: 'Tontine introuvable.' });
   const nbV = (await db.get('SELECT COUNT(*) AS n FROM tontine_versements WHERE tontine_id = ? AND annule = 0', [id])).n;
   if (nbV > 0) return res.status(409).json({ erreur: "Cette tontine contient des versements : elle ne peut pas être supprimée. Annulez d'abord les versements, ou clôturez-la par un retrait." });
-  await db.tx(async (tx) => { await tx.run('DELETE FROM tontine_versements WHERE tontine_id = ?', [id]); await tx.run('DELETE FROM tontine_comptes WHERE id = ?', [id]); });
+  await db.tx(async (tx) => {
+    for (const t of ['tontine_remboursements', 'tontine_prets', 'tontine_versements']) await tx.run(`DELETE FROM ${t} WHERE tontine_id = ?`, [id]);
+    await tx.run('DELETE FROM tontine_comptes WHERE id = ?', [id]);
+  });
   res.json({ ok: true });
 }));
 
@@ -1406,10 +1452,102 @@ app.delete('/api/tontine/:id/versements/:vid', exigerRole('admin'), h(async (req
   const c = await db.get('SELECT statut FROM tontine_comptes WHERE id = ?', [id]);
   if (!c) return res.status(404).json({ erreur: 'Tontine introuvable.' });
   if (c.statut !== 'en_cours') return res.status(409).json({ erreur: 'Cette tontine est clôturée : annulez d\'abord le retrait pour modifier ses versements.' });
-  const x = await db.get('SELECT id, annule FROM tontine_versements WHERE id = ? AND tontine_id = ?', [vid, id]);
+  const x = await db.get('SELECT id, annule, montant FROM tontine_versements WHERE id = ? AND tontine_id = ?', [vid, id]);
   if (!x) return res.status(404).json({ erreur: 'Versement introuvable.' });
   if (x.annule) return res.status(409).json({ erreur: 'Ce versement est déjà annulé.' });
+  {
+    // Les prêts en cours sont garantis par l'épargne : on ne peut pas annuler un versement si l'épargne restante ne les couvre plus
+    const cc = await db.get(`SELECT ${COLS_TONTINE} FROM tontine_comptes WHERE id = ?`, [id]);
+    const tous = await db.all('SELECT date_versement, montant, annule FROM tontine_versements WHERE tontine_id = ?', [id]);
+    const prets = (await pretsDe(db, id)).get(id) || [];
+    const apres = calculerTontine(cc, tous, jourLocal(new Date()), prets);
+    const totalApres = apres.total - x.montant, fraisApres = Math.min(totalApres, (cc.frais_cases || 0) * cc.montant);
+    if (Math.max(0, totalApres - fraisApres) < apres.prets_en_cours) {
+      return res.status(409).json({ erreur: "Impossible d'annuler ce versement : l'épargne restante ne couvrirait plus les prêts en cours (" + apres.prets_en_cours.toLocaleString('fr-FR') + ' F à rembourser). Faites d\'abord rembourser les prêts.' });
+    }
+  }
   await db.run('UPDATE tontine_versements SET annule = 1, annule_par = ?, annule_le = ? WHERE id = ?', [req.user.id, now(), vid]);
+  res.json(await detailTontine(db, id));
+}));
+
+// Prêt : la personne emprunte SUR SON PROPRE ARGENT (son épargne nette de frais). Capital + intérêt (facultatif) ne peuvent pas dépasser ce qui est disponible.
+// Remboursement libre (partiel ou total) ; ce qui reste dû est retenu au moment du retrait.
+app.post('/api/tontine/:id/prets', exigerRole('admin'), h(async (req, res) => {
+  const id = idParam(req.params.id);
+  const aujourdhui = jourLocal(new Date());
+  await db.tx(async (tx) => {
+    const c = await tx.get(`SELECT ${COLS_TONTINE} FROM tontine_comptes WHERE id = ?`, [id]);
+    if (!c) throw new ErreurHttp(404, 'Tontine introuvable.');
+    if (c.statut !== 'en_cours') throw new ErreurHttp(409, 'Cette tontine est clôturée : aucun prêt possible.');
+    const montant = Number(req.body.montant), taux = req.body.taux_pct === undefined || req.body.taux_pct === '' ? 0 : Number(req.body.taux_pct);
+    const date = texte(req.body.date, 10) || aujourdhui, echeance = texte(req.body.echeance, 10) || null;
+    const moyen = texte(req.body.moyen, 20) || 'especes', note = texte(req.body.note, 300) || null;
+    if (!Number.isInteger(montant) || montant < 1 || montant > 100000000) throw new ErreurHttp(400, 'Le montant du prêt doit être un nombre entier de F CFA.');
+    if (!Number.isFinite(taux) || taux < 0 || taux > 100) throw new ErreurHttp(400, "Le taux d'intérêt doit être compris entre 0 et 100 %.");
+    if (!dateValide(date) || date > aujourdhui) throw new ErreurHttp(400, 'La date du prêt ne peut pas être dans le futur.');
+    if (date < c.date_debut) throw new ErreurHttp(400, 'La date du prêt est avant le début de la tontine.');
+    if (echeance && (!dateValide(echeance) || echeance < date)) throw new ErreurHttp(400, "La date d'échéance doit être valide et après la date du prêt.");
+    if (!MOYENS_TONTINE.includes(moyen)) throw new ErreurHttp(400, 'Moyen de paiement invalide (espèces ou MOMO).');
+    const versements = await tx.all('SELECT date_versement, montant, annule FROM tontine_versements WHERE tontine_id = ?', [id]);
+    const prets = (await pretsDe(tx, id)).get(id) || [];
+    const calc = calculerTontine(c, versements, aujourdhui, prets);
+    const interet = Math.round(montant * taux / 100), totalDu = montant + interet;
+    if (totalDu > calc.disponible_pret) {
+      throw new ErreurHttp(400, 'Prêt trop élevé : cette personne peut emprunter au maximum ' + calc.disponible_pret.toLocaleString('fr-FR') + ' F à rembourser (épargne versée ' +
+        calc.total.toLocaleString('fr-FR') + ' F, moins ' + calc.frais.toLocaleString('fr-FR') + ' F de frais, moins ' + calc.prets_en_cours.toLocaleString('fr-FR') + ' F de prêts en cours).');
+    }
+    await tx.insertId('INSERT INTO tontine_prets (tontine_id, montant, taux_pct, interet, total_du, date_pret, echeance, moyen, note, compte_id, cree_le) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      [id, montant, taux, interet, totalDu, date, echeance, moyen, note, req.user.id, now()]);
+  });
+  res.status(201).json(await detailTontine(db, id));
+}));
+
+// Annuler un prêt saisi par erreur (possible seulement tant qu'aucun remboursement n'a été enregistré)
+app.delete('/api/tontine/:id/prets/:pid', exigerRole('admin'), h(async (req, res) => {
+  const id = idParam(req.params.id), pid = idParam(req.params.pid);
+  const c = await db.get('SELECT statut FROM tontine_comptes WHERE id = ?', [id]);
+  if (!c) return res.status(404).json({ erreur: 'Tontine introuvable.' });
+  if (c.statut !== 'en_cours') return res.status(409).json({ erreur: "Cette tontine est clôturée : annulez d'abord le retrait." });
+  const p = await db.get('SELECT id, annule FROM tontine_prets WHERE id = ? AND tontine_id = ?', [pid, id]);
+  if (!p) return res.status(404).json({ erreur: 'Prêt introuvable.' });
+  if (p.annule) return res.status(409).json({ erreur: 'Ce prêt est déjà annulé.' });
+  const nb = (await db.get('SELECT COUNT(*) AS n FROM tontine_remboursements WHERE pret_id = ? AND annule = 0', [pid])).n;
+  if (nb > 0) return res.status(409).json({ erreur: "Des remboursements ont déjà été enregistrés pour ce prêt : annulez-les d'abord." });
+  await db.run('UPDATE tontine_prets SET annule = 1, annule_par = ?, annule_le = ? WHERE id = ?', [req.user.id, now(), pid]);
+  res.json(await detailTontine(db, id));
+}));
+
+app.post('/api/tontine/:id/prets/:pid/remboursements', exigerRole('admin'), h(async (req, res) => {
+  const id = idParam(req.params.id), pid = idParam(req.params.pid);
+  const aujourdhui = jourLocal(new Date());
+  await db.tx(async (tx) => {
+    const c = await tx.get('SELECT statut FROM tontine_comptes WHERE id = ?', [id]);
+    if (!c) throw new ErreurHttp(404, 'Tontine introuvable.');
+    if (c.statut !== 'en_cours') throw new ErreurHttp(409, 'Cette tontine est clôturée.');
+    const p = (await pretsDe(tx, id)).get(id)?.find((x) => x.id === pid);
+    if (!p || p.annule) throw new ErreurHttp(404, 'Prêt introuvable.');
+    const montant = req.body.montant === undefined || req.body.montant === '' ? p.reste : Number(req.body.montant);
+    const date = texte(req.body.date, 10) || aujourdhui, moyen = texte(req.body.moyen, 20) || 'especes';
+    if (!Number.isInteger(montant) || montant < 1) throw new ErreurHttp(400, 'Le montant remboursé doit être un nombre entier de F CFA.');
+    if (montant > p.reste) throw new ErreurHttp(400, 'Ce remboursement dépasse ce qui reste dû (' + p.reste.toLocaleString('fr-FR') + ' F).');
+    if (!dateValide(date) || date > aujourdhui) throw new ErreurHttp(400, 'La date du remboursement ne peut pas être dans le futur.');
+    if (date < p.date_pret) throw new ErreurHttp(400, 'La date du remboursement est avant la date du prêt.');
+    if (!MOYENS_TONTINE.includes(moyen)) throw new ErreurHttp(400, 'Moyen de paiement invalide (espèces ou MOMO).');
+    await tx.insertId('INSERT INTO tontine_remboursements (pret_id, tontine_id, montant, date_remboursement, moyen, retenue, compte_id, cree_le) VALUES (?,?,?,?,?,?,?,?)',
+      [pid, id, montant, date, moyen, 0, req.user.id, now()]);
+  });
+  res.status(201).json(await detailTontine(db, id));
+}));
+
+app.delete('/api/tontine/:id/prets/:pid/remboursements/:rid', exigerRole('admin'), h(async (req, res) => {
+  const id = idParam(req.params.id), pid = idParam(req.params.pid), rid = idParam(req.params.rid);
+  const c = await db.get('SELECT statut FROM tontine_comptes WHERE id = ?', [id]);
+  if (!c) return res.status(404).json({ erreur: 'Tontine introuvable.' });
+  if (c.statut !== 'en_cours') return res.status(409).json({ erreur: "Cette tontine est clôturée : annulez d'abord le retrait." });
+  const r = await db.get('SELECT id, annule, retenue FROM tontine_remboursements WHERE id = ? AND pret_id = ? AND tontine_id = ?', [rid, pid, id]);
+  if (!r) return res.status(404).json({ erreur: 'Remboursement introuvable.' });
+  if (r.annule) return res.status(409).json({ erreur: 'Ce remboursement est déjà annulé.' });
+  await db.run('UPDATE tontine_remboursements SET annule = 1, annule_par = ?, annule_le = ? WHERE id = ?', [req.user.id, now(), rid]);
   res.json(await detailTontine(db, id));
 }));
 
@@ -1422,13 +1560,20 @@ app.post('/api/tontine/:id/retrait', exigerRole('admin'), h(async (req, res) => 
     if (!c) throw new ErreurHttp(404, 'Tontine introuvable.');
     if (c.statut !== 'en_cours') throw new ErreurHttp(409, 'Cette tontine est déjà clôturée.');
     const versements = await tx.all('SELECT date_versement, montant, annule FROM tontine_versements WHERE tontine_id = ?', [id]);
-    const calc = calculerTontine(c, versements, aujourdhui);
+    const prets = (await pretsDe(tx, id)).get(id) || [];
+    const calc = calculerTontine(c, versements, aujourdhui, prets);
     if (calc.total <= 0) throw new ErreurHttp(409, 'Aucun versement : il n\'y a rien à retirer.');
     if (!calc.complet && req.body.anticipe !== true) throw new ErreurHttp(409, 'Le cycle n\'est pas terminé (' + calc.cases_payees + ' / ' + c.nb_cases + ' cases). Confirmez le retrait anticipé pour continuer.');
     const moyen = texte(req.body.moyen, 20) || 'especes';
     if (!MOYENS_TONTINE.includes(moyen)) throw new ErreurHttp(400, 'Moyen de paiement invalide (espèces ou MOMO).');
-    await tx.run('UPDATE tontine_comptes SET statut = ?, date_retrait = ?, montant_retire = ?, frais_retenus = ?, retrait_moyen = ?, retrait_compte_id = ? WHERE id = ?',
-      ['payee', aujourdhui, calc.a_remettre, calc.frais, moyen, req.user.id, id]);
+    // Ce qui reste dû sur les prêts est retenu sur le retrait : chaque prêt non soldé est clos par une « retenue » automatique
+    for (const p of prets) {
+      if (p.annule || p.reste <= 0) continue;
+      await tx.run('INSERT INTO tontine_remboursements (pret_id, tontine_id, montant, date_remboursement, moyen, retenue, compte_id, cree_le) VALUES (?,?,?,?,?,?,?,?)',
+        [p.id, id, p.reste, aujourdhui, 'retenue', 1, req.user.id, now()]);
+    }
+    await tx.run('UPDATE tontine_comptes SET statut = ?, date_retrait = ?, montant_retire = ?, frais_retenus = ?, prets_retenus = ?, retrait_moyen = ?, retrait_compte_id = ? WHERE id = ?',
+      ['payee', aujourdhui, calc.a_remettre_net, calc.frais, calc.prets_en_cours, moyen, req.user.id, id]);
   });
   res.json(await detailTontine(db, id));
 }));
@@ -1439,7 +1584,10 @@ app.delete('/api/tontine/:id/retrait', exigerRole('admin'), h(async (req, res) =
   const c = await db.get('SELECT statut FROM tontine_comptes WHERE id = ?', [id]);
   if (!c) return res.status(404).json({ erreur: 'Tontine introuvable.' });
   if (c.statut !== 'payee') return res.status(409).json({ erreur: "Aucun retrait n'a été enregistré pour cette tontine." });
-  await db.run("UPDATE tontine_comptes SET statut = 'en_cours', date_retrait = NULL, montant_retire = NULL, frais_retenus = NULL, retrait_moyen = NULL, retrait_compte_id = NULL WHERE id = ?", [id]);
+  await db.tx(async (tx) => {
+    await tx.run('DELETE FROM tontine_remboursements WHERE tontine_id = ? AND retenue = 1', [id]); // les retenues automatiques disparaissent : les prêts redeviennent dus
+    await tx.run("UPDATE tontine_comptes SET statut = 'en_cours', date_retrait = NULL, montant_retire = NULL, frais_retenus = NULL, prets_retenus = NULL, retrait_moyen = NULL, retrait_compte_id = NULL WHERE id = ?", [id]);
+  });
   res.json(await detailTontine(db, id));
 }));
 
