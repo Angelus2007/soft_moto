@@ -1259,17 +1259,6 @@ CREATE INDEX IF NOT EXISTS idx_tontine_remb ON tontine_remboursements (pret_id);
 
 const FREQ_TONTINE = ['jour', 'semaine', 'mois'];
 const MOYENS_TONTINE = ['especes', 'momo'];
-// Date de début : aujourd'hui, passée (rattrapage des cases) ou légèrement future. Rejet si trop lointaine.
-function validerDebutTontine(debut) {
-  if (!dateValide(debut)) return 'Date de début invalide.';
-  const auj = jourLocal(new Date());
-  const min = addJours(auj, -5 * 366); // ~5 ans en arrière
-  const max = addJours(auj, 366);      // jusqu'à 1 an dans le futur
-  if (debut < min) return 'La date de début ne peut pas remonter à plus de 5 ans.';
-  if (debut > max) return "La date de début ne peut pas être à plus d'un an dans le futur.";
-  return null;
-}
-
 function ajouterMois(s, n) {
   const [y, m, d] = s.split('-').map(Number), t = (m - 1) + n;
   const an = y + Math.floor(t / 12), mo = ((t % 12) + 12) % 12, dernier = new Date(Date.UTC(an, mo + 1, 0)).getUTCDate();
@@ -1281,11 +1270,17 @@ const dateCaseTontine = (c, i) => (c.frequence === 'semaine' ? addJours(c.date_d
 function calculerTontine(c, versements, aujourdhui, prets = []) {
   const actifs = versements.filter((x) => !x.annule);
   const total = actifs.reduce((t, x) => t + x.montant, 0);
-  const casesPayees = Math.min(c.nb_cases, Math.floor(total / c.montant));
+  const illimite = !(c.nb_cases > 0);
+  const casesPayees = illimite ? Math.floor(total / c.montant) : Math.min(c.nb_cases, Math.floor(total / c.montant));
+  // nb_cases = 0 : tontine SANS LIMITE de cases (la personne verse tant qu'elle veut et retire quand elle veut)
   let echues = 0, echuesAvant = 0;
-  for (let i = 1; i <= c.nb_cases; i++) { const d = dateCaseTontine(c, i); if (d <= aujourdhui) echues++; if (d < aujourdhui) echuesAvant++; }
+  if (illimite) {
+    for (let i = 1; i <= 20000; i++) { const d = dateCaseTontine(c, i); if (d > aujourdhui) break; echues++; if (d < aujourdhui) echuesAvant++; }
+  } else {
+    for (let i = 1; i <= c.nb_cases; i++) { const d = dateCaseTontine(c, i); if (d <= aujourdhui) echues++; if (d < aujourdhui) echuesAvant++; }
+  }
   const retard = c.statut === 'en_cours' ? Math.max(0, echuesAvant - casesPayees) : 0;
-  const complet = casesPayees >= c.nb_cases;
+  const complet = !illimite && casesPayees >= c.nb_cases;
   const frais = Math.min(total, (c.frais_cases || 0) * c.montant);
   // Prêts pris sur l'épargne de la personne : ce qui reste dû (capital + intérêt) est garanti par son épargne nette de frais
   const encours = prets.reduce((t, p) => t + (p.annule ? 0 : Math.max(0, p.total_du - (p.rembourse || 0))), 0);
@@ -1293,9 +1288,9 @@ function calculerTontine(c, versements, aujourdhui, prets = []) {
   const situation = c.statut === 'payee' ? 'payee' : complet ? 'a_payer' : retard > 0 ? 'retard' : (echues - casesPayees > 0 ? 'aujourdhui' : 'a_jour');
   return {
     total, cases_payees: casesPayees, reste_partiel: total - casesPayees * c.montant, retard_cases: retard,
-    complet, frais, a_remettre: Math.max(0, total - frais), objectif: c.nb_cases * c.montant,
+    complet, illimite, echues, frais, a_remettre: Math.max(0, total - frais), objectif: illimite ? null : c.nb_cases * c.montant,
     prets_en_cours: encours, garantie, disponible_pret: Math.max(0, garantie - encours), a_remettre_net: Math.max(0, garantie - encours),
-    fin_prevue: dateCaseTontine(c, c.nb_cases), situation,
+    fin_prevue: illimite ? null : dateCaseTontine(c, c.nb_cases), situation,
     verse_aujourdhui: actifs.filter((x) => x.date_versement === aujourdhui).reduce((t, x) => t + x.montant, 0)
   };
 }
@@ -1332,7 +1327,8 @@ async function detailTontine(q, id) {
   const prets = (await pretsDe(q, id)).get(id) || [];
   const calc = calculerTontine(c, versements, aujourdhui, prets);
   const grille = [];
-  for (let i = 1; i <= c.nb_cases; i++) {
+  const nbGrille = calc.illimite ? Math.min(5000, Math.max(calc.cases_payees, calc.echues) + 7) : c.nb_cases; // sans limite : les cases payées, les cases échues et les 7 prochaines
+  for (let i = 1; i <= nbGrille; i++) {
     const d = dateCaseTontine(c, i);
     grille.push({ numero: i, date: d, etat: i <= calc.cases_payees ? 'payee' : d < aujourdhui ? 'retard' : d === aujourdhui ? 'aujourdhui' : 'avenir' });
   }
@@ -1373,16 +1369,15 @@ app.get('/api/tontine/:id', exigerRole('admin'), h(async (req, res) => {
 
 app.post('/api/tontine', exigerRole('admin'), h(async (req, res) => {
   const nom = texte(req.body.nom, 100), telephone = texte(req.body.telephone, 30) || null;
-  const montant = Number(req.body.montant), nbCases = Number(req.body.nb_cases), fraisCases = req.body.frais_cases === undefined || req.body.frais_cases === '' ? 1 : Number(req.body.frais_cases);
+  const montant = Number(req.body.montant), nbCases = req.body.nb_cases === undefined || req.body.nb_cases === null || req.body.nb_cases === '' ? 0 : Number(req.body.nb_cases), fraisCases = req.body.frais_cases === undefined || req.body.frais_cases === '' ? 1 : Number(req.body.frais_cases);
   const frequence = texte(req.body.frequence, 10) || 'jour';
   const debut = texte(req.body.date_debut, 10) || jourLocal(new Date());
   if (nom.length < 2) return res.status(400).json({ erreur: 'Entrez le nom de la personne.' });
   if (!Number.isInteger(montant) || montant < 50 || montant > 10000000) return res.status(400).json({ erreur: 'Le montant de chaque versement doit être un nombre entier de F CFA (50 au minimum).' });
   if (!FREQ_TONTINE.includes(frequence)) return res.status(400).json({ erreur: 'Rythme invalide (jour, semaine ou mois).' });
-  if (!Number.isInteger(nbCases) || nbCases < 1 || nbCases > 366) return res.status(400).json({ erreur: 'Le nombre de cases doit être compris entre 1 et 366.' });
-  if (!Number.isInteger(fraisCases) || fraisCases < 0 || fraisCases > nbCases) return res.status(400).json({ erreur: 'Les frais (en nombre de versements retenus) doivent être compris entre 0 et le nombre de cases.' });
-  const errDebut = validerDebutTontine(debut);
-  if (errDebut) return res.status(400).json({ erreur: errDebut });
+  if (!Number.isInteger(nbCases) || nbCases < 0 || nbCases > 100000) return res.status(400).json({ erreur: 'Le nombre de cases doit être un nombre entier (laissez vide ou 0 pour ne pas limiter les cases).' });
+  if (!Number.isInteger(fraisCases) || fraisCases < 0 || (nbCases > 0 && fraisCases > nbCases) || fraisCases > 1000) return res.status(400).json({ erreur: 'Les frais (en nombre de versements retenus) doivent être compris entre 0 et le nombre de cases.' });
+  if (!dateValide(debut)) return res.status(400).json({ erreur: 'Date de début invalide.' });
   const id = await db.insertId('INSERT INTO tontine_comptes (nom, telephone, montant, frequence, nb_cases, frais_cases, date_debut, statut, compte_id, cree_le) VALUES (?,?,?,?,?,?,?,?,?,?)',
     [nom, telephone, montant, frequence, nbCases, fraisCases, debut, 'en_cours', req.user.id, now()]);
   res.status(201).json(await detailTontine(db, id));
@@ -1402,16 +1397,15 @@ app.patch('/api/tontine/:id', exigerRole('admin'), h(async (req, res) => {
     const nbV = (await db.get('SELECT COUNT(*) AS n FROM tontine_versements WHERE tontine_id = ? AND annule = 0', [id])).n;
     if (nbV > 0 || c.statut !== 'en_cours') return res.status(409).json({ erreur: 'Les règles du cycle (montant, rythme, nombre de cases, frais, début) ne se modifient plus une fois un versement enregistré.' });
     const montant = req.body.montant !== undefined ? Number(req.body.montant) : c.montant;
-    const nbCases = req.body.nb_cases !== undefined ? Number(req.body.nb_cases) : c.nb_cases;
+    const nbCases = req.body.nb_cases !== undefined ? (req.body.nb_cases === null || req.body.nb_cases === '' ? 0 : Number(req.body.nb_cases)) : c.nb_cases;
     const fraisCases = req.body.frais_cases !== undefined ? Number(req.body.frais_cases) : c.frais_cases;
     const frequence = req.body.frequence !== undefined ? texte(req.body.frequence, 10) : c.frequence;
     const debut = req.body.date_debut !== undefined ? texte(req.body.date_debut, 10) : c.date_debut;
     if (!Number.isInteger(montant) || montant < 50 || montant > 10000000) return res.status(400).json({ erreur: 'Montant de versement invalide.' });
     if (!FREQ_TONTINE.includes(frequence)) return res.status(400).json({ erreur: 'Rythme invalide.' });
-    if (!Number.isInteger(nbCases) || nbCases < 1 || nbCases > 366) return res.status(400).json({ erreur: 'Le nombre de cases doit être compris entre 1 et 366.' });
-    if (!Number.isInteger(fraisCases) || fraisCases < 0 || fraisCases > nbCases) return res.status(400).json({ erreur: 'Frais invalides.' });
-    const errDebut = validerDebutTontine(debut);
-    if (errDebut) return res.status(400).json({ erreur: errDebut });
+    if (!Number.isInteger(nbCases) || nbCases < 0 || nbCases > 100000) return res.status(400).json({ erreur: 'Le nombre de cases doit être un nombre entier (vide ou 0 = sans limite).' });
+    if (!Number.isInteger(fraisCases) || fraisCases < 0 || (nbCases > 0 && fraisCases > nbCases) || fraisCases > 1000) return res.status(400).json({ erreur: 'Frais invalides.' });
+    if (!dateValide(debut)) return res.status(400).json({ erreur: 'Date de début invalide.' });
     Object.assign(champs, { montant, nb_cases: nbCases, frais_cases: fraisCases, frequence, date_debut: debut });
   }
   const cles = Object.keys(champs);
@@ -1448,13 +1442,14 @@ app.post('/api/tontine/:id/versements', exigerRole('admin'), h(async (req, res) 
     const moyen = texte(req.body.moyen, 20) || 'especes';
     if (!Number.isInteger(montant) || montant < 1 || montant > 100000000) throw new ErreurHttp(400, 'Le montant du versement doit être un nombre entier de F CFA.');
     if (!dateValide(date) || date > aujourdhui) throw new ErreurHttp(400, 'La date du versement ne peut pas être dans le futur.');
-    if (date < c.date_debut) throw new ErreurHttp(400, 'La date du versement est avant le début de la tontine (' + c.date_debut.split('-').reverse().join('/') + ').');
     if (!MOYENS_TONTINE.includes(moyen)) throw new ErreurHttp(400, 'Moyen de paiement invalide (espèces ou MOMO).');
     const total = (await tx.get('SELECT COALESCE(SUM(montant), 0) AS t FROM tontine_versements WHERE tontine_id = ? AND annule = 0', [id])).t;
-    if (total + montant > c.nb_cases * c.montant) {
+    if (c.nb_cases > 0 && total + montant > c.nb_cases * c.montant) {
       throw new ErreurHttp(400, 'Ce versement dépasse l\'objectif de la tontine (' + (c.nb_cases * c.montant).toLocaleString('fr-FR') + ' F). Il reste ' + (c.nb_cases * c.montant - total).toLocaleString('fr-FR') + ' F à verser.');
     }
     ajoute = await tx.insertId('INSERT INTO tontine_versements (tontine_id, date_versement, montant, moyen, compte_id, cree_le) VALUES (?,?,?,?,?,?)', [id, date, montant, moyen, req.user.id, now()]);
+    // Versement daté AVANT le début de la tontine (anciens versements) : le début est avancé à cette date
+    if (date < c.date_debut) await tx.run('UPDATE tontine_comptes SET date_debut = ? WHERE id = ?', [date, id]);
   });
   res.status(201).json(await detailTontine(db, id));
 }));
@@ -1576,7 +1571,7 @@ app.post('/api/tontine/:id/retrait', exigerRole('admin'), h(async (req, res) => 
     const prets = (await pretsDe(tx, id)).get(id) || [];
     const calc = calculerTontine(c, versements, aujourdhui, prets);
     if (calc.total <= 0) throw new ErreurHttp(409, 'Aucun versement : il n\'y a rien à retirer.');
-    if (!calc.complet && req.body.anticipe !== true) throw new ErreurHttp(409, 'Le cycle n\'est pas terminé (' + calc.cases_payees + ' / ' + c.nb_cases + ' cases). Confirmez le retrait anticipé pour continuer.');
+    if (!calc.complet && !calc.illimite && req.body.anticipe !== true) throw new ErreurHttp(409, 'Le cycle n\'est pas terminé (' + calc.cases_payees + ' / ' + c.nb_cases + ' cases). Confirmez le retrait anticipé pour continuer.');
     const moyen = texte(req.body.moyen, 20) || 'especes';
     if (!MOYENS_TONTINE.includes(moyen)) throw new ErreurHttp(400, 'Moyen de paiement invalide (espèces ou MOMO).');
     // Ce qui reste dû sur les prêts est retenu sur le retrait : chaque prêt non soldé est clos par une « retenue » automatique
