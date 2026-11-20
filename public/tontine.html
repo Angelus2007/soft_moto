@@ -370,9 +370,9 @@
         <div><label for="nTel">Téléphone</label><input type="tel" id="nTel" maxlength="30" autocomplete="off" placeholder="+229 …"></div>
         <div><label for="nMontant">Versement par case (F CFA)</label><input type="number" id="nMontant" min="50" step="50" value="500"></div>
         <div><label for="nFreq">Rythme</label><select id="nFreq"><option value="jour">Par jour</option><option value="semaine">Par semaine</option><option value="mois">Par mois</option></select></div>
-        <div><label for="nCases">Nombre de cases (durée du cycle)</label><input type="number" id="nCases" min="1" max="366" value="31"></div>
+        <div><label for="nCases">Nombre de cases (vide = sans limite)</label><input type="number" id="nCases" min="0" placeholder="sans limite"></div>
         <div><label for="nFrais">Frais retenus (en nombre de versements)</label><input type="number" id="nFrais" min="0" max="366" value="1"><p class="tt-hint" id="nFraisHint"></p></div>
-        <div><label for="nDebut">Date de début</label><input type="date" id="nDebut"><p class="tt-hint">Aujourd&apos;hui ou une date passée (rattrapage). Les cases déjà échues compteront comme en retard jusqu&apos;au versement.</p></div>
+        <div><label for="nDebut">Date de début</label><input type="date" id="nDebut"></div>
         <div class="full"><p class="tt-hint" id="nResume"></p></div>
       </div>
       <p class="tt-err" id="nErr" role="alert"></p>
@@ -463,13 +463,13 @@
       return filtreOk(t, onglet) && (!q || t.nom.toLowerCase().includes(q) || (t.telephone || '').toLowerCase().includes(q));
     });
     $('tbody').innerHTML = l.map(function(t){
-      const pct = Math.round(t.cases_payees / t.nb_cases * 100);
+      const pct = t.illimite ? Math.min(100, Math.round(t.cases_payees / Math.max(1, t.echues) * 100)) : Math.round(t.cases_payees / t.nb_cases * 100);
       return '<tr><td data-label="Personne"><div class="driver-cell"><div class="avatar ' + avatarClass(t.nom) + '">' + esc(initials(t.nom)) + '</div><div>' +
         '<div class="d-name"><a class="code-link" href="#" data-open="' + t.id + '">' + esc(t.nom) + '</a></div>' +
         '<div class="d-phone">' + esc(t.telephone || '—') + '</div></div></div></td>' +
-        '<td data-label="Versement"><strong>' + fmtF(t.montant) + '</strong> ' + RYTHME[t.frequence] + '<span class="sub-note">' + t.nb_cases + ' cases · du ' + dFR(t.date_debut) + ' au ' + dFR(t.fin_prevue) + '</span></td>' +
-        '<td data-label="Progression">' + t.cases_payees + ' / ' + t.nb_cases + ' cases<div class="ct-bar"><i style="width:' + pct + '%"></i></div></td>' +
-        '<td data-label="Déposé"><strong>' + fmtF(t.total) + '</strong><span class="sub-note">sur ' + fmtF(t.objectif) + '</span>' + (t.prets_en_cours ? '<span class="sub-note" style="color:var(--impaye-dark);">prêt en cours : ' + fmtF(t.prets_en_cours) + '</span>' : '') + '</td>' +
+        '<td data-label="Versement"><strong>' + fmtF(t.montant) + '</strong> ' + RYTHME[t.frequence] + '<span class="sub-note">' + (t.illimite ? 'sans limite de cases · depuis le ' + dFR(t.date_debut) : t.nb_cases + ' cases · du ' + dFR(t.date_debut) + ' au ' + dFR(t.fin_prevue)) + '</span></td>' +
+        '<td data-label="Progression">' + (t.illimite ? t.cases_payees + ' case' + (t.cases_payees > 1 ? 's' : '') + ' payée' + (t.cases_payees > 1 ? 's' : '') : t.cases_payees + ' / ' + t.nb_cases + ' cases') + '<div class="ct-bar"><i style="width:' + pct + '%"></i></div>' + (t.illimite ? '<span class="sub-note">sur ' + t.echues + ' échue' + (t.echues > 1 ? 's' : '') + '</span>' : '') + '</td>' +
+        '<td data-label="Déposé"><strong>' + fmtF(t.total) + '</strong>' + (t.illimite ? '' : '<span class="sub-note">sur ' + fmtF(t.objectif) + '</span>') + (t.prets_en_cours ? '<span class="sub-note" style="color:var(--impaye-dark);">prêt en cours : ' + fmtF(t.prets_en_cours) + '</span>' : '') + '</td>' +
         '<td data-label="Situation">' + SITUATION[t.situation](t) + (t.statut === 'payee' ? '<span class="sub-note">retiré le ' + dFR(t.date_retrait) + ' : ' + fmtF(t.montant_retire) + '</span>' : '') + '</td>' +
         '<td data-label="Actions"><div class="row-actions">' + (t.statut === 'en_cours' ? '<button type="button" class="primaire" data-open="' + t.id + '">Verser</button>' : '') +
         '<button type="button" data-open="' + t.id + '">Ouvrir</button></div></td></tr>';
@@ -486,49 +486,20 @@
   });
 
   /* ---------------- Nouvelle tontine ---------------- */
-  const DEFAUT_CASES = { jour: 31, semaine: 12, mois: 12 };
   const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  function addJoursIso(s, n) {
-    const d = new Date(s + 'T00:00:00Z');
-    d.setUTCDate(d.getUTCDate() + n);
-    return d.toISOString().slice(0, 10);
-  }
-  function addMoisIso(s, n) {
-    const [y, m, d] = s.split('-').map(Number), t = (m - 1) + n;
-    const an = y + Math.floor(t / 12), mo = ((t % 12) + 12) % 12;
-    const dernier = new Date(Date.UTC(an, mo + 1, 0)).getUTCDate();
-    return an + '-' + String(mo + 1).padStart(2, '0') + '-' + String(Math.min(d, dernier)).padStart(2, '0');
-  }
-  function dateCaseForm(debut, freq, i) {
-    if (freq === 'semaine') return addJoursIso(debut, 7 * (i - 1));
-    if (freq === 'mois') return addMoisIso(debut, i - 1);
-    return addJoursIso(debut, i - 1);
-  }
   function resume(){
     const m = Number($('nMontant').value) || 0, n = Number($('nCases').value) || 0, f = Number($('nFrais').value) || 0;
-    const freq = $('nFreq').value || 'jour', debut = $('nDebut').value, auj = today();
+    $('nResume').textContent = !m ? '' : (n
+      ? 'À la fin du cycle : ' + fmtF(m * n) + ' versés au total. Frais retenus : ' + fmtF(f * m) + '. La personne récupère ' + fmtF(Math.max(0, m * (n - f))) + '.'
+      : 'Sans limite de cases : la personne verse autant qu\'elle veut (même pour des dates passées) et retire quand elle veut. Frais retenus au retrait : ' + fmtF(f * m) + '.');
     $('nFraisHint').textContent = f ? '= ' + fmtF(f * m) : 'aucun frais';
-    if (!(m && n && debut)) { $('nResume').textContent = ''; return; }
-    const fin = dateCaseForm(debut, freq, n);
-    let echeues = 0;
-    for (let i = 1; i <= n; i++) { if (dateCaseForm(debut, freq, i) <= auj) echeues++; }
-    let msg = 'Cycle du ' + dFR(debut) + ' au ' + dFR(fin) + ' · ' + n + ' cases. À la fin : ' + fmtF(m * n) + ' versés, frais ' + fmtF(f * m) + ', récupère ' + fmtF(Math.max(0, m * (n - f))) + '.';
-    if (debut < auj) {
-      let avant = 0;
-      for (let i = 1; i <= n; i++) { if (dateCaseForm(debut, freq, i) < auj) avant++; }
-      if (avant > 0) msg += ' Début antérieur : ' + avant + ' case' + (avant > 1 ? 's' : '') + ' déjà échue' + (avant > 1 ? 's' : '') + ' (en retard jusqu’au versement).';
-      else if (echeues > 0) msg += ' La 1re case est due aujourd’hui.';
-    } else if (debut > auj) {
-      msg += ' Début futur : aucune case due tant que la date de début n’est pas atteinte.';
-    }
-    $('nResume').textContent = msg;
   }
-  ['nMontant', 'nCases', 'nFrais', 'nDebut'].forEach(function(i){ $(i).addEventListener('input', resume); });
-  $('nFreq').addEventListener('change', function(){ $('nCases').value = DEFAUT_CASES[$('nFreq').value]; resume(); });
+  ['nMontant', 'nCases', 'nFrais'].forEach(function(i){ $(i).addEventListener('input', resume); });
+  $('nFreq').addEventListener('change', resume);
   function ouvrirFormulaire(pre){
     pre = pre || {};
     $('nNom').value = pre.nom || ''; $('nTel').value = pre.telephone || '';
-    $('nMontant').value = pre.montant || 500; $('nFreq').value = pre.frequence || 'jour'; $('nCases').value = pre.nb_cases || DEFAUT_CASES[pre.frequence || 'jour'];
+    $('nMontant').value = pre.montant || 500; $('nFreq').value = pre.frequence || 'jour'; $('nCases').value = pre.nb_cases || '';
     $('nFrais').value = pre.frais_cases === undefined ? 1 : pre.frais_cases; $('nDebut').value = today(); $('nErr').textContent = '';
     resume(); $('newBox').classList.add('open'); $('nNom').focus(); window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -537,7 +508,7 @@
   $('nSave').addEventListener('click', function(){
     const btn = this; $('nErr').textContent = ''; btn.disabled = true;
     api('/api/tontine', json('POST', { nom: $('nNom').value, telephone: $('nTel').value, montant: Number($('nMontant').value), frequence: $('nFreq').value,
-      nb_cases: Number($('nCases').value), frais_cases: Number($('nFrais').value), date_debut: $('nDebut').value }))
+      nb_cases: Number($('nCases').value) || 0, frais_cases: Number($('nFrais').value), date_debut: $('nDebut').value }))
       .then(function(t){ $('newBox').classList.remove('open'); onglet = 'en_cours'; if(window.smToast) smToast('Tontine ouverte pour ' + t.nom + '.'); return charger().then(function(){ ouvrir(t.id); }); })
       .catch(function(err){ $('nErr').textContent = smMessage(err); })
       .finally(function(){ btn.disabled = false; });
@@ -597,22 +568,22 @@
 
   function dessiner(){
     const t = ouverte; if(!t) return;
-    const enCours = t.statut === 'en_cours', pct = Math.round(t.cases_payees / t.nb_cases * 100);
+    const enCours = t.statut === 'en_cours', pct = t.illimite ? Math.min(100, Math.round(t.cases_payees / Math.max(1, t.echues) * 100)) : Math.round(t.cases_payees / t.nb_cases * 100);
     const aucunVersement = !t.versements.some(function(v){ return !v.annule; });
     let h = '<div class="tt-head"><div class="avatar ' + avatarClass(t.nom) + '">' + esc(initials(t.nom)) + '</div><div><h2>' + esc(t.nom) + '</h2>' +
       '<div class="d-phone">' + esc(t.telephone || '—') +
-      ' · ' + fmtF(t.montant) + ' ' + RYTHME[t.frequence] + ' · ' + t.nb_cases + ' cases</div><div style="margin-top:6px;">' + SITUATION[t.situation](t) + '</div></div>' +
+      ' · ' + fmtF(t.montant) + ' ' + RYTHME[t.frequence] + ' · ' + (t.illimite ? 'sans limite de cases' : t.nb_cases + ' cases') + '</div><div style="margin-top:6px;">' + SITUATION[t.situation](t) + '</div></div>' +
       '<button type="button" class="tt-close" data-a="fermer" aria-label="Fermer">×</button></div>';
 
     h += '<div class="tt-kpis">' +
       '<div class="tt-kpi"><div class="l">Déposé</div><div class="v">' + fmtF(t.total) + '</div></div>' +
-      '<div class="tt-kpi"><div class="l">Cases payées</div><div class="v">' + t.cases_payees + ' / ' + t.nb_cases + '</div></div>' +
+      '<div class="tt-kpi"><div class="l">Cases payées</div><div class="v">' + (t.illimite ? t.cases_payees : t.cases_payees + ' / ' + t.nb_cases) + '</div></div>' +
       '<div class="tt-kpi"><div class="l">Frais retenus</div><div class="v">' + fmtF(t.frais) + '</div></div>' +
       '<div class="tt-kpi"><div class="l">À remettre</div><div class="v">' + fmtF(t.statut === 'payee' ? t.montant_retire : t.a_remettre_net) + '</div>' + (t.prets_en_cours && t.statut !== 'payee' ? '<div class="tt-hint">après retenue des prêts (' + fmtF(t.prets_en_cours) + ')</div>' : '') + '</div></div>' +
       '<div class="ct-bar" style="margin:0 0 4px;"><i style="width:' + pct + '%"></i></div>' +
-      '<p class="tt-hint">Du ' + dFR(t.date_debut) + ' au ' + dFR(t.fin_prevue) + (t.reste_partiel ? ' · ' + fmtF(t.reste_partiel) + ' versés pour la case suivante (il manque ' + fmtF(t.montant - t.reste_partiel) + ')' : '') + '</p>';
+      '<p class="tt-hint">' + (t.illimite ? 'Depuis le ' + dFR(t.date_debut) + ' · sans limite de cases (' + t.cases_payees + ' payée' + (t.cases_payees > 1 ? 's' : '') + ' sur ' + t.echues + ' échue' + (t.echues > 1 ? 's' : '') + ')' : 'Du ' + dFR(t.date_debut) + ' au ' + dFR(t.fin_prevue)) + (t.reste_partiel ? ' · ' + fmtF(t.reste_partiel) + ' versés pour la case suivante (il manque ' + fmtF(t.montant - t.reste_partiel) + ')' : '') + '</p>';
 
-    h += '<div class="tt-cases">' + t.grille.map(function(c){
+    h += '<div class="tt-cases" style="max-height:300px; overflow:auto;">' + t.grille.map(function(c){
       return '<div class="tt-case ' + c.etat + '" title="Case ' + c.numero + ' · ' + dFR(c.date) + '"><b>' + c.numero + '</b>' + (c.etat === 'payee' ? '✓' : (c.etat === 'retard' ? 'retard' : c.etat === 'aujourdhui' ? 'auj.' : dFR(c.date).slice(0, 5))) + '</div>';
     }).join('') + '</div>';
 
@@ -621,11 +592,11 @@
         '<div class="tt-actions"><button type="button" class="btn" data-a="cycle">Ouvrir un nouveau cycle</button><button type="button" class="btn ghost" data-a="annuler-retrait">Annuler le retrait</button></div>';
     } else {
       h += '<div class="tt-inline"><div><label for="vMontant">Montant versé (F)</label><input type="number" id="vMontant" min="1" step="50" value="' + t.montant + '"></div>' +
-        '<div><label for="vDate">Date</label><input type="date" id="vDate" value="' + t.aujourdhui + '" min="' + t.date_debut + '" max="' + t.aujourdhui + '"></div>' +
+        '<div><label for="vDate">Date du versement</label><input type="date" id="vDate" value="' + t.aujourdhui + '" max="' + t.aujourdhui + '"></div>' +
         '<div><label for="vMoyen">Moyen</label><select id="vMoyen"><option value="especes">Espèces</option><option value="momo">MOMO</option></select></div>' +
         '<div style="flex:0 0 auto;"><button type="button" class="btn" data-a="verser">Enregistrer le versement</button></div></div>' +
-        '<p class="tt-hint">Un versement plus grand remplit plusieurs cases (ex. ' + fmtF(t.montant * 5) + ' = 5 cases).</p><p class="tt-err" id="dErr" role="alert"></p>' +
-        '<div class="tt-actions"><button type="button" class="btn ghost" data-a="retrait"' + (t.total > 0 ? '' : ' disabled') + '>' + (t.complet ? 'Remettre l\'argent (fin de cycle)' : 'Retrait anticipé') + '</button>' +
+        '<p class="tt-hint">Un versement plus grand remplit plusieurs cases (ex. ' + fmtF(t.montant * 5) + ' = 5 cases). Vous pouvez saisir une <strong>date passée</strong>, même avant le début : le début de la tontine reculera à cette date.</p><p class="tt-err" id="dErr" role="alert"></p>' +
+        '<div class="tt-actions"><button type="button" class="btn ghost" data-a="retrait"' + (t.total > 0 ? '' : ' disabled') + '>' + (t.complet ? 'Remettre l\'argent (fin de cycle)' : (t.illimite ? 'Retirer l\'argent' : 'Retrait anticipé')) + '</button>' +
         '<select id="rMoyen" style="padding:9px 10px;border:1.5px solid var(--border);border-radius:10px;font:inherit;"><option value="especes">Remise en espèces</option><option value="momo">Remise par MOMO</option></select>' +
         '<button type="button" class="btn ghost" data-a="modifier">Modifier</button>' + (aucunVersement ? '<button type="button" class="btn ghost" data-a="supprimer">Supprimer</button>' : '') + '</div>';
       h += '<div class="tt-box" id="editBox" style="display:none;"><div class="tt-grid">' +
@@ -633,7 +604,7 @@
         '<div><label>Téléphone</label><input type="text" id="eTel" value="' + esc(t.telephone || '') + '" maxlength="30"></div>' +
         '<div class="full"><label>Note</label><input type="text" id="eNote" value="' + esc(t.note || '') + '" maxlength="500"></div>' +
         (aucunVersement ? '<div><label>Versement par case</label><input type="number" id="eMontant" value="' + t.montant + '"></div><div><label>Rythme</label><select id="eFreq"><option value="jour"' + (t.frequence === 'jour' ? ' selected' : '') + '>Par jour</option><option value="semaine"' + (t.frequence === 'semaine' ? ' selected' : '') + '>Par semaine</option><option value="mois"' + (t.frequence === 'mois' ? ' selected' : '') + '>Par mois</option></select></div>' +
-          '<div><label>Nombre de cases</label><input type="number" id="eCases" value="' + t.nb_cases + '"></div><div><label>Frais (en versements)</label><input type="number" id="eFrais" value="' + t.frais_cases + '"></div><div><label>Début</label><input type="date" id="eDebut" value="' + t.date_debut + '"></div>' : '') +
+          '<div><label>Nombre de cases (vide = sans limite)</label><input type="number" id="eCases" min="0" value="' + (t.nb_cases || '') + '" placeholder="sans limite"></div><div><label>Frais (en versements)</label><input type="number" id="eFrais" value="' + t.frais_cases + '"></div><div><label>Début</label><input type="date" id="eDebut" value="' + t.date_debut + '"></div>' : '') +
         '</div><p class="tt-hint">' + (aucunVersement ? '' : 'Les règles du cycle (montant, rythme, cases, frais, début) ne se modifient plus après le premier versement.') + '</p><p class="tt-err" id="eErr"></p>' +
         '<div style="margin-top:10px;"><button type="button" class="btn" data-a="enregistrer-modif">Enregistrer</button></div></div>';
     }
@@ -668,8 +639,8 @@
       if(!window.confirm('Annuler ce versement ? Il restera visible dans l\'historique, marqué « annulé », mais ne comptera plus.')) return;
       api('/api/tontine/' + id + '/versements/' + b.dataset.v, { method: 'DELETE' }).then(maj).catch(erreurModal);
     } else if(act === 'retrait'){
-      const moyen = $('rMoyen').value, anticipe = !t.complet;
-      const texte = (anticipe ? 'RETRAIT ANTICIPÉ : le cycle n\'est pas terminé (' + t.cases_payees + ' / ' + t.nb_cases + ' cases).\n\n' : 'Fin de cycle : ' + t.cases_payees + ' / ' + t.nb_cases + ' cases payées.\n\n') +
+      const moyen = $('rMoyen').value, anticipe = !t.complet && !t.illimite;
+      const texte = (anticipe ? 'RETRAIT ANTICIPÉ : le cycle n\'est pas terminé (' + t.cases_payees + ' / ' + t.nb_cases + ' cases).\n\n' : (t.illimite ? 'Retrait : ' + t.cases_payees + ' case' + (t.cases_payees > 1 ? 's' : '') + ' payée' + (t.cases_payees > 1 ? 's' : '') + '.\n\n' : 'Fin de cycle : ' + t.cases_payees + ' / ' + t.nb_cases + ' cases payées.\n\n')) +
         'Déposé : ' + fmtF(t.total) + '\nFrais retenus : ' + fmtF(t.frais) + (t.prets_en_cours ? '\nPrêts non remboursés (retenus) : ' + fmtF(t.prets_en_cours) : '') + '\n\nRemettre ' + fmtF(t.a_remettre_net) + ' à ' + t.nom + ' ? La tontine sera clôturée.';
       if(!window.confirm(texte)) return;
       b.disabled = true;
@@ -685,7 +656,7 @@
       const box = $('editBox'); box.style.display = box.style.display === 'none' ? 'block' : 'none';
     } else if(act === 'enregistrer-modif'){
       const corps = { nom: $('eNom').value, telephone: $('eTel').value, note: $('eNote').value };
-      if($('eMontant')) Object.assign(corps, { montant: Number($('eMontant').value), frequence: $('eFreq').value, nb_cases: Number($('eCases').value), frais_cases: Number($('eFrais').value), date_debut: $('eDebut').value });
+      if($('eMontant')) Object.assign(corps, { montant: Number($('eMontant').value), frequence: $('eFreq').value, nb_cases: $('eCases').value === '' ? '' : Number($('eCases').value), frais_cases: Number($('eFrais').value), date_debut: $('eDebut').value });
       b.disabled = true;
       api('/api/tontine/' + id, json('PATCH', corps)).then(function(d){ maj(d); if(window.smToast) smToast('Tontine modifiée.'); }).catch(function(err){ b.disabled = false; erreurModal(err); });
     } else if(act === 'nouveau-pret'){
