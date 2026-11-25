@@ -389,7 +389,7 @@
     </div>
 
     <div class="panel">
-      <div class="panel-head"><div class="chips" id="onglets" style="margin:0;"></div><span class="meta" id="collecteJour"></span><button type="button" class="btn danger" id="supprPayees" style="display:none;"></button></div>
+      <div class="panel-head"><div class="chips" id="onglets" style="margin:0;"></div><span class="meta" id="collecteJour"></span><button type="button" class="btn danger" id="supprPayees" style="display:none;"></button><button type="button" class="btn danger" id="supprTerminees" style="display:none;"></button></div>
       <table>
         <thead><tr><th>Personne</th><th>Versement</th><th>Progression</th><th>Déposé</th><th>Situation</th><th></th></tr></thead>
         <tbody id="tbody"></tbody>
@@ -463,6 +463,9 @@
     const nbPayees = data.tontines.filter(function(t){ return t.statut === 'payee'; }).length;
     $('supprPayees').style.display = (onglet === 'payee' && nbPayees) ? '' : 'none';
     $('supprPayees').textContent = 'Supprimer toutes les payées (' + nbPayees + ')';
+    const nbTermines = data.tontines.filter(function(t){ return t.situation === 'a_payer'; }).length;
+    $('supprTerminees').style.display = (onglet === 'a_payer' && nbTermines) ? '' : 'none';
+    $('supprTerminees').textContent = 'Supprimer tous les cycles terminés (' + nbTermines + ')';
     const q = $('searchInput').value.trim().toLowerCase();
     const l = data.tontines.filter(function(t){
       return filtreOk(t, onglet) && (!q || t.nom.toLowerCase().includes(q) || (t.telephone || '').toLowerCase().includes(q));
@@ -477,7 +480,7 @@
         '<td data-label="Déposé"><strong>' + fmtF(t.total) + '</strong>' + (t.illimite ? '' : '<span class="sub-note">sur ' + fmtF(t.objectif) + '</span>') + (t.prets_en_cours ? '<span class="sub-note" style="color:var(--impaye-dark);">prêt en cours : ' + fmtF(t.prets_en_cours) + '</span>' : '') + '</td>' +
         '<td data-label="Situation">' + SITUATION[t.situation](t) + (t.statut === 'payee' ? '<span class="sub-note">retiré le ' + dFR(t.date_retrait) + ' : ' + fmtF(t.montant_retire) + '</span>' : '') + '</td>' +
         '<td data-label="Actions"><div class="row-actions">' + (t.statut === 'en_cours' ? '<button type="button" class="primaire" data-open="' + t.id + '">Verser</button>' : '') +
-        '<button type="button" data-open="' + t.id + '">Ouvrir</button>' + (t.statut === 'payee' ? '<button type="button" class="danger" data-del="' + t.id + '">Supprimer</button>' : '') + '</div></td></tr>';
+        '<button type="button" data-open="' + t.id + '">Ouvrir</button>' + (t.statut === 'payee' || t.situation === 'a_payer' ? '<button type="button" class="danger" data-del="' + t.id + '">Supprimer</button>' : '') + '</div></td></tr>';
     }).join('');
     const msg = erreur || (!data.tontines.length ? 'Aucune tontine pour le moment. Cliquez sur « + Nouvelle tontine » pour en ouvrir une.' : (!l.length ? 'Aucune tontine dans cette catégorie.' : ''));
     $('vide').textContent = msg; $('vide').style.display = msg ? 'block' : 'none';
@@ -494,12 +497,32 @@
 
   /* ---------------- Suppression des tontines payées (retrait déjà fait) ---------------- */
   function supprimerPayee(t, bouton){
-    if(!window.confirm('Supprimer définitivement la tontine de ' + t.nom + ' ?\n\nCette personne a déjà retiré son argent (' + fmtF(t.montant_retire) + ' le ' + dFR(t.date_retrait) + ').\nSon historique (versements, prêts, remboursements) sera effacé et ne pourra pas être récupéré.')) return;
+    const termine = t.statut !== 'payee' && t.situation === 'a_payer';
+    let url = '/api/tontine/' + t.id;
+    if(termine){
+      const saisie = window.prompt('ATTENTION : le cycle de ' + t.nom + ' est terminé, mais cette personne n\'a PAS encore retiré son argent (' + fmtF(t.a_remettre_net) + ' à remettre' + (t.prets_en_cours ? ', après retenue de ' + fmtF(t.prets_en_cours) + ' de prêts' : '') + ').\n\nSupprimer ce cycle efface ses versements, prêts et remboursements : l\'argent à remettre ne sera plus suivi. Action irréversible.\n\nPour confirmer, tapez SUPPRIMER :');
+      if(saisie === null) return;
+      if(saisie.trim().toUpperCase() !== 'SUPPRIMER'){ alert('Suppression annulée : le mot SUPPRIMER n\'a pas été tapé.'); return; }
+      url += '?confirmer=SUPPRIMER';
+    } else if(!window.confirm('Supprimer définitivement la tontine de ' + t.nom + ' ?\n\nCette personne a déjà retiré son argent (' + fmtF(t.montant_retire) + ' le ' + dFR(t.date_retrait) + ').\nSon historique (versements, prêts, remboursements) sera effacé et ne pourra pas être récupéré.')) return;
     if(bouton) bouton.disabled = true;
-    api('/api/tontine/' + t.id, { method: 'DELETE' })
+    api(url, { method: 'DELETE' })
       .then(function(){ if(ouverte && ouverte.id === t.id) fermer(); if(window.smToast) smToast('Tontine de ' + t.nom + ' supprimée.'); return charger(); })
       .catch(function(err){ if(bouton) bouton.disabled = false; alert(smMessage(err)); });
   }
+  $('supprTerminees').addEventListener('click', function(){
+    const l = data ? data.tontines.filter(function(t){ return t.situation === 'a_payer'; }) : [];
+    if(!l.length) return;
+    const du = l.reduce(function(s, t){ return s + (t.a_remettre_net || 0); }, 0);
+    const saisie = window.prompt('ATTENTION : vous allez supprimer DÉFINITIVEMENT les ' + l.length + ' cycle' + (l.length > 1 ? 's' : '') + ' terminé' + (l.length > 1 ? 's' : '') + ' qui n\'ont PAS encore été payés (' + fmtF(du) + ' à remettre au total), avec tout leur historique.\nL\'argent dû ne sera plus suivi. Action irréversible.\n\nPour confirmer, tapez SUPPRIMER :');
+    if(saisie === null) return;
+    if(saisie.trim().toUpperCase() !== 'SUPPRIMER'){ alert('Suppression annulée : le mot SUPPRIMER n\'a pas été tapé.'); return; }
+    const btn = this; btn.disabled = true;
+    api('/api/tontine/terminees?confirmer=SUPPRIMER', { method: 'DELETE' })
+      .then(function(r){ if(ouverte && ouverte.situation === 'a_payer') fermer(); if(window.smToast) smToast(r.supprimees + ' cycle' + (r.supprimees > 1 ? 's' : '') + ' terminé' + (r.supprimees > 1 ? 's' : '') + ' supprimé' + (r.supprimees > 1 ? 's' : '') + '.'); return charger(); })
+      .catch(function(err){ alert(smMessage(err)); })
+      .finally(function(){ btn.disabled = false; });
+  });
   $('supprPayees').addEventListener('click', function(){
     const n = data ? data.tontines.filter(function(t){ return t.statut === 'payee'; }).length : 0;
     if(!n) return;
@@ -626,7 +649,7 @@
         '<p class="tt-hint">Un versement plus grand remplit plusieurs cases (ex. ' + fmtF(t.montant * 5) + ' = 5 cases). Vous pouvez saisir une <strong>date passée</strong>, même avant le début : le début de la tontine reculera à cette date.</p><p class="tt-err" id="dErr" role="alert"></p>' +
         '<div class="tt-actions"><button type="button" class="btn ghost" data-a="retrait"' + (t.total > 0 ? '' : ' disabled') + '>' + (t.complet ? 'Remettre l\'argent (fin de cycle)' : (t.illimite ? 'Retirer l\'argent' : 'Retrait anticipé')) + '</button>' +
         '<select id="rMoyen" style="padding:9px 10px;border:1.5px solid var(--border);border-radius:10px;font:inherit;"><option value="especes">Remise en espèces</option><option value="momo">Remise par MOMO</option></select>' +
-        '<button type="button" class="btn ghost" data-a="modifier">Modifier</button>' + (aucunVersement ? '<button type="button" class="btn ghost" data-a="supprimer">Supprimer</button>' : '') + '</div>';
+        '<button type="button" class="btn ghost" data-a="modifier">Modifier</button>' + (t.situation === 'a_payer' ? '<button type="button" class="btn danger" data-a="supprimer-payee">Supprimer ce cycle terminé</button>' : '') + (aucunVersement ? '<button type="button" class="btn ghost" data-a="supprimer">Supprimer</button>' : '') + '</div>';
       h += '<div class="tt-box" id="editBox" style="display:none;"><div class="tt-grid">' +
         '<div><label>Nom</label><input type="text" id="eNom" value="' + esc(t.nom) + '" maxlength="100"></div>' +
         '<div><label>Téléphone</label><input type="text" id="eTel" value="' + esc(t.telephone || '') + '" maxlength="30"></div>' +
