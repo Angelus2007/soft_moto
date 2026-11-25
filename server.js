@@ -141,7 +141,8 @@ async function genererCode() {
 /* Démarrage : tables, migrations, premier administrateur, réglages par défaut. */
 async function demarrer() {
   await creerSchema(db);
-  await creerTablesTontine(); // espace Tontine (mêmes base de données, tables à part)
+  try { await creerTablesTontine(); } // espace Tontine (même base de données, tables à part)
+  catch (e) { console.error('Tables Tontine non créées (le reste du site démarre quand même) :', e.message); }
 
   // Anciens conducteurs créés sans code
   for (const r of await db.all('SELECT id FROM clients WHERE code IS NULL')) {
@@ -1185,7 +1186,11 @@ const COLONNES_TONTINE = {
     ['compte_id', 'INTEGER'], ['cree_le', 'TEXT'], ['annule', 'INTEGER DEFAULT 0'], ['annule_par', 'INTEGER'], ['annule_le', 'TEXT']]
 };
 async function creerTablesTontine() {
-  const { pk } = db.types;
+  const pk = (db.types && db.types.pk) || (db.dialect === 'postgres' ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT');
+  const ajouterColonne = typeof db.ajouterColonne === 'function' ? (t, c, d) => db.ajouterColonne(t, c, d) : async (t, c, d) => {
+    try { await db.exec(`ALTER TABLE ${t} ADD COLUMN ${db.dialect === 'postgres' ? 'IF NOT EXISTS ' : ''}${c} ${d}`); }
+    catch (e) { if (!/duplicate column|already exists/i.test(String(e && e.message))) throw e; }
+  };
   await db.exec(`
 CREATE TABLE IF NOT EXISTS tontine_comptes (
   id ${pk},
@@ -1254,7 +1259,7 @@ CREATE TABLE IF NOT EXISTS tontine_remboursements (
 CREATE INDEX IF NOT EXISTS idx_tontine_prets ON tontine_prets (tontine_id);
 CREATE INDEX IF NOT EXISTS idx_tontine_remb ON tontine_remboursements (pret_id);
 `);
-  for (const [table, cols] of Object.entries(COLONNES_TONTINE)) for (const [col, def] of cols) await db.ajouterColonne(table, col, def);
+  for (const [table, cols] of Object.entries(COLONNES_TONTINE)) for (const [col, def] of cols) await ajouterColonne(table, col, def);
 }
 
 const FREQ_TONTINE = ['jour', 'semaine', 'mois'];
