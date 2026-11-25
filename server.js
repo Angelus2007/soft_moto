@@ -1425,10 +1425,24 @@ async function effacerTontine(tx, id) {
   await tx.run('DELETE FROM tontine_comptes WHERE id = ?', [id]);
 }
 
-// Suppression de TOUTES les tontines déjà payées (la personne a retiré son argent). Réservé à l'administrateur ; il faut confirmer avec ?confirmer=SUPPRIMER.
-// Cette route est déclarée AVANT « /api/tontine/:id », sinon « payees » serait pris pour un identifiant.
+// Tontines dont le CYCLE EST TERMINÉ (toutes les cases payées) mais dont l'argent n'a pas encore été remis (situation « a_payer »).
+async function tontinesCycleTermine(q) {
+  const comptes = await q.all(`SELECT ${COLS_TONTINE} FROM tontine_comptes WHERE statut = 'en_cours'`);
+  if (!comptes.length) return [];
+  const versements = await q.all('SELECT tontine_id, date_versement, montant, annule FROM tontine_versements');
+  const parCompte = new Map();
+  versements.forEach((x) => { if (!parCompte.has(x.tontine_id)) parCompte.set(x.tontine_id, []); parCompte.get(x.tontine_id).push(x); });
+  const prets = await pretsDe(q, null), aujourdhui = jourLocal(new Date());
+  return comptes.filter((c) => calculerTontine(c, parCompte.get(c.id) || [], aujourdhui, prets.get(c.id) || []).situation === 'a_payer');
+}
+
+// Suppression EN LOT (administrateur), avec confirmation ?confirmer=SUPPRIMER :
+//  - DELETE /api/tontine/payees     : toutes les tontines déjà payées (la personne a retiré son argent) ;
+//  - DELETE /api/tontine/terminees  : toutes les tontines au cycle terminé mais pas encore payées (l'argent dû n'est alors plus suivi).
+// Ces routes sont déclarées AVANT « /api/tontine/:id », sinon « payees » serait pris pour un identifiant.
+const confirmeLot = (req) => texte(req.query.confirmer, 20).toUpperCase() === 'SUPPRIMER';
 app.delete('/api/tontine/payees', exigerRole('admin'), h(async (req, res) => {
-  if (texte(req.query.confirmer, 20).toUpperCase() !== 'SUPPRIMER') return res.status(400).json({ erreur: 'Confirmation manquante : tapez SUPPRIMER pour effacer toutes les tontines payées.' });
+  if (!confirmeLot(req)) return res.status(400).json({ erreur: 'Confirmation manquante : tapez SUPPRIMER pour effacer toutes les tontines payées.' });
   let supprimees = 0;
   await db.tx(async (tx) => {
     const ids = (await tx.all("SELECT id FROM tontine_comptes WHERE statut = 'payee'")).map((r) => r.id);
@@ -1437,16 +1451,35 @@ app.delete('/api/tontine/payees', exigerRole('admin'), h(async (req, res) => {
   });
   res.json({ ok: true, supprimees });
 }));
+app.delete('/api/tontine/terminees', exigerRole('admin'), h(async (req, res) => {
+  if (!confirmeLot(req)) return res.status(400).json({ erreur: 'Confirmation manquante : tapez SUPPRIMER pour effacer tous les cycles terminés.' });
+  let supprimees = 0;
+  await db.tx(async (tx) => {
+    const liste = await tontinesCycleTermine(tx);
+    for (const c of liste) await effacerTontine(tx, c.id);
+    supprimees = liste.length;
+  });
+  res.json({ ok: true, supprimees });
+}));
 
-// Suppression d'une tontine : possible si elle ne contient aucun versement, OU si la personne a déjà retiré son argent (tontine « payée » :
-// son historique est alors effacé avec elle). Une tontine en cours qui a des versements ne peut pas être supprimée (annuler les versements ou clôturer par un retrait).
+// Suppression d'une tontine. Possible si :
+//  - elle ne contient aucun versement ;
+//  - OU la personne a déjà retiré son argent (tontine « payée ») ;
+//  - OU son cycle est terminé (toutes les cases payées) : confirmation ?confirmer=SUPPRIMER exigée, car l'argent à remettre n'est alors plus suivi.
+// Une tontine en cours dont le cycle n'est pas terminé et qui a des versements ne se supprime pas (annuler les versements ou clôturer par un retrait).
+// L'historique (versements, prêts, remboursements) est effacé avec elle.
 app.delete('/api/tontine/:id', exigerRole('admin'), h(async (req, res) => {
   const id = idParam(req.params.id);
-  const c = await db.get('SELECT id, statut FROM tontine_comptes WHERE id = ?', [id]);
+  const c = await db.get(`SELECT ${COLS_TONTINE} FROM tontine_comptes WHERE id = ?`, [id]);
   if (!c) return res.status(404).json({ erreur: 'Tontine introuvable.' });
   if (c.statut !== 'payee') {
-    const nbV = (await db.get('SELECT COUNT(*) AS n FROM tontine_versements WHERE tontine_id = ? AND annule = 0', [id])).n;
-    if (nbV > 0) return res.status(409).json({ erreur: "Cette tontine contient des versements : elle ne peut pas être supprimée tant que la personne n'a pas retiré son argent. Annulez d'abord les versements, ou clôturez-la par un retrait." });
+    const versements = await db.all('SELECT date_versement, montant, annule FROM tontine_versements WHERE tontine_id = ?', [id]);
+    if (versements.some((x) => !x.annule)) {
+      const prets = (await pretsDe(db, id)).get(id) || [];
+      const calc = calculerTontine(c, versements, jourLocal(new Date()), prets);
+      if (calc.situation !== 'a_payer') return res.status(409).json({ erreur: "Cette tontine contient des versements et son cycle n'est pas terminé : elle ne peut pas être supprimée. Annulez d'abord les versements, ou clôturez-la par un retrait." });
+      if (!confirmeLot(req)) return res.status(400).json({ erreur: "Ce cycle est terminé mais l'argent n'a pas encore été remis : confirmez la suppression en tapant SUPPRIMER." });
+    }
   }
   await db.tx(async (tx) => { await effacerTontine(tx, id); });
   res.json({ ok: true });
